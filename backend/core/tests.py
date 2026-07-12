@@ -427,4 +427,20 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(str(reporte.data["cobranzas"]["total"]), "12500")
         self.assertEqual(str(reporte.data["cobranzas"]["por_medio"][Pago.Medio.EFECTIVO]), "12500")
 
+    def test_payments_can_be_filtered_and_exported_as_csv(self):
+        self.client.force_authenticate(user=self.admin)
+        pedro = Alumno.objects.get(legajo="P-001")
+        elena = Alumno.objects.get(legajo="E-001")
+        Pago.objects.create(alumno=pedro, sucursal=self.posadas, importe="1000.00", medio=Pago.Medio.EFECTIVO)
+        Pago.objects.create(alumno=elena, sucursal=self.eldorado, importe="2000.00", medio=Pago.Medio.TRANSFERENCIA)
+
+        pagos = self.client.get(f"/api/pagos/?sucursal={self.posadas.id}&medio=efectivo")
+        self.assertEqual(pagos.status_code, status.HTTP_200_OK)
+        self.assertEqual(pagos.data["count"], 1)
+        exportacion = self.client.get(f"/api/pagos/exportar-csv/?sucursal={self.posadas.id}")
+        self.assertEqual(exportacion.status_code, status.HTTP_200_OK)
+        self.assertEqual(exportacion["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn("Perez, Pedro", exportacion.content.decode("utf-8-sig"))
+        self.assertNotIn("Silva, Elena", exportacion.content.decode("utf-8-sig"))
+
 # Create your tests here.

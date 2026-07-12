@@ -57,6 +57,8 @@ Criterios de listo:
 
 Ya disponible en API: numeracion interna inalterable y detalle del comprobante. Pendiente: vista imprimible en el frontend.
 
+El resumen de caja ya cuenta con una vista imprimible desde la pantalla de Caja.
+
 ## P1 - Necesario para uso interno controlado
 
 ### Usuarios y permisos
@@ -84,6 +86,8 @@ Criterios de listo:
 - Exportacion basica a Excel/CSV.
 
 Ya disponible en API: resumen operativo por fechas y sucursal con cobranzas por medio, deuda, saldo a favor y estado de cajas. Pendiente: tablero visual y exportacion.
+
+Disponible en pantalla: listado de cobranzas filtrable por fechas, sucursal y medio, con exportacion CSV. Los pagos historicos tambien reciben numero de recibo al aplicar la migracion.
 
 ### Mejoras CRM alumnos
 

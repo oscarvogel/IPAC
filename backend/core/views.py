@@ -1,8 +1,10 @@
 from django.db import transaction
 from django.db.models import Sum
+from django.http import HttpResponse
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
 from datetime import date
+import csv
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.authtoken.models import Token
@@ -276,6 +278,18 @@ class PagoViewSet(viewsets.ModelViewSet):
         alumno_id = self.request.query_params.get("alumno")
         if alumno_id:
             queryset = queryset.filter(alumno_id=alumno_id)
+        sucursal_id = self.request.query_params.get("sucursal")
+        medio = self.request.query_params.get("medio")
+        desde = self.request.query_params.get("desde")
+        hasta = self.request.query_params.get("hasta")
+        if sucursal_id:
+            queryset = queryset.filter(sucursal_id=sucursal_id)
+        if medio:
+            queryset = queryset.filter(medio=medio)
+        if desde:
+            queryset = queryset.filter(fecha__gte=desde)
+        if hasta:
+            queryset = queryset.filter(fecha__lte=hasta)
         return queryset
 
     def perform_create(self, serializer):
@@ -309,6 +323,27 @@ class PagoViewSet(viewsets.ModelViewSet):
                 ],
             }
         )
+
+    @action(detail=False, methods=["get"], url_path="exportar-csv")
+    def exportar_csv(self, request):
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="pagos-ipac.csv"'
+        response.write("\ufeff")
+        writer = csv.writer(response)
+        writer.writerow(["Recibo", "Fecha", "Alumno", "Legajo", "Concepto", "Sucursal", "Medio", "Importe", "Observacion"])
+        for pago in self.get_queryset():
+            writer.writerow([
+                pago.numero_recibo,
+                pago.fecha.isoformat(),
+                f"{pago.alumno.apellido}, {pago.alumno.nombre}",
+                pago.alumno.legajo,
+                pago.concepto.nombre if pago.concepto else "Pago a cuenta",
+                pago.sucursal.nombre,
+                pago.get_medio_display(),
+                pago.importe,
+                pago.observacion,
+            ])
+        return response
 
 
 class CajaDiariaViewSet(viewsets.ModelViewSet):

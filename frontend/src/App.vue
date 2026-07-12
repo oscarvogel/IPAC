@@ -30,6 +30,16 @@ const alumnos = ref([])
 const conceptos = ref([])
 const pagos = ref([])
 const cajaHoy = ref(null)
+const reporteResumen = ref(null)
+const reportePagos = ref([])
+const hoyIso = new Date().toISOString().slice(0, 10)
+const inicioMesIso = `${hoyIso.slice(0, 8)}01`
+const reporteForm = reactive({
+  desde: inicioMesIso,
+  hasta: hoyIso,
+  sucursal: '',
+  medio: '',
+})
 
 const alumnoForm = reactive({
   legajo: '',
@@ -72,6 +82,7 @@ const modules = [
   { id: 'alumnos', label: 'Alumnos', meta: 'CRM' },
   { id: 'caja', label: 'Caja', meta: 'Tesoreria' },
   { id: 'conceptos', label: 'Conceptos', meta: 'Aranceles' },
+  { id: 'reportes', label: 'Reportes', meta: 'Listados' },
   { id: 'sucursales', label: 'Sucursales', meta: 'Accesos' },
 ]
 
@@ -154,6 +165,13 @@ function formatMoney(value) {
 
 function printCajaResumen() {
   window.print()
+}
+
+function reporteQuery() {
+  const params = new URLSearchParams({ desde: reporteForm.desde, hasta: reporteForm.hasta })
+  if (reporteForm.sucursal) params.set('sucursal', reporteForm.sucursal)
+  if (reporteForm.medio) params.set('medio', reporteForm.medio)
+  return params.toString()
 }
 
 async function apiRequest(path, options = {}) {
@@ -292,6 +310,47 @@ async function loadCajaHoy() {
   const sucursalId = user.value?.perfil?.sucursal?.id || sucursales.value[0]?.id
   if (!sucursalId) return
   cajaHoy.value = await apiRequest(`/cajas/hoy/?sucursal=${sucursalId}`)
+}
+
+async function loadReporte() {
+  error.value = ''
+  loading.value = true
+  try {
+    const query = reporteQuery()
+    const [resumen, pagosData] = await Promise.all([
+      apiRequest(`/reportes/resumen/?${query}`),
+      apiRequest(`/pagos/?${query}`),
+    ])
+    reporteResumen.value = resumen
+    reportePagos.value = pagosData.results || []
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    loading.value = false
+  }
+}
+
+function openModule(moduleId) {
+  activeModule.value = moduleId
+  if (moduleId === 'reportes') loadReporte()
+}
+
+async function exportarPagos() {
+  error.value = ''
+  try {
+    const response = await fetch(`${API_BASE_URL}/pagos/exportar-csv/?${reporteQuery()}`, {
+      headers: { Authorization: `Token ${token.value}` },
+    })
+    if (!response.ok) throw new Error('No se pudo exportar el listado de pagos.')
+    const url = URL.createObjectURL(await response.blob())
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'pagos-ipac.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    error.value = err.message
+  }
 }
 
 async function loadSession() {
@@ -541,7 +600,7 @@ onMounted(loadSession)
             :key="module.id"
             :class="{ active: activeModule === module.id }"
             type="button"
-            @click="activeModule = module.id"
+            @click="openModule(module.id)"
           >
             <span>{{ module.label }}</span>
             <small>{{ module.meta }}</small>
@@ -801,6 +860,37 @@ onMounted(loadSession)
               </tbody>
             </table>
           </section>
+        </section>
+
+        <section v-if="activeModule === 'reportes'" class="cash-screen">
+          <form class="panel quick-create" @submit.prevent="loadReporte">
+            <div class="panel-head compact"><h2>Listado de cobranzas</h2><span>Filtros</span></div>
+            <div class="quick-form">
+              <label>Desde<input v-model="reporteForm.desde" type="date" required /></label>
+              <label>Hasta<input v-model="reporteForm.hasta" type="date" required /></label>
+              <label>Sucursal<select v-model="reporteForm.sucursal"><option value="">Todas</option><option v-for="sucursal in sucursales" :key="sucursal.id" :value="sucursal.id">{{ sucursal.nombre }}</option></select></label>
+              <label>Medio<select v-model="reporteForm.medio"><option value="">Todos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option><option value="otro">Otro</option></select></label>
+            </div>
+            <div class="form-actions"><button class="secondary-button" type="button" @click="exportarPagos">Exportar CSV</button><button class="primary-button" :disabled="loading" type="submit">Actualizar listado</button></div>
+          </form>
+
+          <div v-if="reporteResumen" class="stats-grid cash-stats">
+            <article class="stat-card"><span>Cobrado</span><strong>$ {{ formatMoney(reporteResumen.cobranzas.total) }}</strong><small>{{ reporteResumen.cobranzas.cantidad_pagos }} pagos</small></article>
+            <article class="stat-card"><span>Deuda</span><strong>$ {{ formatMoney(reporteResumen.cuenta_corriente.deuda) }}</strong><small>cuotas pendientes</small></article>
+            <article class="stat-card"><span>Saldo a favor</span><strong>$ {{ formatMoney(reporteResumen.cuenta_corriente.saldo_a_favor) }}</strong><small>pagos sin aplicar</small></article>
+            <article class="stat-card"><span>Cajas</span><strong>{{ reporteResumen.cajas.cerradas }}</strong><small>cierres · {{ reporteResumen.cajas.abiertas }} abiertas</small></article>
+          </div>
+
+          <div class="panel table-card">
+            <div class="panel-head"><div><h2>Pagos del período</h2><p>{{ reportePagos.length }} registros visibles</p></div></div>
+            <table>
+              <thead><tr><th>Recibo</th><th>Fecha</th><th>Alumno</th><th>Concepto</th><th>Medio</th><th>Importe</th></tr></thead>
+              <tbody>
+                <tr v-for="pago in reportePagos" :key="pago.id"><td>{{ pago.numero_recibo }}</td><td>{{ pago.fecha }}</td><td>{{ pago.alumno_nombre }}</td><td>{{ pago.concepto_nombre || 'Pago a cuenta' }}</td><td>{{ pago.medio }}</td><td>$ {{ formatMoney(pago.importe) }}</td></tr>
+              </tbody>
+            </table>
+            <p v-if="!reportePagos.length" class="empty-state flat">No hay pagos con los filtros seleccionados.</p>
+          </div>
         </section>
 
         <section v-if="activeModule === 'sucursales'" class="panel table-card">
