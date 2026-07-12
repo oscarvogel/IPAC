@@ -10,11 +10,13 @@ Base ejecutable inicial:
 - Carreras/cursos y conceptos cobrables iniciales.
 - Registro de pagos.
 - Estado de cuenta simple por alumno.
+- Caja diaria con movimientos, pagos automaticos y cierre con diferencia.
+- Backend de matriculas, cuotas, descuentos, recargos, pagos parciales y saldos a favor.
 - Docker Compose preparado, pendiente de prueba real en maquina con Docker.
 
 ## P0 - Necesario para una demo operativa seria
 
-### Caja diaria
+### Caja diaria - completado
 
 Objetivo: que los pagos registrados alimenten una caja por usuario y sucursal.
 
@@ -26,7 +28,7 @@ Criterios de listo:
 - Cerrar caja con total esperado, contado y diferencia.
 - Impedir o advertir movimientos posteriores a una caja cerrada.
 
-### Conceptos, cuotas y saldos reales
+### Conceptos, cuotas y saldos reales - en curso
 
 Objetivo: pasar de saldos demo a deuda calculada con conceptos/cuotas.
 
@@ -122,14 +124,6 @@ Criterios de listo:
 
 ## Proximo slice recomendado
 
-Implementar **Caja diaria**.
+Completar **cuotas y cuenta corriente real** en el frontend.
 
-Motivo: ya existe registro de pagos; sin caja, tesoreria no puede cerrar el dia ni controlar efectivo, transferencias, egresos y retiros. Es el siguiente flujo que convierte el CRM en una herramienta administrativa real.
-
-Primer alcance de Caja:
-
-- Modelo de caja diaria por fecha, usuario y sucursal.
-- Movimientos de caja: ingreso, egreso, retiro, pase y pago.
-- Pantalla de caja con totales por medio.
-- Accion de cierre con total contado y diferencia.
-- Tests backend y validacion visual del flujo.
+El backend ya incorpora matriculas, cuotas por periodo, descuentos, recargos, pagos parciales, aplicaciones de pago y saldos a favor. El siguiente corte debe exponer ese circuito en la ficha del alumno, manteniendo los componentes visuales separados para facilitar el trabajo UX/UI en paralelo.

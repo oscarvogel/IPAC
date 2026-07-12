@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, MovimientoCaja, Pago, PerfilUsuario, Sucursal
+from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
 
 
 @admin.register(Sucursal)
@@ -53,3 +53,20 @@ class CajaDiariaAdmin(admin.ModelAdmin):
 class MovimientoCajaAdmin(admin.ModelAdmin):
     list_display = ("caja", "tipo", "medio", "importe", "descripcion", "pago")
     list_filter = ("tipo", "medio", "caja__sucursal")
+
+
+@admin.register(Matricula)
+class MatriculaAdmin(admin.ModelAdmin):
+    list_display = ("alumno", "carrera", "sucursal", "fecha_inicio", "estado")
+    list_filter = ("sucursal", "estado")
+
+
+@admin.register(Cuota)
+class CuotaAdmin(admin.ModelAdmin):
+    list_display = ("alumno", "concepto", "periodo", "fecha_vencimiento", "importe", "estado")
+    list_filter = ("sucursal", "estado", "periodo")
+
+
+@admin.register(AplicacionPago)
+class AplicacionPagoAdmin(admin.ModelAdmin):
+    list_display = ("pago", "cuota", "importe", "creado")

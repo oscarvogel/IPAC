@@ -1,7 +1,7 @@
 from django.contrib.auth import authenticate
 from rest_framework import serializers
 
-from .models import Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, MovimientoCaja, Pago, PerfilUsuario, Sucursal
+from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
 
 
 class SucursalSerializer(serializers.ModelSerializer):
@@ -94,11 +94,86 @@ class ConceptoCobrableSerializer(serializers.ModelSerializer):
         ]
 
 
+class MatriculaSerializer(serializers.ModelSerializer):
+    alumno_nombre = serializers.CharField(source="alumno.__str__", read_only=True)
+    carrera_nombre = serializers.CharField(source="carrera.nombre", read_only=True)
+    sucursal = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = Matricula
+        fields = ["id", "alumno", "alumno_nombre", "carrera", "carrera_nombre", "sucursal", "fecha_inicio", "fecha_fin", "estado", "observacion"]
+
+    def validate(self, attrs):
+        alumno = attrs.get("alumno") or getattr(self.instance, "alumno", None)
+        carrera = attrs.get("carrera") or getattr(self.instance, "carrera", None)
+        if alumno and carrera and alumno.sucursal_id != carrera.sucursal_id:
+            raise serializers.ValidationError("El alumno y la carrera deben pertenecer a la misma sucursal.")
+        return attrs
+
+    def create(self, validated_data):
+        validated_data["sucursal"] = validated_data["alumno"].sucursal
+        return super().create(validated_data)
+
+
+class CuotaSerializer(serializers.ModelSerializer):
+    alumno_nombre = serializers.CharField(source="alumno.__str__", read_only=True)
+    concepto_nombre = serializers.CharField(source="concepto.nombre", read_only=True)
+    sucursal = serializers.PrimaryKeyRelatedField(read_only=True)
+    total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    total_pagado = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    saldo = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = Cuota
+        fields = ["id", "alumno", "alumno_nombre", "matricula", "concepto", "concepto_nombre", "sucursal", "periodo", "fecha_emision", "fecha_vencimiento", "importe", "descuento", "recargo", "total", "total_pagado", "saldo", "estado"]
+        read_only_fields = ["estado"]
+
+    def validate(self, attrs):
+        alumno = attrs.get("alumno") or getattr(self.instance, "alumno", None)
+        concepto = attrs.get("concepto") or getattr(self.instance, "concepto", None)
+        matricula = attrs.get("matricula") or getattr(self.instance, "matricula", None)
+        if alumno and concepto and alumno.sucursal_id != concepto.sucursal_id:
+            raise serializers.ValidationError("El concepto debe pertenecer a la sucursal del alumno.")
+        if alumno and matricula and matricula.alumno_id != alumno.id:
+            raise serializers.ValidationError("La matricula no pertenece al alumno.")
+        return attrs
+
+    def create(self, validated_data):
+        validated_data["sucursal"] = validated_data["alumno"].sucursal
+        return super().create(validated_data)
+
+
+class AplicacionPagoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AplicacionPago
+        fields = ["id", "pago", "cuota", "importe", "creado"]
+        read_only_fields = ["creado"]
+
+    def validate(self, attrs):
+        pago, cuota, importe = attrs["pago"], attrs["cuota"], attrs["importe"]
+        if pago.alumno_id != cuota.alumno_id:
+            raise serializers.ValidationError("El pago y la cuota deben pertenecer al mismo alumno.")
+        if cuota.estado == Cuota.Estado.ANULADA:
+            raise serializers.ValidationError("No se puede aplicar un pago a una cuota anulada.")
+        if importe <= 0 or importe > pago.saldo_a_favor:
+            raise serializers.ValidationError("El importe supera el saldo disponible del pago o no es valido.")
+        if importe > cuota.saldo:
+            raise serializers.ValidationError("El importe supera el saldo de la cuota.")
+        return attrs
+
+    def create(self, validated_data):
+        aplicacion = super().create(validated_data)
+        aplicacion.cuota.actualizar_estado()
+        return aplicacion
+
+
 class PagoSerializer(serializers.ModelSerializer):
     alumno_nombre = serializers.CharField(source="alumno.__str__", read_only=True)
     concepto_nombre = serializers.CharField(source="concepto.nombre", read_only=True)
     sucursal_nombre = serializers.CharField(source="sucursal.nombre", read_only=True)
     sucursal = serializers.PrimaryKeyRelatedField(read_only=True)
+    importe_aplicado = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    saldo_a_favor = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
     class Meta:
         model = Pago
@@ -114,6 +189,8 @@ class PagoSerializer(serializers.ModelSerializer):
             "importe",
             "medio",
             "observacion",
+            "importe_aplicado",
+            "saldo_a_favor",
         ]
 
     def validate(self, attrs):

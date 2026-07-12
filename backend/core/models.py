@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from decimal import Decimal
 
 
 class TimeStampedModel(models.Model):
@@ -121,6 +122,80 @@ class ConceptoCobrable(TimeStampedModel):
         return self.nombre
 
 
+class Matricula(TimeStampedModel):
+    class Estado(models.TextChoices):
+        ACTIVA = "activa", "Activa"
+        FINALIZADA = "finalizada", "Finalizada"
+        ANULADA = "anulada", "Anulada"
+
+    alumno = models.ForeignKey(Alumno, on_delete=models.PROTECT, related_name="matriculas")
+    carrera = models.ForeignKey(CarreraCurso, on_delete=models.PROTECT, related_name="matriculas")
+    sucursal = models.ForeignKey(Sucursal, on_delete=models.PROTECT, related_name="matriculas")
+    fecha_inicio = models.DateField()
+    fecha_fin = models.DateField(blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.ACTIVA)
+    observacion = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-fecha_inicio", "-id"]
+        constraints = [models.UniqueConstraint(fields=["alumno", "carrera"], condition=models.Q(estado="activa"), name="unique_active_enrollment_per_course")]
+
+    def save(self, *args, **kwargs):
+        if not self.sucursal_id and self.alumno_id:
+            self.sucursal = self.alumno.sucursal
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.alumno} - {self.carrera}"
+
+
+class Cuota(TimeStampedModel):
+    class Estado(models.TextChoices):
+        PENDIENTE = "pendiente", "Pendiente"
+        PARCIAL = "parcial", "Parcial"
+        PAGADA = "pagada", "Pagada"
+        ANULADA = "anulada", "Anulada"
+
+    alumno = models.ForeignKey(Alumno, on_delete=models.PROTECT, related_name="cuotas")
+    matricula = models.ForeignKey(Matricula, on_delete=models.PROTECT, related_name="cuotas", blank=True, null=True)
+    concepto = models.ForeignKey(ConceptoCobrable, on_delete=models.PROTECT, related_name="cuotas")
+    sucursal = models.ForeignKey(Sucursal, on_delete=models.PROTECT, related_name="cuotas")
+    periodo = models.CharField(max_length=20)
+    fecha_emision = models.DateField()
+    fecha_vencimiento = models.DateField()
+    importe = models.DecimalField(max_digits=12, decimal_places=2)
+    descuento = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    recargo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.PENDIENTE)
+
+    class Meta:
+        ordering = ["fecha_vencimiento", "id"]
+        constraints = [models.UniqueConstraint(fields=["alumno", "concepto", "periodo"], name="unique_student_fee_period")]
+
+    @property
+    def total(self):
+        return self.importe - self.descuento + self.recargo
+
+    @property
+    def total_pagado(self):
+        return sum((item.importe for item in self.aplicaciones.all()), Decimal("0"))
+
+    @property
+    def saldo(self):
+        return max(self.total - self.total_pagado, Decimal("0"))
+
+    def actualizar_estado(self):
+        if self.estado == self.Estado.ANULADA:
+            return
+        nuevo = self.Estado.PAGADA if self.total_pagado >= self.total else self.Estado.PARCIAL if self.total_pagado > 0 else self.Estado.PENDIENTE
+        if self.estado != nuevo:
+            self.estado = nuevo
+            self.save(update_fields=["estado", "actualizado"])
+
+    def __str__(self):
+        return f"{self.alumno} - {self.periodo}"
+
+
 class Pago(TimeStampedModel):
     class Medio(models.TextChoices):
         EFECTIVO = "efectivo", "Efectivo"
@@ -154,6 +229,27 @@ class Pago(TimeStampedModel):
 
     def __str__(self):
         return f"{self.alumno} - {self.importe}"
+
+    @property
+    def importe_aplicado(self):
+        return sum((item.importe for item in self.aplicaciones.all()), Decimal("0"))
+
+    @property
+    def saldo_a_favor(self):
+        return max(self.importe - self.importe_aplicado, Decimal("0"))
+
+
+class AplicacionPago(TimeStampedModel):
+    pago = models.ForeignKey(Pago, on_delete=models.PROTECT, related_name="aplicaciones")
+    cuota = models.ForeignKey(Cuota, on_delete=models.PROTECT, related_name="aplicaciones")
+    importe = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        ordering = ["creado", "id"]
+        unique_together = [("pago", "cuota")]
+
+    def __str__(self):
+        return f"Pago {self.pago_id} -> cuota {self.cuota_id}"
 
 
 class CajaDiaria(TimeStampedModel):

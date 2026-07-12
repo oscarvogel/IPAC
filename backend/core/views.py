@@ -6,14 +6,17 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, MovimientoCaja, Pago, PerfilUsuario, Sucursal
+from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
 from .serializers import (
     AlumnoSerializer,
+    AplicacionPagoSerializer,
     CajaDiariaSerializer,
     CarreraCursoSerializer,
     ConceptoCobrableSerializer,
     CurrentUserSerializer,
+    CuotaSerializer,
     LoginSerializer,
+    MatriculaSerializer,
     MovimientoCajaSerializer,
     PagoSerializer,
     SucursalSerializer,
@@ -103,6 +106,35 @@ class ConceptoCobrableViewSet(viewsets.ModelViewSet):
         instance.activo = False
         instance.save(update_fields=["activo", "actualizado"])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MatriculaViewSet(viewsets.ModelViewSet):
+    serializer_class = MatriculaSerializer
+
+    def get_queryset(self):
+        queryset = scoped_queryset_for_user(Matricula.objects.select_related("alumno", "carrera", "sucursal"), self.request.user)
+        alumno_id = self.request.query_params.get("alumno")
+        return queryset.filter(alumno_id=alumno_id) if alumno_id else queryset
+
+
+class CuotaViewSet(viewsets.ModelViewSet):
+    serializer_class = CuotaSerializer
+
+    def get_queryset(self):
+        queryset = scoped_queryset_for_user(Cuota.objects.select_related("alumno", "matricula", "concepto", "sucursal").prefetch_related("aplicaciones"), self.request.user)
+        alumno_id = self.request.query_params.get("alumno")
+        estado = self.request.query_params.get("estado")
+        if alumno_id:
+            queryset = queryset.filter(alumno_id=alumno_id)
+        return queryset.filter(estado=estado) if estado else queryset
+
+
+class AplicacionPagoViewSet(viewsets.ModelViewSet):
+    serializer_class = AplicacionPagoSerializer
+
+    def get_queryset(self):
+        cuotas = scoped_queryset_for_user(Cuota.objects.all(), self.request.user)
+        return AplicacionPago.objects.select_related("pago", "cuota").filter(cuota__in=cuotas)
 
 
 class PagoViewSet(viewsets.ModelViewSet):

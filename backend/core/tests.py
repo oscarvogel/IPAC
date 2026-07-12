@@ -1,10 +1,11 @@
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, MovimientoCaja, Pago, PerfilUsuario, Sucursal
+from .models import Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
 
 
 class SucursalSeedTests(TestCase):
@@ -300,5 +301,37 @@ class ApiInicialTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(MovimientoCaja.objects.count(), 0)
+
+    def test_can_enroll_student_and_create_fee(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        carrera = CarreraCurso.objects.get(nombre="Secretariado")
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        hoy = timezone.localdate()
+
+        matricula = self.client.post("/api/matriculas/", {"alumno": alumno.id, "carrera": carrera.id, "fecha_inicio": hoy}, format="json")
+        self.assertEqual(matricula.status_code, status.HTTP_201_CREATED)
+
+        cuota = self.client.post("/api/cuotas/", {"alumno": alumno.id, "matricula": matricula.data["id"], "concepto": concepto.id, "periodo": "2026-07", "fecha_emision": hoy, "fecha_vencimiento": hoy, "importe": "25000.00", "descuento": "2000.00", "recargo": "500.00"}, format="json")
+        self.assertEqual(cuota.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(cuota.data["total"], "23500.00")
+        self.assertEqual(cuota.data["saldo"], "23500.00")
+
+    def test_partial_payment_updates_fee_and_keeps_credit_balance(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        hoy = timezone.localdate()
+        cuota = Cuota.objects.create(alumno=alumno, concepto=concepto, sucursal=self.posadas, periodo="2026-07", fecha_emision=hoy, fecha_vencimiento=hoy, importe=25000)
+
+        pago = self.client.post("/api/pagos/", {"alumno": alumno.id, "importe": "30000.00", "medio": Pago.Medio.EFECTIVO}, format="json")
+        aplicacion = self.client.post("/api/aplicaciones-pago/", {"pago": pago.data["id"], "cuota": cuota.id, "importe": "10000.00"}, format="json")
+
+        self.assertEqual(aplicacion.status_code, status.HTTP_201_CREATED)
+        cuota.refresh_from_db()
+        self.assertEqual(cuota.estado, Cuota.Estado.PARCIAL)
+        detalle_pago = self.client.get(f"/api/pagos/{pago.data['id']}/")
+        self.assertEqual(detalle_pago.data["importe_aplicado"], "10000.00")
+        self.assertEqual(detalle_pago.data["saldo_a_favor"], "20000.00")
 
 # Create your tests here.

@@ -2,12 +2,15 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    AplicacionPagoViewSet,
     AlumnoViewSet,
     CajaDiariaViewSet,
     CarreraCursoViewSet,
     ConceptoCobrableViewSet,
+    CuotaViewSet,
     CurrentUserView,
     LoginView,
+    MatriculaViewSet,
     MovimientoCajaViewSet,
     PagoViewSet,
     SucursalViewSet,
@@ -18,7 +21,10 @@ router.register("sucursales", SucursalViewSet, basename="sucursal")
 router.register("alumnos", AlumnoViewSet, basename="alumno")
 router.register("carreras", CarreraCursoViewSet, basename="carrera")
 router.register("conceptos", ConceptoCobrableViewSet, basename="concepto")
+router.register("matriculas", MatriculaViewSet, basename="matricula")
+router.register("cuotas", CuotaViewSet, basename="cuota")
 router.register("pagos", PagoViewSet, basename="pago")
+router.register("aplicaciones-pago", AplicacionPagoViewSet, basename="aplicacion-pago")
 router.register("cajas", CajaDiariaViewSet, basename="caja")
 router.register("movimientos-caja", MovimientoCajaViewSet, basename="movimiento-caja")
 
