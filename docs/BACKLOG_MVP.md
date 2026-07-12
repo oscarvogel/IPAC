@@ -40,7 +40,7 @@ Criterios de listo:
 - Ver deuda por concepto, pagos aplicados y saldo.
 - Soportar pagos a cuenta.
 
-### Recibo de pago
+### Recibo de pago - backend completado
 
 Objetivo: que cada pago tenga comprobante util para mostrador.
 
@@ -50,6 +50,8 @@ Criterios de listo:
 - Vista imprimible de recibo.
 - Datos de alumno, concepto, importe, medio, usuario y sucursal.
 - Exportar o imprimir desde el navegador.
+
+Ya disponible en API: numeracion interna inalterable y detalle del comprobante. Pendiente: vista imprimible en el frontend.
 
 ## P1 - Necesario para uso interno controlado
 

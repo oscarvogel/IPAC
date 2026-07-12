@@ -189,9 +189,11 @@ class PagoSerializer(serializers.ModelSerializer):
             "importe",
             "medio",
             "observacion",
+            "numero_recibo",
             "importe_aplicado",
             "saldo_a_favor",
         ]
+        read_only_fields = ["numero_recibo"]
 
     def validate(self, attrs):
         alumno = attrs.get("alumno") or getattr(self.instance, "alumno", None)

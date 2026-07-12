@@ -216,6 +216,7 @@ class Pago(TimeStampedModel):
     importe = models.DecimalField(max_digits=12, decimal_places=2)
     medio = models.CharField(max_length=30, choices=Medio.choices, default=Medio.EFECTIVO)
     observacion = models.TextField(blank=True)
+    numero_recibo = models.CharField(max_length=30, unique=True, blank=True, null=True, editable=False)
 
     class Meta:
         ordering = ["-fecha", "-id"]
@@ -226,6 +227,9 @@ class Pago(TimeStampedModel):
         if not self.sucursal_id and self.alumno_id:
             self.sucursal = self.alumno.sucursal
         super().save(*args, **kwargs)
+        if not self.numero_recibo:
+            self.numero_recibo = f"REC-{self.pk:08d}"
+            type(self).objects.filter(pk=self.pk).update(numero_recibo=self.numero_recibo)
 
     def __str__(self):
         return f"{self.alumno} - {self.importe}"

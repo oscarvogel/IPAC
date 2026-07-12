@@ -162,6 +162,26 @@ class PagoViewSet(viewsets.ModelViewSet):
             pago=pago,
         )
 
+    @action(detail=True, methods=["get"], url_path="recibo")
+    def recibo(self, request, pk=None):
+        pago = self.get_object()
+        return Response(
+            {
+                "numero": pago.numero_recibo,
+                "emitido_en": pago.creado,
+                "pago": self.get_serializer(pago).data,
+                "aplicaciones": [
+                    {
+                        "cuota_id": aplicacion.cuota_id,
+                        "periodo": aplicacion.cuota.periodo,
+                        "concepto": aplicacion.cuota.concepto.nombre,
+                        "importe": aplicacion.importe,
+                    }
+                    for aplicacion in pago.aplicaciones.select_related("cuota__concepto")
+                ],
+            }
+        )
+
 
 class CajaDiariaViewSet(viewsets.ModelViewSet):
     serializer_class = CajaDiariaSerializer

@@ -38,7 +38,7 @@ class ConceptoCobrableAdmin(admin.ModelAdmin):
 
 @admin.register(Pago)
 class PagoAdmin(admin.ModelAdmin):
-    list_display = ("fecha", "alumno", "concepto", "importe", "medio", "sucursal")
+    list_display = ("numero_recibo", "fecha", "alumno", "concepto", "importe", "medio", "sucursal")
     list_filter = ("fecha", "medio", "sucursal")
     search_fields = ("alumno__apellido", "alumno__nombre", "alumno__legajo", "observacion")
 

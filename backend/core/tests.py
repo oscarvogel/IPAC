@@ -334,4 +334,21 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(detalle_pago.data["importe_aplicado"], "10000.00")
         self.assertEqual(detalle_pago.data["saldo_a_favor"], "20000.00")
 
+    def test_payment_receipt_has_stable_number_and_details(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+
+        pago = self.client.post(
+            "/api/pagos/",
+            {"alumno": alumno.id, "importe": "12500.00", "medio": Pago.Medio.TRANSFERENCIA},
+            format="json",
+        )
+
+        self.assertEqual(pago.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(pago.data["numero_recibo"].startswith("REC-"))
+        recibo = self.client.get(f"/api/pagos/{pago.data['id']}/recibo/")
+        self.assertEqual(recibo.status_code, status.HTTP_200_OK)
+        self.assertEqual(recibo.data["numero"], pago.data["numero_recibo"])
+        self.assertEqual(recibo.data["pago"]["alumno_nombre"], "Perez, Pedro")
+
 # Create your tests here.
