@@ -17,6 +17,7 @@ const showPagoModal = ref(false)
 const showEstadoModal = ref(false)
 const showMovimientoModal = ref(false)
 const showCerrarCajaModal = ref(false)
+const editingConceptoId = ref(null)
 
 const loginForm = reactive({
   username: '',
@@ -98,9 +99,12 @@ const dashboardStats = computed(() => [
 ])
 
 const detailConcepts = computed(() => {
-  if (!selectedAlumno.value) return conceptos.value.slice(0, 3)
-  return conceptos.value.filter((concepto) => concepto.sucursal === selectedAlumno.value.sucursal).slice(0, 3)
+  const activos = conceptos.value.filter((concepto) => concepto.activo)
+  if (!selectedAlumno.value) return activos.slice(0, 3)
+  return activos.filter((concepto) => concepto.sucursal === selectedAlumno.value.sucursal).slice(0, 3)
 })
+
+const conceptosActivos = computed(() => conceptos.value.filter((concepto) => concepto.activo))
 
 const selectedPagos = computed(() => {
   if (!selectedAlumno.value) return []
@@ -238,12 +242,24 @@ function closePagoModal() {
 }
 
 function resetConceptoForm() {
+  editingConceptoId.value = null
   Object.assign(conceptoForm, {
     nombre: '',
     tipo: 'cuota',
     importe: '',
     sucursal: sucursales.value[0]?.id || '',
     carrera: '',
+  })
+}
+
+function editConcepto(concepto) {
+  editingConceptoId.value = concepto.id
+  Object.assign(conceptoForm, {
+    nombre: concepto.nombre,
+    tipo: concepto.tipo,
+    importe: concepto.importe,
+    sucursal: concepto.sucursal,
+    carrera: concepto.carrera || '',
   })
 }
 
@@ -340,18 +356,34 @@ async function createAlumno() {
   }
 }
 
-async function createConcepto() {
+async function saveConcepto() {
   error.value = ''
   loading.value = true
   try {
-    await apiRequest('/conceptos/', {
-      method: 'POST',
+    const isEditing = Boolean(editingConceptoId.value)
+    await apiRequest(isEditing ? `/conceptos/${editingConceptoId.value}/` : '/conceptos/', {
+      method: isEditing ? 'PUT' : 'POST',
       body: JSON.stringify({
         ...conceptoForm,
         carrera: conceptoForm.carrera || null,
       }),
     })
     resetConceptoForm()
+    await loadCatalogs()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    loading.value = false
+  }
+}
+
+async function desactivarConcepto(concepto) {
+  if (!window.confirm(`¿Desactivar el concepto "${concepto.nombre}"? Dejara de estar disponible para nuevos cobros.`)) return
+  error.value = ''
+  loading.value = true
+  try {
+    await apiRequest(`/conceptos/${concepto.id}/`, { method: 'DELETE' })
+    if (editingConceptoId.value === concepto.id) resetConceptoForm()
     await loadCatalogs()
   } catch (err) {
     error.value = err.message
@@ -641,10 +673,10 @@ onMounted(loadSession)
         </section>
 
         <section v-if="activeModule === 'conceptos'" class="secondary-grid">
-          <form class="panel quick-create" @submit.prevent="createConcepto">
+          <form class="panel quick-create" @submit.prevent="saveConcepto">
             <div class="panel-head compact">
-              <h2>Nuevo concepto</h2>
-              <span>Arancel</span>
+              <h2>{{ editingConceptoId ? 'Editar concepto' : 'Nuevo concepto' }}</h2>
+              <span>{{ editingConceptoId ? 'Edicion' : 'Arancel' }}</span>
             </div>
             <div class="quick-form">
               <label>Nombre<input v-model="conceptoForm.nombre" required /></label>
@@ -667,19 +699,22 @@ onMounted(loadSession)
                 </select>
               </label>
             </div>
-            <button class="primary-button" :disabled="loading" type="submit">Guardar concepto</button>
+            <div class="form-actions">
+              <button v-if="editingConceptoId" class="secondary-button" :disabled="loading" type="button" @click="resetConceptoForm">Cancelar</button>
+              <button class="primary-button" :disabled="loading" type="submit">{{ editingConceptoId ? 'Guardar cambios' : 'Guardar concepto' }}</button>
+            </div>
           </form>
 
           <div class="panel table-card">
             <div class="panel-head">
               <div>
                 <h2>Conceptos activos</h2>
-                <p>{{ conceptos.length }} registros</p>
+                <p>{{ conceptosActivos.length }} activos · {{ conceptos.length - conceptosActivos.length }} inactivos</p>
               </div>
             </div>
             <table>
               <thead>
-                <tr><th>Nombre</th><th>Tipo</th><th>Importe</th><th>Sucursal</th></tr>
+                <tr><th>Nombre</th><th>Tipo</th><th>Importe</th><th>Sucursal</th><th>Acciones</th></tr>
               </thead>
               <tbody>
                 <tr v-for="concepto in conceptos" :key="concepto.id">
@@ -687,6 +722,10 @@ onMounted(loadSession)
                   <td>{{ concepto.tipo }}</td>
                   <td>$ {{ concepto.importe }}</td>
                   <td>{{ concepto.sucursal_nombre }}</td>
+                  <td class="table-actions">
+                    <button class="secondary-button" type="button" @click="editConcepto(concepto)">Editar</button>
+                    <button class="danger-button" type="button" @click="desactivarConcepto(concepto)">Desactivar</button>
+                  </td>
                 </tr>
               </tbody>
             </table>

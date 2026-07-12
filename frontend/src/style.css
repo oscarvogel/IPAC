@@ -689,6 +689,31 @@ select:focus {
   font-weight: 820;
 }
 
+.form-actions,
+.table-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.form-actions {
+  padding: 0 16px 16px;
+  justify-content: flex-end;
+}
+
+.table-actions .secondary-button,
+.table-actions .danger-button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.danger-button {
+  border: 1px solid #fecdca;
+  border-radius: 9px;
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
 .secondary-grid {
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);
