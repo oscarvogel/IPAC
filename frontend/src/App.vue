@@ -152,6 +152,10 @@ function formatMoney(value) {
   })
 }
 
+function printCajaResumen() {
+  window.print()
+}
+
 async function apiRequest(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
@@ -740,6 +744,7 @@ onMounted(loadSession)
               <span>{{ cajaHoy?.fecha }} · {{ cajaHoy?.estado }}</span>
             </div>
             <div class="cash-actions">
+              <button type="button" @click="printCajaResumen">Imprimir resumen</button>
               <button type="button" @click="openMovimientoModal('ingreso')" :disabled="cajaHoy?.estado === 'cerrada'">Ingreso</button>
               <button type="button" @click="openMovimientoModal('egreso')" :disabled="cajaHoy?.estado === 'cerrada'">Egreso</button>
               <button type="button" @click="openMovimientoModal('retiro')" :disabled="cajaHoy?.estado === 'cerrada'">Retiro</button>
@@ -776,6 +781,26 @@ onMounted(loadSession)
             </table>
             <p v-if="!cajaMovimientos.length" class="empty-state flat">Todavia no hay movimientos en esta caja.</p>
           </div>
+
+          <section class="cash-print-summary" aria-hidden="true">
+            <header><strong>IPAC</strong><span>Resumen de caja</span></header>
+            <h1>{{ cajaHoy?.sucursal_nombre || user.perfil.sucursal.nombre }}</h1>
+            <p>{{ cajaHoy?.fecha }} · Usuario: {{ user.username }} · Estado: {{ cajaHoy?.estado }}</p>
+            <div class="print-totals">
+              <div><span>Total esperado</span><strong>$ {{ formatMoney(cajaTotales.total) }}</strong></div>
+              <div><span>Efectivo</span><strong>$ {{ formatMoney(cajaTotales.efectivo) }}</strong></div>
+              <div><span>Transferencia</span><strong>$ {{ formatMoney(cajaTotales.transferencia) }}</strong></div>
+              <div v-if="cajaHoy?.estado === 'cerrada'"><span>Total contado</span><strong>$ {{ formatMoney(cajaHoy.total_contado) }}</strong></div>
+              <div v-if="cajaHoy?.estado === 'cerrada'"><span>Diferencia</span><strong>$ {{ formatMoney(cajaHoy.diferencia) }}</strong></div>
+            </div>
+            <table>
+              <thead><tr><th>Tipo</th><th>Medio</th><th>Descripcion</th><th>Importe</th></tr></thead>
+              <tbody>
+                <tr v-for="movimiento in cajaMovimientos" :key="`print-${movimiento.id}`"><td>{{ movimiento.tipo_label }}</td><td>{{ movimiento.medio }}</td><td>{{ movimiento.descripcion || 'Sin descripcion' }}</td><td>$ {{ formatMoney(movimiento.importe) }}</td></tr>
+                <tr v-if="!cajaMovimientos.length"><td colspan="4">No hay movimientos registrados.</td></tr>
+              </tbody>
+            </table>
+          </section>
         </section>
 
         <section v-if="activeModule === 'sucursales'" class="panel table-card">

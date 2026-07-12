@@ -778,6 +778,10 @@ select:focus {
   border-color: #bbf7d0;
 }
 
+.cash-print-summary {
+  display: none;
+}
+
 .table-card {
   overflow-x: auto;
 }
@@ -802,6 +806,19 @@ th {
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.09em;
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .cash-print-summary, .cash-print-summary * { visibility: visible; }
+  .cash-print-summary { position: absolute; inset: 0; display: block; padding: 24px; color: #111827; background: white; }
+  .cash-print-summary header, .print-totals { display: flex; justify-content: space-between; gap: 14px; }
+  .cash-print-summary header { padding-bottom: 14px; border-bottom: 2px solid #111827; }
+  .cash-print-summary h1 { margin: 24px 0 4px; }
+  .print-totals { margin: 22px 0; flex-wrap: wrap; }
+  .print-totals div { min-width: 130px; }
+  .print-totals span, .print-totals strong { display: block; }
+  .cash-print-summary table { min-width: 0; }
 }
 
 .table-badge {
