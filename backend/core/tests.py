@@ -414,4 +414,17 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(repetida.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Cuota.objects.filter(periodo="2026-09").count(), 2)
 
+    def test_operational_report_respects_branch_and_date_range(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        Pago.objects.create(alumno=alumno, sucursal=self.posadas, importe="12500.00", medio=Pago.Medio.EFECTIVO)
+
+        reporte = self.client.get(
+            f"/api/reportes/resumen/?desde={timezone.localdate()}&hasta={timezone.localdate()}&sucursal={self.posadas.id}"
+        )
+        self.assertEqual(reporte.status_code, status.HTTP_200_OK)
+        self.assertEqual(reporte.data["cobranzas"]["cantidad_pagos"], 1)
+        self.assertEqual(str(reporte.data["cobranzas"]["total"]), "12500")
+        self.assertEqual(str(reporte.data["cobranzas"]["por_medio"][Pago.Medio.EFECTIVO]), "12500")
+
 # Create your tests here.

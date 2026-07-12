@@ -1,6 +1,8 @@
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
+from datetime import date
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.authtoken.models import Token
@@ -64,6 +66,54 @@ class CurrentUserView(APIView):
 
     def get(self, request):
         return Response(CurrentUserSerializer(request.user).data)
+
+
+class ReporteResumenView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        hoy = timezone.localdate()
+        try:
+            desde = date.fromisoformat(request.query_params.get("desde", hoy.replace(day=1).isoformat()))
+            hasta = date.fromisoformat(request.query_params.get("hasta", hoy.isoformat()))
+        except ValueError:
+            return Response({"detail": "Las fechas deben tener formato AAAA-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        if desde > hasta:
+            return Response({"detail": "La fecha desde no puede ser posterior a hasta."}, status=status.HTTP_400_BAD_REQUEST)
+
+        sucursal_id = request.query_params.get("sucursal")
+        sucursales = scoped_queryset_for_user(Sucursal.objects.all(), request.user)
+        if sucursal_id:
+            sucursales = sucursales.filter(pk=sucursal_id)
+            if not sucursales.exists():
+                return Response({"detail": "Sucursal invalida o sin acceso."}, status=status.HTTP_400_BAD_REQUEST)
+
+        pagos = Pago.objects.filter(sucursal__in=sucursales, fecha__range=(desde, hasta))
+        cuotas = Cuota.objects.filter(sucursal__in=sucursales).exclude(estado=Cuota.Estado.ANULADA).prefetch_related("aplicaciones")
+        cajas = CajaDiaria.objects.filter(sucursal__in=sucursales, fecha__range=(desde, hasta))
+        deuda = sum((cuota.saldo for cuota in cuotas), Decimal("0"))
+        saldo_a_favor = sum((pago.saldo_a_favor for pago in Pago.objects.filter(sucursal__in=sucursales).prefetch_related("aplicaciones")), Decimal("0"))
+        cobrado_por_medio = {
+            medio: pagos.filter(medio=medio).aggregate(total=Sum("importe"))["total"] or Decimal("0")
+            for medio, _ in Pago.Medio.choices
+        }
+        return Response(
+            {
+                "periodo": {"desde": desde, "hasta": hasta},
+                "sucursales": list(sucursales.values("id", "codigo", "nombre")),
+                "cobranzas": {
+                    "cantidad_pagos": pagos.count(),
+                    "total": pagos.aggregate(total=Sum("importe"))["total"] or Decimal("0"),
+                    "por_medio": cobrado_por_medio,
+                },
+                "cuenta_corriente": {"deuda": deuda, "saldo_a_favor": saldo_a_favor, "saldo_neto": deuda - saldo_a_favor},
+                "cajas": {
+                    "abiertas": cajas.filter(estado=CajaDiaria.Estado.ABIERTA).count(),
+                    "cerradas": cajas.filter(estado=CajaDiaria.Estado.CERRADA).count(),
+                    "diferencia_acumulada": sum((caja.diferencia for caja in cajas), Decimal("0")),
+                },
+            }
+        )
 
 
 class SucursalViewSet(viewsets.ModelViewSet):

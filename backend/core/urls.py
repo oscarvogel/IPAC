@@ -13,6 +13,7 @@ from .views import (
     MatriculaViewSet,
     MovimientoCajaViewSet,
     PagoViewSet,
+    ReporteResumenView,
     SucursalViewSet,
 )
 
@@ -31,5 +32,6 @@ router.register("movimientos-caja", MovimientoCajaViewSet, basename="movimiento-
 urlpatterns = [
     path("auth/login/", LoginView.as_view(), name="api-login"),
     path("auth/me/", CurrentUserView.as_view(), name="api-current-user"),
+    path("reportes/resumen/", ReporteResumenView.as_view(), name="api-reporte-resumen"),
     path("", include(router.urls)),
 ]

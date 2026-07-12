@@ -83,6 +83,8 @@ Criterios de listo:
 - Caja diaria y cierres.
 - Exportacion basica a Excel/CSV.
 
+Ya disponible en API: resumen operativo por fechas y sucursal con cobranzas por medio, deuda, saldo a favor y estado de cajas. Pendiente: tablero visual y exportacion.
+
 ### Mejoras CRM alumnos
 
 Objetivo: hacer comoda la operacion diaria.
