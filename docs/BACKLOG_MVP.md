@@ -40,6 +40,8 @@ Criterios de listo:
 - Ver deuda por concepto, pagos aplicados y saldo.
 - Soportar pagos a cuenta.
 
+Ya disponible en API: consulta unificada de estado de cuenta por alumno con cuotas, pagos, saldo pendiente y saldo a favor. Pendiente: reemplazar el resumen demo de la pantalla por estos datos reales.
+
 ### Recibo de pago - backend completado
 
 Objetivo: que cada pago tenga comprobante util para mostrador.

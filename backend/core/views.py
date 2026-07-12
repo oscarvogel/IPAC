@@ -91,6 +91,28 @@ class AlumnoViewSet(viewsets.ModelViewSet):
             self.request.user,
         )
 
+    @action(detail=True, methods=["get"], url_path="estado-cuenta")
+    def estado_cuenta(self, request, pk=None):
+        alumno = self.get_object()
+        cuotas = Cuota.objects.filter(alumno=alumno).select_related("concepto").prefetch_related("aplicaciones")
+        pagos = Pago.objects.filter(alumno=alumno).select_related("concepto").prefetch_related("aplicaciones")
+        cuotas_activas = [cuota for cuota in cuotas if cuota.estado != Cuota.Estado.ANULADA]
+        total_deuda = sum((cuota.saldo for cuota in cuotas_activas), 0)
+        saldo_a_favor = sum((pago.saldo_a_favor for pago in pagos), 0)
+        return Response(
+            {
+                "alumno": AlumnoSerializer(alumno).data,
+                "resumen": {
+                    "total_cuotas": sum((cuota.total for cuota in cuotas_activas), 0),
+                    "saldo_pendiente": total_deuda,
+                    "saldo_a_favor": saldo_a_favor,
+                    "saldo_neto": total_deuda - saldo_a_favor,
+                },
+                "cuotas": CuotaSerializer(cuotas, many=True).data,
+                "pagos": PagoSerializer(pagos, many=True).data,
+            }
+        )
+
 
 class ConceptoCobrableViewSet(viewsets.ModelViewSet):
     serializer_class = ConceptoCobrableSerializer

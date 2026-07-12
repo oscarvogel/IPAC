@@ -351,4 +351,37 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(recibo.data["numero"], pago.data["numero_recibo"])
         self.assertEqual(recibo.data["pago"]["alumno_nombre"], "Perez, Pedro")
 
+    def test_account_statement_returns_real_fees_and_credit(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        hoy = timezone.localdate()
+        cuota = Cuota.objects.create(
+            alumno=alumno,
+            concepto=concepto,
+            sucursal=self.posadas,
+            periodo="2026-08",
+            fecha_emision=hoy,
+            fecha_vencimiento=hoy,
+            importe="25000.00",
+        )
+        pago = Pago.objects.create(
+            alumno=alumno,
+            sucursal=self.posadas,
+            importe="30000.00",
+            medio=Pago.Medio.TRANSFERENCIA,
+        )
+        aplicacion = self.client.post(
+            "/api/aplicaciones-pago/",
+            {"pago": pago.id, "cuota": cuota.id, "importe": "10000.00"},
+            format="json",
+        )
+        self.assertEqual(aplicacion.status_code, status.HTTP_201_CREATED)
+
+        estado = self.client.get(f"/api/alumnos/{alumno.id}/estado-cuenta/")
+        self.assertEqual(estado.status_code, status.HTTP_200_OK)
+        self.assertEqual(str(estado.data["resumen"]["saldo_pendiente"]), "15000.00")
+        self.assertEqual(str(estado.data["resumen"]["saldo_a_favor"]), "20000.00")
+        self.assertEqual(str(estado.data["resumen"]["saldo_neto"]), "-5000.00")
+
 # Create your tests here.
