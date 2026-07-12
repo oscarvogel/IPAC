@@ -42,6 +42,8 @@ Criterios de listo:
 
 Ya disponible en API: consulta unificada de estado de cuenta por alumno con cuotas, pagos, saldo pendiente y saldo a favor. Pendiente: reemplazar el resumen demo de la pantalla por estos datos reales.
 
+Tambien disponible en API: generacion atomica de cuotas para un grupo de alumnos, con control de sucursal y prevencion de duplicados por concepto y periodo.
+
 ### Recibo de pago - backend completado
 
 Objetivo: que cada pago tenga comprobante util para mostrador.

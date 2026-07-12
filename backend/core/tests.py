@@ -384,4 +384,34 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(str(estado.data["resumen"]["saldo_a_favor"]), "20000.00")
         self.assertEqual(str(estado.data["resumen"]["saldo_neto"]), "-5000.00")
 
+    def test_can_generate_fees_for_multiple_students_once(self):
+        self.client.force_authenticate(user=self.admin)
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        pedro = Alumno.objects.get(legajo="P-001")
+        ana = Alumno.objects.create(
+            legajo="P-003",
+            nombre="Ana",
+            apellido="Lopez",
+            dni="24111222",
+            sucursal=self.posadas,
+        )
+        hoy = timezone.localdate()
+        payload = {
+            "alumnos": [pedro.id, ana.id],
+            "concepto": concepto.id,
+            "periodo": "2026-09",
+            "fecha_emision": hoy,
+            "fecha_vencimiento": hoy,
+            "importe": "26000.00",
+        }
+
+        response = self.client.post("/api/cuotas/generar/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(Cuota.objects.filter(periodo="2026-09").count(), 2)
+
+        repetida = self.client.post("/api/cuotas/generar/", payload, format="json")
+        self.assertEqual(repetida.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Cuota.objects.filter(periodo="2026-09").count(), 2)
+
 # Create your tests here.

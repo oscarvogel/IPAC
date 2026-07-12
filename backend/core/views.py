@@ -1,4 +1,6 @@
+from django.db import transaction
 from django.utils import timezone
+from decimal import Decimal, InvalidOperation
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.authtoken.models import Token
@@ -149,6 +151,60 @@ class CuotaViewSet(viewsets.ModelViewSet):
         if alumno_id:
             queryset = queryset.filter(alumno_id=alumno_id)
         return queryset.filter(estado=estado) if estado else queryset
+
+    @action(detail=False, methods=["post"], url_path="generar")
+    def generar(self, request):
+        alumno_ids = request.data.get("alumnos", [])
+        concepto_id = request.data.get("concepto")
+        periodo = request.data.get("periodo")
+        fecha_emision = request.data.get("fecha_emision")
+        fecha_vencimiento = request.data.get("fecha_vencimiento")
+        if not isinstance(alumno_ids, list) or not alumno_ids:
+            return Response({"detail": "Debe indicar al menos un alumno."}, status=status.HTTP_400_BAD_REQUEST)
+        if not all([concepto_id, periodo, fecha_emision, fecha_vencimiento]):
+            return Response({"detail": "Concepto, periodo y fechas son obligatorios."}, status=status.HTTP_400_BAD_REQUEST)
+
+        conceptos = scoped_queryset_for_user(ConceptoCobrable.objects.filter(activo=True), request.user)
+        concepto = conceptos.filter(pk=concepto_id).first()
+        if not concepto:
+            return Response({"detail": "Concepto invalido o sin acceso."}, status=status.HTTP_400_BAD_REQUEST)
+        alumnos = scoped_queryset_for_user(Alumno.objects.filter(id__in=alumno_ids, estado=Alumno.Estado.ACTIVO), request.user)
+        if alumnos.count() != len(set(alumno_ids)):
+            return Response({"detail": "Hay alumnos invalidos, inactivos o de otra sucursal."}, status=status.HTTP_400_BAD_REQUEST)
+        if alumnos.exclude(sucursal=concepto.sucursal).exists():
+            return Response({"detail": "El concepto debe pertenecer a la sucursal de todos los alumnos."}, status=status.HTTP_400_BAD_REQUEST)
+        existentes = Cuota.objects.filter(alumno__in=alumnos, concepto=concepto, periodo=periodo)
+        if existentes.exists():
+            return Response(
+                {"detail": "Ya existen cuotas para este concepto y periodo.", "alumnos": list(existentes.values_list("alumno_id", flat=True))},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            importe = Decimal(str(request.data.get("importe", concepto.importe)))
+            descuento = Decimal(str(request.data.get("descuento", 0)))
+            recargo = Decimal(str(request.data.get("recargo", 0)))
+        except (InvalidOperation, TypeError):
+            return Response({"detail": "Los importes deben ser numericos."}, status=status.HTTP_400_BAD_REQUEST)
+        if importe <= 0 or descuento < 0 or recargo < 0 or descuento > importe + recargo:
+            return Response({"detail": "Los importes, descuentos o recargos no son validos."}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            cuotas = [
+                Cuota(
+                    alumno=alumno,
+                    concepto=concepto,
+                    sucursal=alumno.sucursal,
+                    periodo=periodo,
+                    fecha_emision=fecha_emision,
+                    fecha_vencimiento=fecha_vencimiento,
+                    importe=importe,
+                    descuento=descuento,
+                    recargo=recargo,
+                )
+                for alumno in alumnos
+            ]
+            Cuota.objects.bulk_create(cuotas)
+        return Response(CuotaSerializer(cuotas, many=True).data, status=status.HTTP_201_CREATED)
 
 
 class AplicacionPagoViewSet(viewsets.ModelViewSet):
