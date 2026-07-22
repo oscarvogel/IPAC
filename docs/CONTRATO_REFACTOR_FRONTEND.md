@@ -9,6 +9,20 @@
 
 ---
 
+## 0. Estado del roadmap
+
+- [x] PR 1 - router + aliases ✅ `7bfd254`
+- [ ] PR 2 - extract api + auth
+- [ ] PR 3 - extract layout
+- [ ] PR 4 - extract alumnos
+- [ ] PR 5 - extract caja
+- [ ] PR 6 - extract conceptos
+- [ ] PR 7 - extract reportes
+- [ ] PR 8 - extract sucursales + dashboard
+- [ ] PR 9 - Vitest (opcional)
+
+---
+
 ## 1. Proposito
 
 El frontend del MVP esta implementado en un unico archivo `App.vue` que
@@ -137,13 +151,14 @@ frontend/
 
 Cada PR deja la app funcionando. Paridad funcional primero, mejoras despues.
 
-### PR 1 - `chore(frontend): add vue-router and path aliases`
+### PR 1 - `chore(frontend): add vue-router and path aliases` ✅
 - Instala `vue-router@4`.
 - Configura `@/` en `vite.config.js`.
 - Crea `src/router/index.js` con las rutas (placeholders que renderizan `<h1>Modulo X</h1>`).
 - `App.vue` se reduce a `<RouterView />` + toaster.
 - Mantiene el login gate provisorio.
 - **Resultado:** app funciona con URLs (`/login`, `/alumnos`, etc.) pero los modulos son placeholders.
+- **Cerrado en commit `7bfd254` sobre `refactor/pr1-router-aliases`.**
 
 ### PR 2 - `refactor(frontend): extract api client and auth composable`
 - `src/lib/api.js` - fetch wrapper, token header, normalizacion de errores.
