@@ -1,18 +1,15 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getToken } from '@/lib/api'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 
-// Todas las rutas de momento renderizan un PlaceholderView.
-// PR 2+ ira reemplazando cada entrada por su view real.
+// Las rutas que aun no tienen view real apuntan a PlaceholderView.
+// Cada PR del refactor ira reemplazando la entrada correspondiente.
 const routes = [
   { path: '/', redirect: '/alumnos' },
   {
     path: '/login',
     name: 'login',
-    component: PlaceholderView,
-    props: {
-      title: 'Login',
-      note: 'El formulario real de login llega en el PR 2 (extract api + auth composable).',
-    },
+    component: () => import('@/views/LoginView.vue'),
   },
   {
     path: '/alumnos',
@@ -75,16 +72,14 @@ export const router = createRouter({
   routes,
 })
 
-// Guard de auth provisorio.
-// En el PR 2 se reemplaza por el chequeo de useAuth.
-const TOKEN_KEY = 'ipac_token'
-const isAuthenticated = () => Boolean(localStorage.getItem(TOKEN_KEY))
-
+// Guard de auth. Lee el token directo de localStorage via lib/api
+// (el guard corre fuera del contexto Vue, no puede usar useAuth).
 router.beforeEach((to, from, next) => {
-  if (to.path !== '/login' && !isAuthenticated()) {
+  const hasToken = Boolean(getToken())
+  if (to.path !== '/login' && !hasToken) {
     return next({ path: '/login' })
   }
-  if (to.path === '/login' && isAuthenticated()) {
+  if (to.path === '/login' && hasToken) {
     return next({ path: '/alumnos' })
   }
   return next()
