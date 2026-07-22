@@ -1,60 +1,69 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getToken } from '@/lib/api'
+import AppShell from '@/components/layout/AppShell.vue'
+import LoginView from '@/views/LoginView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 
-// Las rutas que aun no tienen view real apuntan a PlaceholderView.
-// Cada PR del refactor ira reemplazando la entrada correspondiente.
+// Las rutas autenticadas viven como children de la ruta padre "/",
+// cuyo component es AppShell. Asi el shell envuelve automaticamente
+// cada vista autenticada y LoginView queda fuera del shell (top-level).
 const routes = [
-  { path: '/', redirect: '/alumnos' },
   {
     path: '/login',
     name: 'login',
-    component: () => import('@/views/LoginView.vue'),
+    component: LoginView,
   },
   {
-    path: '/alumnos',
-    name: 'alumnos',
-    component: PlaceholderView,
-    props: {
-      title: 'Alumnos',
-      note: 'Modulo real llega en el PR 4 (extract alumnos module).',
-    },
-  },
-  {
-    path: '/caja',
-    name: 'caja',
-    component: PlaceholderView,
-    props: {
-      title: 'Caja',
-      note: 'Modulo real llega en el PR 5 (extract caja module).',
-    },
-  },
-  {
-    path: '/conceptos',
-    name: 'conceptos',
-    component: PlaceholderView,
-    props: {
-      title: 'Conceptos',
-      note: 'Modulo real llega en el PR 6 (extract conceptos module).',
-    },
-  },
-  {
-    path: '/reportes',
-    name: 'reportes',
-    component: PlaceholderView,
-    props: {
-      title: 'Reportes',
-      note: 'Modulo real llega en el PR 7 (extract reportes module).',
-    },
-  },
-  {
-    path: '/sucursales',
-    name: 'sucursales',
-    component: PlaceholderView,
-    props: {
-      title: 'Sucursales',
-      note: 'Modulo real llega en el PR 8 (extract sucursales module + dashboard).',
-    },
+    path: '/',
+    component: AppShell,
+    children: [
+      { path: '', redirect: '/alumnos' },
+      {
+        path: 'alumnos',
+        name: 'alumnos',
+        component: PlaceholderView,
+        props: {
+          title: 'Alumnos',
+          note: 'Modulo real llega en el PR 4 (extract alumnos module).',
+        },
+      },
+      {
+        path: 'caja',
+        name: 'caja',
+        component: PlaceholderView,
+        props: {
+          title: 'Caja',
+          note: 'Modulo real llega en el PR 5 (extract caja module).',
+        },
+      },
+      {
+        path: 'conceptos',
+        name: 'conceptos',
+        component: PlaceholderView,
+        props: {
+          title: 'Conceptos',
+          note: 'Modulo real llega en el PR 6 (extract conceptos module).',
+        },
+      },
+      {
+        path: 'reportes',
+        name: 'reportes',
+        component: PlaceholderView,
+        props: {
+          title: 'Reportes',
+          note: 'Modulo real llega en el PR 7 (extract reportes module).',
+        },
+      },
+      {
+        path: 'sucursales',
+        name: 'sucursales',
+        component: PlaceholderView,
+        props: {
+          title: 'Sucursales',
+          note: 'Modulo real llega en el PR 8 (extract sucursales module + dashboard).',
+        },
+      },
+    ],
   },
   {
     path: '/:pathMatch(.*)*',
