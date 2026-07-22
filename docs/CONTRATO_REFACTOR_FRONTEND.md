@@ -14,7 +14,7 @@
 - [x] PR 1 - router + aliases ✅ `7bfd254`
 - [x] PR 2 - extract api + auth ✅ `331a3d8`
 - [x] PR 3 - extract layout ✅ `ae54133`
-- [ ] PR 4 - extract alumnos
+- [x] PR 4 - extract alumnos ✅ `d21f94d + 690210f + 1e703ee + 289787e`
 - [ ] PR 5 - extract caja
 - [ ] PR 6 - extract conceptos
 - [ ] PR 7 - extract reportes
@@ -177,11 +177,17 @@ Cada PR deja la app funcionando. Paridad funcional primero, mejoras despues.
 - **Resultado:** layout limpio, navegacion con URL real, modulos siguen como placeholders.
 - **Cerrado en commit `ae54133` sobre `refactor/pr3-layout`.** Patrón parent route: `/` envuelve con AppShell, los 5 modulos son children; `/login` y 404 quedan top-level.
 
-### PR 4 - `refactor(frontend): extract alumnos module`
+### PR 4 - `refactor(frontend): extract alumnos module` ✅
 - `useAlumnos.js`, `useCatalogos.js`.
 - `AlumnosView.vue` + `AlumnoList.vue` + `AlumnoDetail.vue` + `AlumnoForm.vue` + `PagoForm.vue` + `EstadoCuentaModal.vue`.
 - **Este es el PR mas grande.** Conviene partirlo en commits chicos: lista -> detail -> form -> modales.
 - **Resultado:** pantalla de alumnos funciona identica a antes, en 6 archivos chicos.
+- **Cerrado en 4 commits sobre `refactor/pr4-alumnos`:**
+  - `d21f94d` composables + skeleton view + router
+  - `690210f` AlumnoList + AlumnoDetail
+  - `1e703ee` stats grid + topbar actions composable
+  - `289787e` AlumnoForm + PagoForm + EstadoCuentaModal
+- **Extras que se sumaron en el PR:** `useTopbarActions` composable (las vistas inyectan botones en el topbar) y `usePagos` (compartido con Caja en PR 5).
 
 ### PR 5 - `refactor(frontend): extract caja module`
 - `useCaja.js` con la logica de totales.

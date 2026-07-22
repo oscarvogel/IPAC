@@ -4,8 +4,17 @@
       <p class="eyebrow">Panel de trabajo</p>
       <h1>{{ title }}</h1>
     </div>
-    <div class="top-actions">
-      <slot name="actions" />
+    <div v-if="actions.length" class="top-actions">
+      <button
+        v-for="action in actions"
+        :key="action.label"
+        :class="action.variant === 'primary' ? 'new-button' : 'secondary-button'"
+        type="button"
+        :disabled="action.disabled"
+        @click="action.onClick"
+      >
+        {{ action.label }}
+      </button>
     </div>
   </header>
 </template>
@@ -13,8 +22,10 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useTopbarActions } from '@/composables/useTopbarActions'
 
 const route = useRoute()
+const { actions: providedActions } = useTopbarActions()
 
 const titles = {
   '/alumnos': 'Alumnos',
@@ -25,4 +36,5 @@ const titles = {
 }
 
 const title = computed(() => titles[route.path] || 'IPAC')
+const actions = computed(() => providedActions.value || [])
 </script>
