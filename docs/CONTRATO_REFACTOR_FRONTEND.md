@@ -12,7 +12,7 @@
 ## 0. Estado del roadmap
 
 - [x] PR 1 - router + aliases ✅ `7bfd254`
-- [ ] PR 2 - extract api + auth
+- [x] PR 2 - extract api + auth ✅ `331a3d8`
 - [ ] PR 3 - extract layout
 - [ ] PR 4 - extract alumnos
 - [ ] PR 5 - extract caja
@@ -160,14 +160,15 @@ Cada PR deja la app funcionando. Paridad funcional primero, mejoras despues.
 - **Resultado:** app funciona con URLs (`/login`, `/alumnos`, etc.) pero los modulos son placeholders.
 - **Cerrado en commit `7bfd254` sobre `refactor/pr1-router-aliases`.**
 
-### PR 2 - `refactor(frontend): extract api client and auth composable`
+### PR 2 - `refactor(frontend): extract api client and auth composable` ✅
 - `src/lib/api.js` - fetch wrapper, token header, normalizacion de errores.
-- `src/lib/formatters.js` - `formatMoney`, `formatDate`.
+- `src/lib/formatters.js` - `formatMoney`, `formatDate`, `formatDateTime`.
 - `src/composables/useAuth.js` - login/logout/me, persistencia en localStorage.
 - `src/composables/useToast.js` - mensajes globales.
 - `src/views/LoginView.vue` - mueve el form de login.
 - `App.vue` queda en ~30 lineas: shell + toaster + router guard.
 - **Resultado:** login funciona desde `/login`, redirect a `/alumnos` tras exito.
+- **Cerrado en commit `331a3d8` sobre `refactor/pr2-api-auth`.**
 
 ### PR 3 - `refactor(frontend): extract layout components`
 - `AppShell.vue`, `AppSidebar.vue`, `AppTopbar.vue`.
