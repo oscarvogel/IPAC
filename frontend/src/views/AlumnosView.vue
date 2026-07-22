@@ -34,11 +34,32 @@
         :alumno="selectedAlumno"
         :conceptos="conceptos"
         :pagos="pagos"
-        @register-pago="showPagoForm = true"
-        @edit="openEdit"
-        @view-estado="showEstadoCuenta = true"
+        @register-pago="openPagoForm"
+        @edit="openEditForm"
+        @view-estado="openEstadoCuenta"
       />
     </div>
+
+    <AlumnoForm
+      :open="showAlumnoForm"
+      :alumno="editingAlumno"
+      @close="closeAlumnoForm"
+      @saved="onAlumnoSaved"
+    />
+
+    <PagoForm
+      :open="showPagoForm"
+      :alumno="selectedAlumno"
+      :conceptos="conceptos"
+      @close="closePagoForm"
+      @saved="onPagoSaved"
+    />
+
+    <EstadoCuentaModal
+      :open="showEstadoCuenta"
+      :alumno="selectedAlumno"
+      @close="closeEstadoCuenta"
+    />
   </div>
 </template>
 
@@ -51,20 +72,26 @@ import { setTopbarActions } from '@/composables/useTopbarActions'
 import { formatMoney } from '@/lib/formatters'
 import AlumnoList from '@/components/alumnos/AlumnoList.vue'
 import AlumnoDetail from '@/components/alumnos/AlumnoDetail.vue'
+import AlumnoForm from '@/components/alumnos/AlumnoForm.vue'
+import PagoForm from '@/components/alumnos/PagoForm.vue'
+import EstadoCuentaModal from '@/components/alumnos/EstadoCuentaModal.vue'
 
-const { alumnos, selectedAlumno, selectedAlumnoId, setSelected, loadAlumnos } = useAlumnos()
+const { alumnos, selectedAlumno, setSelected, loadAlumnos } = useAlumnos()
 const { sucursales, conceptos, loadCatalogos } = useCatalogos()
 const { pagos, loadPagos } = usePagos()
 
 const searchQuery = ref('')
 const sucursalFilter = ref('todas')
+
+const showAlumnoForm = ref(false)
+const editingAlumno = ref(null)
 const showPagoForm = ref(false)
 const showEstadoCuenta = ref(false)
 
 onMounted(async () => {
   await Promise.all([loadCatalogos(), loadAlumnos(), loadPagos()])
   setTopbarActions([
-    { label: 'Nuevo alumno', variant: 'primary', onClick: openNewAlumno },
+    { label: 'Nuevo alumno', variant: 'primary', onClick: openNewAlumnoForm },
   ])
 })
 
@@ -76,17 +103,45 @@ function onSelect(alumno) {
   setSelected(alumno.id)
 }
 
-function openNewAlumno() {
-  // Se enchufa al modal de AlumnoForm en el commit 4.
-  // Por ahora solo loguea para confirmar que el wiring anda.
-  // eslint-disable-next-line no-console
-  console.info('[AlumnosView] openNewAlumno pendiente del modal (commit 4)')
+function openNewAlumnoForm() {
+  editingAlumno.value = null
+  showAlumnoForm.value = true
 }
 
-function openEdit() {
-  // Idem: depende del modal del commit 4.
-  // eslint-disable-next-line no-console
-  console.info('[AlumnosView] openEdit pendiente del modal (commit 4)')
+function openEditForm() {
+  editingAlumno.value = selectedAlumno.value
+  showAlumnoForm.value = true
+}
+
+function closeAlumnoForm() {
+  showAlumnoForm.value = false
+  editingAlumno.value = null
+}
+
+function onAlumnoSaved(saved) {
+  setSelected(saved.id)
+}
+
+function openPagoForm() {
+  if (!selectedAlumno.value) return
+  showPagoForm.value = true
+}
+
+function closePagoForm() {
+  showPagoForm.value = false
+}
+
+function onPagoSaved() {
+  // PagoForm ya recarga la lista. No hace falta hacer nada mas aca.
+}
+
+function openEstadoCuenta() {
+  if (!selectedAlumno.value) return
+  showEstadoCuenta.value = true
+}
+
+function closeEstadoCuenta() {
+  showEstadoCuenta.value = false
 }
 
 const totalPagado = computed(() =>
