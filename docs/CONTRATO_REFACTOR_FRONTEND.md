@@ -13,7 +13,7 @@
 
 - [x] PR 1 - router + aliases ✅ `7bfd254`
 - [x] PR 2 - extract api + auth ✅ `331a3d8`
-- [ ] PR 3 - extract layout
+- [x] PR 3 - extract layout ✅ `ae54133`
 - [ ] PR 4 - extract alumnos
 - [ ] PR 5 - extract caja
 - [ ] PR 6 - extract conceptos
@@ -170,11 +170,12 @@ Cada PR deja la app funcionando. Paridad funcional primero, mejoras despues.
 - **Resultado:** login funciona desde `/login`, redirect a `/alumnos` tras exito.
 - **Cerrado en commit `331a3d8` sobre `refactor/pr2-api-auth`.**
 
-### PR 3 - `refactor(frontend): extract layout components`
+### PR 3 - `refactor(frontend): extract layout components` ✅
 - `AppShell.vue`, `AppSidebar.vue`, `AppTopbar.vue`.
 - `App.vue` queda en ~10 lineas.
 - Sidebar usa `<router-link>` pero las views siguen siendo placeholders.
 - **Resultado:** layout limpio, navegacion con URL real, modulos siguen como placeholders.
+- **Cerrado en commit `ae54133` sobre `refactor/pr3-layout`.** Patrón parent route: `/` envuelve con AppShell, los 5 modulos son children; `/login` y 404 quedan top-level.
 
 ### PR 4 - `refactor(frontend): extract alumnos module`
 - `useAlumnos.js`, `useCatalogos.js`.

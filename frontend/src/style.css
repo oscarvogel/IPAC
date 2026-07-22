@@ -192,7 +192,7 @@ h3 {
   gap: 8px;
 }
 
-.main-nav button {
+.main-nav a {
   width: 100%;
   min-height: 58px;
   padding: 10px 12px;
@@ -203,18 +203,19 @@ h3 {
   background: transparent;
   display: grid;
   gap: 3px;
+  text-decoration: none;
 }
 
-.main-nav button span {
+.main-nav a span {
   font-weight: 820;
 }
 
-.main-nav button small {
+.main-nav a small {
   color: #95a3b8;
 }
 
-.main-nav button:hover,
-.main-nav button.active {
+.main-nav a:hover,
+.main-nav a.active {
   color: white;
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.08);
