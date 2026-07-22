@@ -1,0 +1,68 @@
+// Composable para la gestion de alumnos.
+// Estado singleton: lista de alumnos y el seleccionado.
+
+import { ref, computed, readonly } from 'vue'
+import { apiRequest } from '@/lib/api'
+
+const alumnos = ref([])
+const selectedAlumnoId = ref(null)
+const loading = ref(false)
+const error = ref('')
+
+async function loadAlumnos() {
+  loading.value = true
+  error.value = ''
+  try {
+    const data = await apiRequest('/alumnos/')
+    alumnos.value = data.results || []
+    if (!selectedAlumnoId.value && alumnos.value.length) {
+      selectedAlumnoId.value = alumnos.value[0].id
+    }
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    loading.value = false
+  }
+}
+
+async function createAlumno(payload) {
+  const saved = await apiRequest('/alumnos/', { method: 'POST', body: payload })
+  alumnos.value.push(saved)
+  return saved
+}
+
+async function updateAlumno(id, payload) {
+  const saved = await apiRequest(`/alumnos/${id}/`, { method: 'PATCH', body: payload })
+  const idx = alumnos.value.findIndex((a) => a.id === id)
+  if (idx >= 0) alumnos.value[idx] = saved
+  return saved
+}
+
+async function deactivateAlumno(id) {
+  await apiRequest(`/alumnos/${id}/`, { method: 'DELETE' })
+  const idx = alumnos.value.findIndex((a) => a.id === id)
+  if (idx >= 0) {
+    alumnos.value[idx] = { ...alumnos.value[idx], estado: 'baja' }
+  }
+}
+
+function setSelected(id) {
+  selectedAlumnoId.value = id
+}
+
+export function useAlumnos() {
+  return {
+    alumnos: readonly(alumnos),
+    selectedAlumnoId,
+    selectedAlumno: computed(
+      () => alumnos.value.find((a) => a.id === selectedAlumnoId.value) || null,
+    ),
+    loading: readonly(loading),
+    error: readonly(error),
+    loadAlumnos,
+    createAlumno,
+    updateAlumno,
+    deactivateAlumno,
+    setSelected,
+  }
+}

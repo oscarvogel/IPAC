@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { getToken } from '@/lib/api'
 import AppShell from '@/components/layout/AppShell.vue'
 import LoginView from '@/views/LoginView.vue'
+import AlumnosView from '@/views/AlumnosView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 
 // Las rutas autenticadas viven como children de la ruta padre "/",
@@ -21,11 +22,7 @@ const routes = [
       {
         path: 'alumnos',
         name: 'alumnos',
-        component: PlaceholderView,
-        props: {
-          title: 'Alumnos',
-          note: 'Modulo real llega en el PR 4 (extract alumnos module).',
-        },
+        component: AlumnosView,
       },
       {
         path: 'caja',
