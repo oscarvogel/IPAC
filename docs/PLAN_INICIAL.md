@@ -4,7 +4,7 @@
 
 Inicializar el proyecto IPAC como una aplicacion web administrativa para IPAC Posadas y Eldorado, orientada a administracion, tesoreria y cobranzas.
 
-Por ahora este repositorio contiene solo documentacion inicial. No se crea todavia backend, frontend, Docker, scripts ni estructura de aplicacion.
+El repositorio ya contiene una primera base ejecutable con backend, frontend y Docker Compose para iniciar el MVP.
 
 ## Stack acordado
 
@@ -75,7 +75,7 @@ Coolify y GitHub Actions quedan diferidos hasta definir servidor, credenciales y
 
 1. Confirmar datos reales o anonimizados de alumnos, cuotas, pagos y conceptos.
 2. Definir usuarios iniciales, roles y permisos por sucursal.
-3. Inicializar backend Django/DRF.
-4. Inicializar frontend Vue/Vite.
-5. Agregar Docker Compose para desarrollo y produccion.
-6. Construir el primer flujo funcional: login, sucursales, alumnos y conceptos base.
+3. Ampliar el flujo de cuotas, pagos, descuentos y caja.
+4. Definir usuarios reales, perfiles y permisos finos por sucursal.
+5. Validar datos reales o anonimizados para preparar migracion desde Excel.
+6. Probar Docker Compose en una maquina con Docker disponible.

@@ -17,7 +17,12 @@ La primera version se enfocara en administracion, tesoreria y cobranzas. La gest
 
 ## Estado del proyecto
 
-Planificacion inicial. Todavia no hay implementacion de backend, frontend, Docker ni deploy.
+Base ejecutable inicial en desarrollo:
+
+- Backend Django + Django REST Framework en `backend/`.
+- Frontend Vue + Vite en `frontend/`.
+- Docker Compose preparado para PostgreSQL, backend y frontend.
+- Primer flujo funcional: login, sucursales, alumnos, carreras/cursos y conceptos cobrables.
 
 ## Alcance inicial previsto
 
@@ -33,3 +38,55 @@ Planificacion inicial. Todavia no hay implementacion de backend, frontend, Docke
 ## Documentacion
 
 - [Plan inicial](docs/PLAN_INICIAL.md)
+- [Backlog MVP](docs/BACKLOG_MVP.md)
+
+## Desarrollo local
+
+### Backend
+
+En Windows usar `py` y el entorno virtual local:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r backend\requirements.txt
+.\.venv\Scripts\python.exe backend\manage.py migrate
+.\.venv\Scripts\python.exe backend\manage.py seed_initial_data
+.\.venv\Scripts\python.exe backend\manage.py createsuperuser
+.\.venv\Scripts\python.exe backend\manage.py runserver 0.0.0.0:8000
+```
+
+El backend expone la API bajo `http://localhost:8000/api/` y acepta CORS local para `localhost` y `127.0.0.1`.
+El seed crea un usuario inicial `admin` / `admin123` salvo que se ajusten `IPAC_SEED_ADMIN_USERNAME` e `IPAC_SEED_ADMIN_PASSWORD`.
+
+### Frontend
+
+```powershell
+npm --prefix frontend --strict-ssl=false install
+npm --prefix frontend run dev
+```
+
+El frontend usa `VITE_API_BASE_URL`; ver `frontend/.env.example`.
+
+### Tests y checks
+
+```powershell
+.\.venv\Scripts\python.exe backend\manage.py test core
+.\.venv\Scripts\python.exe backend\manage.py check
+npm --prefix frontend run build
+```
+
+## Docker Compose
+
+Docker no esta disponible actualmente en esta maquina, pero el repo queda preparado para:
+
+```powershell
+docker compose up --build
+```
+
+Servicios previstos:
+
+- `db`: PostgreSQL con volumen persistente.
+- `backend`: Django/DRF + migraciones + seed inicial.
+- `frontend`: Vue compilado y servido por Nginx.
+
+Copiar los `.env.example` antes de un despliegue real y ajustar claves, hosts, CORS y credenciales.
