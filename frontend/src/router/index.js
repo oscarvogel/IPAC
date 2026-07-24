@@ -3,6 +3,7 @@ import { getToken } from '@/lib/api'
 import AppShell from '@/components/layout/AppShell.vue'
 import LoginView from '@/views/LoginView.vue'
 import AlumnosView from '@/views/AlumnosView.vue'
+import CajaView from '@/views/CajaView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 
 // Las rutas autenticadas viven como children de la ruta padre "/",
@@ -27,11 +28,7 @@ const routes = [
       {
         path: 'caja',
         name: 'caja',
-        component: PlaceholderView,
-        props: {
-          title: 'Caja',
-          note: 'Modulo real llega en el PR 5 (extract caja module).',
-        },
+        component: CajaView,
       },
       {
         path: 'conceptos',
