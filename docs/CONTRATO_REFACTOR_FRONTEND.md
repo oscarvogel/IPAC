@@ -3,7 +3,7 @@
 > Documento vivo. Define las reglas y la hoja de ruta para dividir
 > `frontend/src/App.vue` (1127 lineas) en modulos chicos y mantenibles.
 >
-> **Ultima actualizacion:** 2026-07-22
+> **Ultima actualizacion:** 2026-07-24
 > **Rama de trabajo:** `refactor/frontend-modular`
 > **Origen:** parte desde `main` con el MVP integrado.
 
@@ -15,7 +15,7 @@
 - [x] PR 2 - extract api + auth ✅ `331a3d8`
 - [x] PR 3 - extract layout ✅ `ae54133`
 - [x] PR 4 - extract alumnos ✅ `d21f94d + 690210f + 1e703ee + 289787e`
-- [ ] PR 5 - extract caja
+- [x] PR 5 - extract caja ✅ `263293d + 87f696b`
 - [ ] PR 6 - extract conceptos
 - [ ] PR 7 - extract reportes
 - [ ] PR 8 - extract sucursales + dashboard
@@ -194,6 +194,10 @@ Cada PR deja la app funcionando. Paridad funcional primero, mejoras despues.
 - `CajaView.vue` + 4 subcomponentes.
 - `print.css` con las reglas de impresion.
 - **Resultado:** caja, movimientos y cierre funcionan. Resumen imprimible sigue OK.
+- **Cerrado en 2 commits sobre `refactor/pr5-caja`:**
+  - `263293d` useCaja + CajaView skeleton + router
+  - `87f696b` CajaHero + CajaMovimientos + CajaPrintSummary + MovimientoForm + CerrarCajaModal
+- **Nota:** los 5 subcomponentes viven en `components/caja/` (se suman CajaPrintSummary al plan original de 4 subcomponentes para mantener CajaView por debajo de ~150 lineas; el contrato permitia splitear). El CSS compartido sigue en `style.css` por compatibilidad con PRs 1-4 — mover a `assets/styles/` queda para un PR de refactor de CSS aparte.
 
 ### PR 6 - `refactor(frontend): extract conceptos module`
 - `useConceptos.js` + `ConceptosView.vue` + 2 subcomponentes.
