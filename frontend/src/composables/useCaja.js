@@ -79,18 +79,22 @@ function clearError() {
 
 const cajaMovimientos = computed(() => cajaHoy.value?.movimientos || [])
 
-const cajaTotales = computed(() => {
-  return cajaMovimientos.value.reduce(
-    (acc, movimiento) => {
-      const amount = Number(movimiento.importe || 0)
-      const signed = ['egreso', 'retiro', 'pase'].includes(movimiento.tipo) ? -amount : amount
-      acc.total += signed
-      acc[movimiento.medio] = (acc[movimiento.medio] || 0) + signed
-      return acc
-    },
-    { total: 0, efectivo: 0, transferencia: 0, tarjeta: 0, otro: 0 },
-  )
-})
+// Logica pura de totales. Vive afuera del computed para poder testearla
+// sin tener que instanciar el composable ni mockear la API.
+const TIPOS_NEGATIVOS = new Set(['egreso', 'retiro', 'pase'])
+const MEDIOS_INICIALES = { total: 0, efectivo: 0, transferencia: 0, tarjeta: 0, otro: 0 }
+
+export function calcularTotalesCaja(movimientos = []) {
+  return movimientos.reduce((acc, movimiento) => {
+    const amount = Number(movimiento.importe || 0)
+    const signed = TIPOS_NEGATIVOS.has(movimiento.tipo) ? -amount : amount
+    acc.total += signed
+    acc[movimiento.medio] = (acc[movimiento.medio] || 0) + signed
+    return acc
+  }, { ...MEDIOS_INICIALES })
+}
+
+const cajaTotales = computed(() => calcularTotalesCaja(cajaMovimientos.value))
 
 export function useCaja() {
   return {
