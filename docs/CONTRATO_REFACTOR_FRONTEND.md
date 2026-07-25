@@ -18,7 +18,7 @@
 - [x] PR 5 - extract caja ✅ `263293d + 87f696b`
 - [x] PR 6 - extract conceptos ✅ `dc82e8e + a2445db`
 - [x] PR 7 - extract reportes ✅ `d8cf59f + 13e8359`
-- [ ] PR 8 - extract sucursales + dashboard
+- [x] PR 8 - extract sucursales + dashboard ✅ `aa66aa2 + 4f9e339 + 639713c`
 - [ ] PR 9 - Vitest (opcional)
 
 ---
@@ -215,11 +215,15 @@ Cada PR deja la app funcionando. Paridad funcional primero, mejoras despues.
   - `13e8359` ReporteFiltros + ReporteResumen + PagosListado + view slim
 - **Notas:** los filtros (desde, hasta, sucursal, medio) se aplican al resumen y a la tabla. El reporteResumen agrega una tabla de "cobrado por medio" con porcentaje de participacion. El export CSV dispara descarga via fetch con token y `<a download>`.
 
-### PR 8 - `refactor(frontend): extract sucursales module + dashboard`
-- `SucursalList.vue` + `SucursalesView.vue`.
-- `DashboardView.vue` con los KPIs actuales.
-- `/` redirige a `/dashboard`.
+### PR 8 - `refactor(frontend): extract sucursales module + dashboard` ✅
+- `SucursalList.vue` + `SucursalView.vue` + `SucursalForm.vue`.
+- `DashboardView.vue` con 4 stat cards, panel de caja del dia y ultimos pagos.
+- `/` redirige a `/dashboard`. Sidebar y topbar actualizados.
 - **Resultado:** 5 modulos navegables + dashboard inicial.
+- **Cerrado en 3 commits sobre `refactor/pr8-sucursales-dashboard`:**
+  - `aa66aa2` useSucursales + DashboardView + SucursalesView + SucursalForm + router
+  - `4f9e339` SucursalList + view slim
+  - `639713c` fix(ui): login redirige a /dashboard en vez de /alumnos
 
 ### PR 9 (opcional) - `test(frontend): add Vitest setup`
 - Instala `vitest` + `@vue/test-utils`.
