@@ -17,7 +17,7 @@
 - [x] PR 4 - extract alumnos ✅ `d21f94d + 690210f + 1e703ee + 289787e`
 - [x] PR 5 - extract caja ✅ `263293d + 87f696b`
 - [x] PR 6 - extract conceptos ✅ `dc82e8e + a2445db`
-- [ ] PR 7 - extract reportes
+- [x] PR 7 - extract reportes ✅ `d8cf59f + 13e8359`
 - [ ] PR 8 - extract sucursales + dashboard
 - [ ] PR 9 - Vitest (opcional)
 
@@ -207,9 +207,13 @@ Cada PR deja la app funcionando. Paridad funcional primero, mejoras despues.
   - `a2445db` ConceptoList + ConceptoForm + view slim
 - **Notas:** la pantalla agrega filtros locales (busqueda, sucursal, solo activos) y un select de Carrera que se filtra automaticamente por la sucursal seleccionada para respetar el `unique_together` del modelo. El composable `useConceptos` es el CRUD real; `useCatalogos.conceptos` queda para los selects de PagoForm, etc.
 
-### PR 7 - `refactor(frontend): extract reportes module`
+### PR 7 - `refactor(frontend): extract reportes module` ✅
 - `useReportes.js` + 3 subcomponentes.
 - **Resultado:** listado filtrable + export CSV funcionan.
+- **Cerrado en 2 commits sobre `refactor/pr7-reportes`:**
+  - `d8cf59f` useReportes + ReportesView skeleton + router (con export de API_BASE_URL en lib/api)
+  - `13e8359` ReporteFiltros + ReporteResumen + PagosListado + view slim
+- **Notas:** los filtros (desde, hasta, sucursal, medio) se aplican al resumen y a la tabla. El reporteResumen agrega una tabla de "cobrado por medio" con porcentaje de participacion. El export CSV dispara descarga via fetch con token y `<a download>`.
 
 ### PR 8 - `refactor(frontend): extract sucursales module + dashboard`
 - `SucursalList.vue` + `SucursalesView.vue`.
