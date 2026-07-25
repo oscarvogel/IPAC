@@ -16,7 +16,7 @@
 - [x] PR 3 - extract layout ✅ `ae54133`
 - [x] PR 4 - extract alumnos ✅ `d21f94d + 690210f + 1e703ee + 289787e`
 - [x] PR 5 - extract caja ✅ `263293d + 87f696b`
-- [ ] PR 6 - extract conceptos
+- [x] PR 6 - extract conceptos ✅ `dc82e8e + a2445db`
 - [ ] PR 7 - extract reportes
 - [ ] PR 8 - extract sucursales + dashboard
 - [ ] PR 9 - Vitest (opcional)
@@ -199,9 +199,13 @@ Cada PR deja la app funcionando. Paridad funcional primero, mejoras despues.
   - `87f696b` CajaHero + CajaMovimientos + CajaPrintSummary + MovimientoForm + CerrarCajaModal
 - **Nota:** los 5 subcomponentes viven en `components/caja/` (se suman CajaPrintSummary al plan original de 4 subcomponentes para mantener CajaView por debajo de ~150 lineas; el contrato permitia splitear). El CSS compartido sigue en `style.css` por compatibilidad con PRs 1-4 — mover a `assets/styles/` queda para un PR de refactor de CSS aparte.
 
-### PR 6 - `refactor(frontend): extract conceptos module`
+### PR 6 - `refactor(frontend): extract conceptos module` ✅
 - `useConceptos.js` + `ConceptosView.vue` + 2 subcomponentes.
 - **Resultado:** alta, edicion y desactivacion de conceptos funciona como antes.
+- **Cerrado en 2 commits sobre `refactor/pr6-conceptos`:**
+  - `dc82e8e` useConceptos + ConceptosView skeleton + router
+  - `a2445db` ConceptoList + ConceptoForm + view slim
+- **Notas:** la pantalla agrega filtros locales (busqueda, sucursal, solo activos) y un select de Carrera que se filtra automaticamente por la sucursal seleccionada para respetar el `unique_together` del modelo. El composable `useConceptos` es el CRUD real; `useCatalogos.conceptos` queda para los selects de PagoForm, etc.
 
 ### PR 7 - `refactor(frontend): extract reportes module`
 - `useReportes.js` + 3 subcomponentes.
