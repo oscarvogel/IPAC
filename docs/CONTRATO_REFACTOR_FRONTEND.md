@@ -3,9 +3,11 @@
 > Documento vivo. Define las reglas y la hoja de ruta para dividir
 > `frontend/src/App.vue` (1127 lineas) en modulos chicos y mantenibles.
 >
-> **Ultima actualizacion:** 2026-07-24
+> **Ultima actualizacion:** 2026-07-25
 > **Rama de trabajo:** `refactor/frontend-modular`
 > **Origen:** parte desde `main` con el MVP integrado.
+>
+> **Estado del roadmap:** los 9 PRs planificados estan cerrados. El frontend modular esta completo y paridad funcional con el MVP original confirmada.
 
 ---
 
@@ -19,7 +21,7 @@
 - [x] PR 6 - extract conceptos ✅ `dc82e8e + a2445db`
 - [x] PR 7 - extract reportes ✅ `d8cf59f + 13e8359`
 - [x] PR 8 - extract sucursales + dashboard ✅ `aa66aa2 + 4f9e339 + 639713c`
-- [ ] PR 9 - Vitest (opcional)
+- [x] PR 9 - Vitest (opcional) ✅ `4fa879b + db844bb`
 
 ---
 
@@ -225,10 +227,15 @@ Cada PR deja la app funcionando. Paridad funcional primero, mejoras despues.
   - `4f9e339` SucursalList + view slim
   - `639713c` fix(ui): login redirige a /dashboard en vez de /alumnos
 
-### PR 9 (opcional) - `test(frontend): add Vitest setup`
-- Instala `vitest` + `@vue/test-utils`.
-- Tests para: `useAuth`, `useCaja.totales`, `formatters`.
-- Configura `npm test` y dejalo listo para CI.
+### PR 9 (opcional) - `test(frontend): add Vitest setup` ✅
+- Instala `vitest` 3 + `@vue/test-utils` + `jsdom`.
+- `vitest.config.js` reusa el alias `@/` y configura environment jsdom.
+- Scripts `npm test` y `npm run test:watch`.
+- Tests para: `useAuth` (login/logout/fetchCurrentUser), `useCaja` (totales extraidos a `calcularTotalesCaja`), `formatters` (formatMoney/formatDate/formatDateTime).
+- 20 tests pasan en ~3.5s.
+- **Cerrado en 2 commits sobre `refactor/pr9-vitest`:**
+  - `4fa879b` setup + formatters test
+  - `db844bb` useCaja + useAuth tests
 
 ---
 
