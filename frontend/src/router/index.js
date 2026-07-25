@@ -4,6 +4,7 @@ import AppShell from '@/components/layout/AppShell.vue'
 import LoginView from '@/views/LoginView.vue'
 import AlumnosView from '@/views/AlumnosView.vue'
 import CajaView from '@/views/CajaView.vue'
+import ConceptosView from '@/views/ConceptosView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 
 // Las rutas autenticadas viven como children de la ruta padre "/",
@@ -33,11 +34,7 @@ const routes = [
       {
         path: 'conceptos',
         name: 'conceptos',
-        component: PlaceholderView,
-        props: {
-          title: 'Conceptos',
-          note: 'Modulo real llega en el PR 6 (extract conceptos module).',
-        },
+        component: ConceptosView,
       },
       {
         path: 'reportes',
