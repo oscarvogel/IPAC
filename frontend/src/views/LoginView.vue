@@ -44,7 +44,7 @@ async function handleSubmit() {
   localError.value = ''
   const ok = await login(form.username, form.password)
   if (ok) {
-    router.replace('/alumnos')
+    router.replace('/dashboard')
   } else {
     localError.value = authError.value || 'No se pudo iniciar sesion.'
     toast.error(localError.value)
