@@ -5,7 +5,9 @@ import LoginView from '@/views/LoginView.vue'
 import AlumnosView from '@/views/AlumnosView.vue'
 import CajaView from '@/views/CajaView.vue'
 import ConceptosView from '@/views/ConceptosView.vue'
+import DashboardView from '@/views/DashboardView.vue'
 import ReportesView from '@/views/ReportesView.vue'
+import SucursalesView from '@/views/SucursalesView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 
 // Las rutas autenticadas viven como children de la ruta padre "/",
@@ -21,7 +23,12 @@ const routes = [
     path: '/',
     component: AppShell,
     children: [
-      { path: '', redirect: '/alumnos' },
+      { path: '', redirect: '/dashboard' },
+      {
+        path: 'dashboard',
+        name: 'dashboard',
+        component: DashboardView,
+      },
       {
         path: 'alumnos',
         name: 'alumnos',
@@ -45,11 +52,7 @@ const routes = [
       {
         path: 'sucursales',
         name: 'sucursales',
-        component: PlaceholderView,
-        props: {
-          title: 'Sucursales',
-          note: 'Modulo real llega en el PR 8 (extract sucursales module + dashboard).',
-        },
+        component: SucursalesView,
       },
     ],
   },
@@ -77,7 +80,7 @@ router.beforeEach((to, from, next) => {
     return next({ path: '/login' })
   }
   if (to.path === '/login' && hasToken) {
-    return next({ path: '/alumnos' })
+    return next({ path: '/dashboard' })
   }
   return next()
 })

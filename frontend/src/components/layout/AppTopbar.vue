@@ -28,6 +28,7 @@ const route = useRoute()
 const { actions: providedActions } = useTopbarActions()
 
 const titles = {
+  '/dashboard': 'Dashboard',
   '/alumnos': 'Alumnos',
   '/caja': 'Caja',
   '/conceptos': 'Conceptos',

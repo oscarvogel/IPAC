@@ -37,6 +37,7 @@ const router = useRouter()
 const { user, logout } = useAuth()
 
 const modules = [
+  { to: '/dashboard', label: 'Dashboard', meta: 'Resumen' },
   { to: '/alumnos', label: 'Alumnos', meta: 'CRM' },
   { to: '/caja', label: 'Caja', meta: 'Tesoreria' },
   { to: '/conceptos', label: 'Conceptos', meta: 'Aranceles' },
