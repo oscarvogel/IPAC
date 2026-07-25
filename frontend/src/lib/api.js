@@ -8,6 +8,8 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 const TOKEN_KEY = 'ipac_token'
 
+export { API_BASE_URL }
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY) || ''
 }

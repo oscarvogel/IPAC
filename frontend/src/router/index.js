@@ -5,6 +5,7 @@ import LoginView from '@/views/LoginView.vue'
 import AlumnosView from '@/views/AlumnosView.vue'
 import CajaView from '@/views/CajaView.vue'
 import ConceptosView from '@/views/ConceptosView.vue'
+import ReportesView from '@/views/ReportesView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 
 // Las rutas autenticadas viven como children de la ruta padre "/",
@@ -39,11 +40,7 @@ const routes = [
       {
         path: 'reportes',
         name: 'reportes',
-        component: PlaceholderView,
-        props: {
-          title: 'Reportes',
-          note: 'Modulo real llega en el PR 7 (extract reportes module).',
-        },
+        component: ReportesView,
       },
       {
         path: 'sucursales',
