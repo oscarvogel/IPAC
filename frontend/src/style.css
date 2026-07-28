@@ -275,7 +275,8 @@ h3 {
 }
 
 .global-search {
-  width: min(380px, 36vw);
+  flex: 1;
+  max-width: 480px;
   padding: 0 18px;
 }
 
@@ -1047,7 +1048,6 @@ th {
   gap: 10px;
   align-items: center;
   margin-bottom: 4px;
-  flex-wrap: wrap;
 }
 
 .topbar-filters .primary-button {
