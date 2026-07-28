@@ -1,7 +1,7 @@
 <template>
   <aside class="sidebar">
     <div class="brand-block">
-      <span class="brand-mark">IP</span>
+      <img src="/logo-ipac.jpg" alt="IPAC" class="brand-logo" />
       <div>
         <p class="brand">IPAC</p>
         <small>CRM administrativo</small>
