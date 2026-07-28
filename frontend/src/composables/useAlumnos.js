@@ -38,12 +38,19 @@ async function updateAlumno(id, payload) {
   return saved
 }
 
-async function deactivateAlumno(id) {
-  await apiRequest(`/alumnos/${id}/`, { method: 'DELETE' })
+async function setAlumnoEstado(id, estado) {
+  const saved = await apiRequest(`/alumnos/${id}/`, { method: 'PATCH', body: { estado } })
   const idx = alumnos.value.findIndex((a) => a.id === id)
-  if (idx >= 0) {
-    alumnos.value[idx] = { ...alumnos.value[idx], estado: 'baja' }
-  }
+  if (idx >= 0) alumnos.value[idx] = saved
+  return saved
+}
+
+async function deactivateAlumno(id) {
+  return setAlumnoEstado(id, 'inactivo')
+}
+
+async function reactivateAlumno(id) {
+  return setAlumnoEstado(id, 'activo')
 }
 
 function setSelected(id) {
@@ -63,6 +70,8 @@ export function useAlumnos() {
     createAlumno,
     updateAlumno,
     deactivateAlumno,
+    reactivateAlumno,
+    setAlumnoEstado,
     setSelected,
   }
 }

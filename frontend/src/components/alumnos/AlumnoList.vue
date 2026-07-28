@@ -28,7 +28,7 @@
         </span>
         <span class="row-meta">
           <small>{{ alumno.sucursal_nombre }}</small>
-          <em>{{ alumno.estado }}</em>
+          <em :class="'estado-badge ' + alumno.estado">{{ alumno.estado }}</em>
         </span>
       </button>
 

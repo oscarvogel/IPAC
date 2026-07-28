@@ -1028,6 +1028,88 @@ th {
   }
 }
 
+.topbar-filters .primary-button {
+  margin: 0;
+  height: 44px;
+  padding: 0 20px;
+  white-space: nowrap;
+}
+
+.estado-badge {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+
+.estado-badge.activo {
+  color: var(--green-dark);
+  background: #dcfce7;
+}
+
+.estado-badge.inactivo {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.estado-badge.baja {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.estado-badge ~ .estado-badge {
+  margin-left: 6px;
+}
+
+.btn-inline {
+  margin-left: 6px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.btn-inline:hover {
+  color: var(--blue);
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.btn-deactivate,
+.btn-activate {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 14px;
+  border-radius: 11px;
+  font-weight: 820;
+}
+
+.btn-deactivate {
+  border: 1px solid #fecdca;
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.btn-activate {
+  border: 1px solid #bbf7d0;
+  color: var(--green-dark);
+  background: #ecfdf3;
+}
+
+.btn-deactivate:hover {
+  background: #fef2f2;
+}
+
+.btn-activate:hover {
+  background: #d1fae5;
+}
+
 @media (max-width: 820px) {
   .app-shell {
     display: block;

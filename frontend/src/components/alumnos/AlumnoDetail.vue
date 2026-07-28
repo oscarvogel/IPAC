@@ -5,15 +5,18 @@
         <span class="avatar large">{{ avatarInitials(alumno) }}</span>
         <div>
           <p class="eyebrow">Cuenta del alumno</p>
-          <h2>{{ alumno.nombre }} {{ alumno.apellido }}</h2>
+          <h2>
+            {{ alumno.nombre }} {{ alumno.apellido }}
+            <button type="button" class="btn-inline" @click="$emit('edit')" title="Editar alumno">✎</button>
+          </h2>
           <small>{{ alumno.legajo }} · DNI {{ alumno.dni }}</small>
+          <span :class="'estado-badge ' + alumno.estado">{{ alumno.estado }}</span>
         </div>
       </div>
 
       <div class="detail-actions">
         <button type="button" @click="$emit('register-pago')">Registrar pago</button>
         <button type="button" @click="$emit('generar-cuota')">Generar cuota</button>
-        <button type="button" class="btn-edit" @click="$emit('edit')">Editar alumno</button>
       </div>
 
       <dl class="detail-data">
@@ -22,6 +25,14 @@
         <div><dt>Email</dt><dd>{{ alumno.email || 'Sin email' }}</dd></div>
         <div><dt>Telefono</dt><dd>{{ alumno.telefono || 'Sin telefono' }}</dd></div>
       </dl>
+
+      <button
+        type="button"
+        :class="alumno.estado === 'inactivo' ? 'btn-activate' : 'btn-deactivate'"
+        @click="$emit('toggle-estado', alumno)"
+      >
+        {{ alumno.estado === 'inactivo' ? 'Reactivar alumno' : 'Dar de baja' }}
+      </button>
 
       <div class="mini-ledger">
         <div class="panel-head compact">
@@ -57,7 +68,7 @@ const props = defineProps({
   pagos: { type: Array, default: () => [] },
 })
 
-defineEmits(['register-pago', 'edit', 'view-estado', 'generar-cuota'])
+defineEmits(['register-pago', 'edit', 'view-estado', 'generar-cuota', 'toggle-estado'])
 
 const detailConcepts = computed(() => {
   if (!props.alumno) return []

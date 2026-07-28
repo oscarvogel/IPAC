@@ -20,6 +20,7 @@
           {{ sucursal.nombre }}
         </option>
       </select>
+      <button type="button" class="primary-button" @click="openNewAlumnoForm">Nuevo alumno</button>
     </div>
 
     <div class="crm-grid">
@@ -38,6 +39,7 @@
         @edit="openEditForm"
         @view-estado="openEstadoCuenta"
         @generar-cuota="openGenerarCuota"
+        @toggle-estado="handleToggleEstado"
       />
     </div>
 
@@ -73,11 +75,11 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAlumnos } from '@/composables/useAlumnos'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { usePagos } from '@/composables/usePagos'
-import { setTopbarActions } from '@/composables/useTopbarActions'
+import { useToast } from '@/composables/useToast'
 import { formatMoney } from '@/lib/formatters'
 import AlumnoList from '@/components/alumnos/AlumnoList.vue'
 import AlumnoDetail from '@/components/alumnos/AlumnoDetail.vue'
@@ -86,7 +88,8 @@ import PagoForm from '@/components/alumnos/PagoForm.vue'
 import EstadoCuentaModal from '@/components/alumnos/EstadoCuentaModal.vue'
 import GenerarCuotaModal from '@/components/alumnos/GenerarCuotaModal.vue'
 
-const { alumnos, selectedAlumno, setSelected, loadAlumnos } = useAlumnos()
+const { alumnos, selectedAlumno, setSelected, loadAlumnos, deactivateAlumno, reactivateAlumno } = useAlumnos()
+const toast = useToast()
 const { sucursales, conceptos, loadCatalogos } = useCatalogos()
 const { pagos, loadPagos } = usePagos()
 
@@ -101,13 +104,6 @@ const showGenerarCuota = ref(false)
 
 onMounted(async () => {
   await Promise.all([loadCatalogos(), loadAlumnos(), loadPagos()])
-  setTopbarActions([
-    { label: 'Nuevo alumno', variant: 'primary', onClick: openNewAlumnoForm },
-  ])
-})
-
-onBeforeUnmount(() => {
-  setTopbarActions([])
 })
 
 function onSelect(alumno) {
@@ -153,6 +149,20 @@ function openEstadoCuenta() {
 
 function closeEstadoCuenta() {
   showEstadoCuenta.value = false
+}
+
+async function handleToggleEstado(alumno) {
+  try {
+    if (alumno.estado === 'inactivo') {
+      await reactivateAlumno(alumno.id)
+      toast.success('Alumno reactivado')
+    } else {
+      await deactivateAlumno(alumno.id)
+      toast.success('Alumno dado de baja')
+    }
+  } catch (err) {
+    toast.error(err.message || 'Error al cambiar estado del alumno')
+  }
 }
 
 const totalPagado = computed(() =>
