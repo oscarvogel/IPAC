@@ -12,6 +12,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from django.contrib.auth.models import User
+
 from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
 from .serializers import (
     AlumnoSerializer,
@@ -26,6 +28,7 @@ from .serializers import (
     MovimientoCajaSerializer,
     PagoSerializer,
     SucursalSerializer,
+    UserSerializer,
 )
 
 
@@ -381,6 +384,23 @@ class CajaDiariaViewSet(viewsets.ModelViewSet):
         caja.cerrada_en = timezone.now()
         caja.save(update_fields=["total_contado", "estado", "cerrada_en", "actualizado"])
         return Response(self.get_serializer(caja).data)
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    serializer_class = UserSerializer
+
+    def get_queryset(self):
+        perfil = getattr(self.request.user, "perfil", None)
+        qs = User.objects.select_related("perfil__sucursal").order_by("username")
+        if perfil and perfil.rol == PerfilUsuario.Rol.SUPERADMIN:
+            return qs
+        if perfil:
+            return qs.filter(perfil__sucursal=perfil.sucursal)
+        return qs.none()
+
+    def perform_destroy(self, instance):
+        instance.is_active = False
+        instance.save(update_fields=["is_active"])
 
 
 class MovimientoCajaViewSet(viewsets.ModelViewSet):

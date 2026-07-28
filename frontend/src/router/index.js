@@ -8,6 +8,7 @@ import ConceptosView from '@/views/ConceptosView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import ReportesView from '@/views/ReportesView.vue'
 import SucursalesView from '@/views/SucursalesView.vue'
+import UsuariosView from '@/views/UsuariosView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 
 // Las rutas autenticadas viven como children de la ruta padre "/",
@@ -53,6 +54,11 @@ const routes = [
         path: 'sucursales',
         name: 'sucursales',
         component: SucursalesView,
+      },
+      {
+        path: 'usuarios',
+        name: 'usuarios',
+        component: UsuariosView,
       },
     ],
   },

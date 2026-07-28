@@ -27,6 +27,7 @@ class Sucursal(TimeStampedModel):
 
 class PerfilUsuario(TimeStampedModel):
     class Rol(models.TextChoices):
+        SUPERADMIN = "superadmin", "Superadmin"
         ADMINISTRACION = "administracion", "Administracion"
         TESORERIA = "tesoreria", "Tesoreria"
         CAJA = "caja", "Caja"

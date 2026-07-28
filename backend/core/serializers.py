@@ -1,7 +1,81 @@
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
+
+
+class UserSerializer(serializers.ModelSerializer):
+    rol = serializers.ChoiceField(choices=PerfilUsuario.Rol.choices, write_only=True)
+    sucursal = serializers.PrimaryKeyRelatedField(
+        queryset=Sucursal.objects.all(), write_only=True,
+    )
+    puede_ver_todas_las_sucursales = serializers.BooleanField(
+        write_only=True, required=False, default=False,
+    )
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    perfil = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "id", "username", "password",
+            "first_name", "last_name", "email", "is_active",
+            "rol", "sucursal", "puede_ver_todas_las_sucursales", "perfil",
+        ]
+
+    def get_perfil(self, obj):
+        perfil = getattr(obj, "perfil", None)
+        if not perfil:
+            return None
+        from .serializers import PerfilUsuarioSerializer
+        return PerfilUsuarioSerializer(perfil).data
+
+    def validate_username(self, value):
+        qs = User.objects.filter(username=value)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("El nombre de usuario ya existe.")
+        return value
+
+    def create(self, validated_data):
+        rol = validated_data.pop("rol")
+        sucursal = validated_data.pop("sucursal")
+        puede_ver_todas = validated_data.pop("puede_ver_todas_las_sucursales", False)
+        password = validated_data.pop("password", None)
+        user = User(**validated_data)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
+        user.save()
+        PerfilUsuario.objects.create(
+            user=user, rol=rol, sucursal=sucursal,
+            puede_ver_todas_las_sucursales=puede_ver_todas,
+        )
+        return user
+
+    def update(self, instance, validated_data):
+        rol = validated_data.pop("rol", None)
+        sucursal = validated_data.pop("sucursal", None)
+        puede_ver_todas = validated_data.pop("puede_ver_todas_las_sucursales", None)
+        password = validated_data.pop("password", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        if rol is not None or sucursal is not None or puede_ver_todas is not None:
+            perfil, _ = PerfilUsuario.objects.get_or_create(user=instance)
+            if rol is not None:
+                perfil.rol = rol
+            if sucursal is not None:
+                perfil.sucursal = sucursal
+            if puede_ver_todas is not None:
+                perfil.puede_ver_todas_las_sucursales = puede_ver_todas
+            perfil.save()
+        return instance
 
 
 class SucursalSerializer(serializers.ModelSerializer):

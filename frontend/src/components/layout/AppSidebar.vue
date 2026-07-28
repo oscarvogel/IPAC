@@ -30,20 +30,32 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 
 const router = useRouter()
 const { user, logout } = useAuth()
 
-const modules = [
-  { to: '/dashboard', label: 'Dashboard', meta: 'Resumen' },
-  { to: '/alumnos', label: 'Alumnos', meta: 'CRM' },
-  { to: '/caja', label: 'Caja', meta: 'Tesoreria' },
-  { to: '/conceptos', label: 'Conceptos', meta: 'Aranceles' },
-  { to: '/reportes', label: 'Reportes', meta: 'Listados' },
-  { to: '/sucursales', label: 'Sucursales', meta: 'Accesos' },
-]
+const canManageUsers = computed(() => {
+  const rol = user.value?.perfil?.rol
+  return rol === 'superadmin' || rol === 'administracion'
+})
+
+const modules = computed(() => {
+  const base = [
+    { to: '/dashboard', label: 'Dashboard', meta: 'Resumen' },
+    { to: '/alumnos', label: 'Alumnos', meta: 'CRM' },
+    { to: '/caja', label: 'Caja', meta: 'Tesoreria' },
+    { to: '/conceptos', label: 'Conceptos', meta: 'Aranceles' },
+    { to: '/reportes', label: 'Reportes', meta: 'Listados' },
+    { to: '/sucursales', label: 'Sucursales', meta: 'Accesos' },
+  ]
+  if (canManageUsers.value) {
+    base.push({ to: '/usuarios', label: 'Usuarios', meta: 'Permisos' })
+  }
+  return base
+})
 
 function handleLogout() {
   logout()

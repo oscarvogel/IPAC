@@ -1,18 +1,18 @@
 # Mail — Solicitud de Excel para IPAC
 
-> Borrador listo para copiar y enviar. Completar los campos entre `[corchetes]` antes de mandar.
+> Listo para copiar y enviar. Solo falta pegar el cuerpo en tu cliente de mail.
 
 ---
 
-**Para:** [mail del referente de IPAC — Posadas o Eldorado]
-**CC:** [opcional, mail del referente de la otra sucursal / coordinación]
-**Asunto:** Solicitud de información — Avance del sistema IPAC (datos para migración inicial)
+**Para:** ipacmisiones0468@gmail.com
+**CC:** (opcional — agregar mails de la otra sucursal / coordinación si querés)
+**Asunto:** Solicitud de información — Sistema IPAC (datos para carga inicial)
 
 ---
 
-Hola [nombre],
+Estimados,
 
-Te escribo desde el equipo que está desarrollando el sistema de administración, tesorería y cobranzas para **IPAC Posadas y Eldorado**.
+Les escribo desde el equipo que está desarrollando el sistema de administración, tesorería y cobranzas para **IPAC Posadas y Eldorado**.
 
 Para poder avanzar con la carga inicial y la configuración del sistema, necesitamos que nos envíen los archivos Excel (**reales o anonimizados, según prefieran**) con la siguiente información.
 
@@ -90,15 +90,12 @@ Quedamos a disposición.
 ¡Gracias!
 
 Saludos,
-[Tu nombre]
-[Teléfono / contacto]
+**Oscar Vogel — Consultoría**
 
 ---
 
 ## Notas internas (no incluir en el mail)
 
-- Referente tentativo IPAC Posadas: [definir]
-- Referente tentativo IPAC Eldorado: [definir]
+- Si no contestan en 3-4 días, hacer follow-up cordial.
 - Si no hay datos reales disponibles todavía, pedir **datos anonimizados de ejemplo** para terminar de validar los modelos.
-- Tono: cordial y concreto. No mencionar la propuesta comercial ni el contrato (eso se maneja por otra vía).
-- Si el referente no contesta en 3-4 días, hacer follow-up cordial.
+- La propuesta comercial y el contrato se manejan por otra vía; acá solo se piden datos.
