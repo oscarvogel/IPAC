@@ -531,7 +531,7 @@ h3 {
   font-weight: 820;
 }
 
-.detail-actions button:first-child {
+.detail-actions button:nth-child(-n+2) {
   color: white;
   border-color: var(--green);
   background: var(--green);

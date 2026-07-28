@@ -8,7 +8,7 @@
             <h2>{{ alumno?.nombre }} {{ alumno?.apellido }}</h2>
             <span>Resumen de cuotas, pagos y saldo a favor.</span>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">×</button>
+          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">&times;</button>
         </header>
 
         <section v-if="loading" class="modal-section">
@@ -67,7 +67,19 @@
                     <em v-if="pago.numero_recibo">{{ pago.numero_recibo }}</em>
                   </span>
                 </div>
-                <strong>$ {{ formatMoney(pago.importe) }}</strong>
+                <div class="account-row-end">
+                  <strong>$ {{ formatMoney(pago.importe) }}</strong>
+                  <button
+                    v-if="pago.id"
+                    class="print-recibo-btn"
+                    type="button"
+                    title="Imprimir recibo"
+                    :disabled="printingId === pago.id"
+                    @click="printRecibo(pago)"
+                  >
+                    {{ printingId === pago.id ? '...' : '🖨' }}
+                  </button>
+                </div>
               </div>
               <p v-if="!data.pagos.length" class="empty-state flat">
                 Sin pagos registrados.
@@ -81,14 +93,17 @@
         </section>
       </section>
     </div>
+
+    <ReciboPrintView :recibo="reciboData" />
   </Teleport>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { usePagos } from '@/composables/usePagos'
 import { useToast } from '@/composables/useToast'
 import { formatMoney, formatDate } from '@/lib/formatters'
+import ReciboPrintView from '@/components/ui/ReciboPrintView.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -102,6 +117,22 @@ const toast = useToast()
 
 const data = ref(null)
 const loading = ref(false)
+const reciboData = ref(null)
+const printingId = ref(null)
+
+async function printRecibo(pago) {
+  if (!pago.id || printingId.value) return
+  printingId.value = pago.id
+  try {
+    reciboData.value = await getRecibo(pago.id)
+    await nextTick()
+    window.print()
+  } catch {
+    // falla silenciosa
+  } finally {
+    printingId.value = null
+  }
+}
 
 const paidTotal = computed(() => {
   if (!data.value?.pagos) return 0
@@ -134,4 +165,24 @@ watch(
 .estado-parcial { color: #1d4ed8; }
 .estado-pagada { color: #047857; }
 .estado-anulada { color: #6b7280; text-decoration: line-through; }
+
+.account-row-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.print-recibo-btn {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.print-recibo-btn:disabled {
+  opacity: 0.5;
+}
 </style>

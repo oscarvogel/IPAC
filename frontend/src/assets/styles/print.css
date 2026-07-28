@@ -1,0 +1,19 @@
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .print-recibo,
+  .print-recibo *,
+  .cash-print-summary,
+  .cash-print-summary * {
+    visibility: visible;
+  }
+
+  .print-recibo,
+  .cash-print-summary {
+    position: absolute;
+    inset: 0;
+    display: block;
+  }
+}

@@ -22,6 +22,10 @@ async function getEstadoCuenta(alumnoId) {
   return await apiRequest(`/alumnos/${alumnoId}/estado-cuenta/`)
 }
 
+async function generarCuota(payload) {
+  return await apiRequest('/cuotas/generar/', { method: 'POST', body: payload })
+}
+
 export function usePagos() {
   return {
     pagos: readonly(pagos),
@@ -29,5 +33,6 @@ export function usePagos() {
     createPago,
     getRecibo,
     getEstadoCuenta,
+    generarCuota,
   }
 }

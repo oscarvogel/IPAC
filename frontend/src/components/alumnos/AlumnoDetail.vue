@@ -12,7 +12,8 @@
 
       <div class="detail-actions">
         <button type="button" @click="$emit('register-pago')">Registrar pago</button>
-        <button type="button" @click="$emit('edit')">Editar alumno</button>
+        <button type="button" @click="$emit('generar-cuota')">Generar cuota</button>
+        <button type="button" class="btn-edit" @click="$emit('edit')">Editar alumno</button>
       </div>
 
       <dl class="detail-data">
@@ -56,7 +57,7 @@ const props = defineProps({
   pagos: { type: Array, default: () => [] },
 })
 
-defineEmits(['register-pago', 'edit', 'view-estado'])
+defineEmits(['register-pago', 'edit', 'view-estado', 'generar-cuota'])
 
 const detailConcepts = computed(() => {
   if (!props.alumno) return []

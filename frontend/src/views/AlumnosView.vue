@@ -37,6 +37,7 @@
         @register-pago="openPagoForm"
         @edit="openEditForm"
         @view-estado="openEstadoCuenta"
+        @generar-cuota="openGenerarCuota"
       />
     </div>
 
@@ -60,6 +61,14 @@
       :alumno="selectedAlumno"
       @close="closeEstadoCuenta"
     />
+
+    <GenerarCuotaModal
+      :open="showGenerarCuota"
+      :alumno="selectedAlumno"
+      :conceptos="conceptos"
+      @close="showGenerarCuota = false"
+      @saved="onCuotaGenerada"
+    />
   </div>
 </template>
 
@@ -75,6 +84,7 @@ import AlumnoDetail from '@/components/alumnos/AlumnoDetail.vue'
 import AlumnoForm from '@/components/alumnos/AlumnoForm.vue'
 import PagoForm from '@/components/alumnos/PagoForm.vue'
 import EstadoCuentaModal from '@/components/alumnos/EstadoCuentaModal.vue'
+import GenerarCuotaModal from '@/components/alumnos/GenerarCuotaModal.vue'
 
 const { alumnos, selectedAlumno, setSelected, loadAlumnos } = useAlumnos()
 const { sucursales, conceptos, loadCatalogos } = useCatalogos()
@@ -87,6 +97,7 @@ const showAlumnoForm = ref(false)
 const editingAlumno = ref(null)
 const showPagoForm = ref(false)
 const showEstadoCuenta = ref(false)
+const showGenerarCuota = ref(false)
 
 onMounted(async () => {
   await Promise.all([loadCatalogos(), loadAlumnos(), loadPagos()])

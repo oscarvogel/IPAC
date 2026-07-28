@@ -169,6 +169,7 @@ class AplicacionPagoSerializer(serializers.ModelSerializer):
 
 class PagoSerializer(serializers.ModelSerializer):
     alumno_nombre = serializers.CharField(source="alumno.__str__", read_only=True)
+    alumno_legajo = serializers.CharField(source="alumno.legajo", read_only=True)
     concepto_nombre = serializers.CharField(source="concepto.nombre", read_only=True)
     sucursal_nombre = serializers.CharField(source="sucursal.nombre", read_only=True)
     sucursal = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -181,6 +182,7 @@ class PagoSerializer(serializers.ModelSerializer):
             "id",
             "alumno",
             "alumno_nombre",
+            "alumno_legajo",
             "concepto",
             "concepto_nombre",
             "sucursal",
