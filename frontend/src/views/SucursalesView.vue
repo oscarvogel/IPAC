@@ -11,7 +11,7 @@
     <div class="topbar-filters">
       <button type="button" class="primary-button" @click="openNewSucursalForm">Nueva sucursal</button>
     </div>
-    <SucursalList :sucursales="sucursales" @edit="openEditForm" />
+    <SucursalList :sucursales="sucursales" @edit="openEditForm" @deactivate="confirmDeactivate" />
 
     <SucursalForm
       :open="showSucursalForm"
@@ -25,10 +25,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useSucursales } from '@/composables/useSucursales'
+import { useToast } from '@/composables/useToast'
 import SucursalForm from '@/components/sucursales/SucursalForm.vue'
 import SucursalList from '@/components/sucursales/SucursalList.vue'
 
-const { sucursales, loadSucursales } = useSucursales()
+const { sucursales, loadSucursales, updateSucursal } = useSucursales()
+const toast = useToast()
 
 const showSucursalForm = ref(false)
 const editingSucursal = ref(null)
@@ -67,5 +69,14 @@ function closeSucursalForm() {
 
 function onSucursalSaved() {
   closeSucursalForm()
+}
+
+async function confirmDeactivate(sucursal) {
+  try {
+    await updateSucursal(sucursal.id, { activa: false })
+    toast.success('Sucursal desactivada')
+  } catch (err) {
+    toast.error(err.message || 'No se pudo desactivar la sucursal.')
+  }
 }
 </script>

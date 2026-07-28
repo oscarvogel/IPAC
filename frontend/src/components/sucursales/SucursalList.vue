@@ -28,6 +28,14 @@
             <button class="secondary-button" type="button" @click="$emit('edit', sucursal)">
               Editar
             </button>
+            <button
+              v-if="sucursal.activa"
+              class="danger-button"
+              type="button"
+              @click="$emit('deactivate', sucursal)"
+            >
+              Desactivar
+            </button>
           </td>
         </tr>
       </tbody>
@@ -43,7 +51,7 @@ defineProps({
   sucursales: { type: Array, required: true },
 })
 
-defineEmits(['edit'])
+defineEmits(['edit', 'deactivate'])
 </script>
 
 <style scoped>
