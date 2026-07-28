@@ -26,7 +26,11 @@ echo "✓ Nginx config creado"
 nginx -t && systemctl reload nginx
 echo "✓ Nginx recargado"
 
-# 3. Ir al proyecto y levantar docker
+# 3. Obtener certificado SSL con Let's Encrypt
+certbot --nginx -d ipac.vogelconsultoria.com.ar --non-interactive --agree-tos --email admin@vogelconsultoria.com.ar || echo "⚠ certbot falló (quizás ya existe el certificado)"
+echo "✓ SSL configurado"
+
+# 4. Ir al proyecto y levantar docker
 cd /var/www/html/ipac
 docker compose down --remove-orphans
 docker compose up -d --build
@@ -34,5 +38,5 @@ echo "✓ Docker Compose levantado"
 
 echo ""
 echo "=== Todo listo ==="
-echo "App: http://ipac.vogelconsultoria.com.ar"
+echo "App: https://ipac.vogelconsultoria.com.ar"
 echo "Usuario: admin / admin123"
