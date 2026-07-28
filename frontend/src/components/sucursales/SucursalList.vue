@@ -20,12 +20,12 @@
           <td>{{ sucursal.codigo }}</td>
           <td>{{ sucursal.nombre }}</td>
           <td>
-            <span :class="sucursal.activa ? 'status-pill active' : 'status-pill inactive'">
+            <span :class="'estado-badge ' + (sucursal.activa ? 'activo' : 'inactivo')">
               {{ sucursal.activa ? 'Activa' : 'Inactiva' }}
             </span>
           </td>
-          <td class="row-actions">
-            <button class="secondary-button small" type="button" @click="$emit('edit', sucursal)">
+          <td class="table-actions">
+            <button class="secondary-button" type="button" @click="$emit('edit', sucursal)">
               Editar
             </button>
           </td>
@@ -47,31 +47,4 @@ defineEmits(['edit'])
 </script>
 
 <style scoped>
-.row-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.secondary-button.small {
-  padding: 4px 10px;
-  font-size: 0.85rem;
-}
-
-.status-pill {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.status-pill.active {
-  background: #e2f5e8;
-  color: #1f6f3a;
-}
-
-.status-pill.inactive {
-  background: #f3e0dc;
-  color: #8a2e1c;
-}
 </style>

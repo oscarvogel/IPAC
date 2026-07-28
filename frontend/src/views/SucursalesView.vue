@@ -8,6 +8,9 @@
       </article>
     </div>
 
+    <div class="topbar-filters">
+      <button type="button" class="primary-button" @click="openNewSucursalForm">Nueva sucursal</button>
+    </div>
     <SucursalList :sucursales="sucursales" @edit="openEditForm" />
 
     <SucursalForm
@@ -20,8 +23,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { setTopbarActions } from '@/composables/useTopbarActions'
+import { computed, onMounted, ref } from 'vue'
 import { useSucursales } from '@/composables/useSucursales'
 import SucursalForm from '@/components/sucursales/SucursalForm.vue'
 import SucursalList from '@/components/sucursales/SucursalList.vue'
@@ -33,13 +35,6 @@ const editingSucursal = ref(null)
 
 onMounted(async () => {
   await loadSucursales()
-  setTopbarActions([
-    { label: 'Nueva sucursal', variant: 'primary', onClick: openNewSucursalForm },
-  ])
-})
-
-onBeforeUnmount(() => {
-  setTopbarActions([])
 })
 
 const totalActivas = computed(() => sucursales.value.filter((s) => s.activa).length)

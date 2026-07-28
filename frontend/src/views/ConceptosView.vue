@@ -24,6 +24,7 @@
         <input v-model="onlyActive" type="checkbox" />
         Solo activos
       </label>
+      <button type="button" class="primary-button" @click="openNewConceptoForm">Nuevo concepto</button>
     </div>
 
     <ConceptoList
@@ -42,10 +43,9 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useConceptos } from '@/composables/useConceptos'
-import { setTopbarActions } from '@/composables/useTopbarActions'
 import { useToast } from '@/composables/useToast'
 import { formatMoney } from '@/lib/formatters'
 import ConceptoList from '@/components/conceptos/ConceptoList.vue'
@@ -64,13 +64,6 @@ const editingConcepto = ref(null)
 
 onMounted(async () => {
   await Promise.all([loadCatalogos(), loadConceptos()])
-  setTopbarActions([
-    { label: 'Nuevo concepto', variant: 'primary', onClick: openNewConceptoForm },
-  ])
-})
-
-onBeforeUnmount(() => {
-  setTopbarActions([])
 })
 
 const filteredConceptos = computed(() => {
@@ -152,19 +145,4 @@ async function confirmDeactivate(concepto) {
 </script>
 
 <style scoped>
-.topbar-filters {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 4px;
-  flex-wrap: wrap;
-}
-
-.checkbox-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.9rem;
-  color: #4a4a55;
-}
 </style>

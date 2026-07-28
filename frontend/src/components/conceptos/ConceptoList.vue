@@ -26,17 +26,17 @@
           <td>{{ concepto.sucursal_nombre || 'Sin sucursal' }}</td>
           <td>{{ concepto.carrera_nombre || 'Aplica a todas' }}</td>
           <td>
-            <span :class="concepto.activo ? 'status-pill active' : 'status-pill inactive'">
+            <span :class="'estado-badge ' + (concepto.activo ? 'activo' : 'inactivo')">
               {{ concepto.activo ? 'Activo' : 'Inactivo' }}
             </span>
           </td>
-          <td class="row-actions">
-            <button class="secondary-button small" type="button" @click="$emit('edit', concepto)">
+          <td class="table-actions">
+            <button class="secondary-button" type="button" @click="$emit('edit', concepto)">
               Editar
             </button>
             <button
               v-if="concepto.activo"
-              class="secondary-button small danger"
+              class="danger-button"
               type="button"
               @click="$emit('deactivate', concepto)"
             >
@@ -63,36 +63,4 @@ defineEmits(['edit', 'deactivate'])
 </script>
 
 <style scoped>
-.row-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.secondary-button.small {
-  padding: 4px 10px;
-  font-size: 0.85rem;
-}
-
-.secondary-button.danger {
-  color: #b1351b;
-  border-color: #e3b9b1;
-}
-
-.status-pill {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.status-pill.active {
-  background: #e2f5e8;
-  color: #1f6f3a;
-}
-
-.status-pill.inactive {
-  background: #f3e0dc;
-  color: #8a2e1c;
-}
 </style>

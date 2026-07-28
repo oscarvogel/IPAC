@@ -827,6 +827,20 @@ th {
   background: #dcfce7;
 }
 
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.checkbox-inline input {
+  width: auto;
+  min-height: auto;
+}
+
 .alert {
   margin-bottom: 14px;
   padding: 12px 14px;
@@ -1026,6 +1040,14 @@ th {
   .cash-actions {
     justify-content: start;
   }
+}
+
+.topbar-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
 }
 
 .topbar-filters .primary-button {

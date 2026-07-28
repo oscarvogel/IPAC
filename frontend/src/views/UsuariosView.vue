@@ -28,6 +28,7 @@
         <option value="caja">Caja</option>
         <option value="consulta">Consulta</option>
       </select>
+      <button type="button" class="primary-button" @click="openNewUsuarioForm">Nuevo usuario</button>
     </div>
 
     <div class="panel table-card">
@@ -57,17 +58,17 @@
             <td><span class="table-badge">{{ rolLabel(usuario) }}</span></td>
             <td>{{ usuario.perfil?.sucursal?.nombre || '—' }}</td>
             <td>
-              <span :class="usuario.is_active ? 'status-pill active' : 'status-pill inactive'">
+              <span :class="'estado-badge ' + (usuario.is_active ? 'activo' : 'inactivo')">
                 {{ usuario.is_active ? 'Activo' : 'Inactivo' }}
               </span>
             </td>
-            <td class="row-actions">
-              <button class="secondary-button small" type="button" @click="openEditForm(usuario)">
+            <td class="table-actions">
+              <button class="secondary-button" type="button" @click="openEditForm(usuario)">
                 Editar
               </button>
               <button
                 v-if="usuario.is_active"
-                class="secondary-button small danger"
+                class="danger-button"
                 type="button"
                 @click="confirmDeactivate(usuario)"
               >
@@ -93,10 +94,9 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useCatalogos } from '@/composables/useCatalogos'
+import { computed, onMounted, ref } from 'vue'
 import { useUsuarios } from '@/composables/useUsuarios'
-import { setTopbarActions } from '@/composables/useTopbarActions'
+import { useCatalogos } from '@/composables/useCatalogos'
 import { useToast } from '@/composables/useToast'
 import UsuarioForm from '@/components/usuarios/UsuarioForm.vue'
 
@@ -113,13 +113,6 @@ const editingUsuario = ref(null)
 
 onMounted(async () => {
   await Promise.all([loadCatalogos(), loadUsuarios()])
-  setTopbarActions([
-    { label: 'Nuevo usuario', variant: 'primary', onClick: openNewUsuarioForm },
-  ])
-})
-
-onBeforeUnmount(() => {
-  setTopbarActions([])
 })
 
 const filteredUsuarios = computed(() => {
@@ -185,44 +178,4 @@ async function confirmDeactivate(usuario) {
 </script>
 
 <style scoped>
-.topbar-filters {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 4px;
-  flex-wrap: wrap;
-}
-
-.row-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.secondary-button.small {
-  padding: 4px 10px;
-  font-size: 0.85rem;
-}
-
-.secondary-button.danger {
-  color: #b1351b;
-  border-color: #e3b9b1;
-}
-
-.status-pill {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.status-pill.active {
-  background: #e2f5e8;
-  color: #1f6f3a;
-}
-
-.status-pill.inactive {
-  background: #f3e0dc;
-  color: #8a2e1c;
-}
 </style>

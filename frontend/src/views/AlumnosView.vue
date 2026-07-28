@@ -20,12 +20,16 @@
           {{ sucursal.nombre }}
         </option>
       </select>
+      <label class="checkbox-inline">
+        <input v-model="onlyActive" type="checkbox" />
+        Solo activos
+      </label>
       <button type="button" class="primary-button" @click="openNewAlumnoForm">Nuevo alumno</button>
     </div>
 
     <div class="crm-grid">
       <AlumnoList
-        :alumnos="alumnos"
+        :alumnos="filteredAlumnos"
         :selected-alumno="selectedAlumno"
         :search-query="searchQuery"
         :sucursal-filter="sucursalFilter"
@@ -95,6 +99,7 @@ const { pagos, loadPagos } = usePagos()
 
 const searchQuery = ref('')
 const sucursalFilter = ref('todas')
+const onlyActive = ref(false)
 
 const showAlumnoForm = ref(false)
 const editingAlumno = ref(null)
@@ -165,6 +170,11 @@ async function handleToggleEstado(alumno) {
   }
 }
 
+const filteredAlumnos = computed(() => {
+  if (!onlyActive.value) return alumnos.value
+  return alumnos.value.filter((a) => a.estado === 'activo')
+})
+
 const totalPagado = computed(() =>
   pagos.value.reduce((sum, p) => sum + Number(p.importe || 0), 0),
 )
@@ -182,10 +192,4 @@ const stats = computed(() => [
 </script>
 
 <style scoped>
-.topbar-filters {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 4px;
-}
 </style>
