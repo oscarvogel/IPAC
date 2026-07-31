@@ -42,7 +42,7 @@ describe('useAuth', () => {
       method: 'POST',
       body: { username: 'admin', password: 'admin123' },
     })
-    expect(api.setToken).toHaveBeenCalledWith('tok-123')
+    expect(api.setToken).toHaveBeenCalledWith('tok-123', { persistent: true })
     expect(auth.user.value).toEqual(sampleMe)
     expect(auth.error.value).toBe('')
   })
@@ -56,6 +56,18 @@ describe('useAuth', () => {
     expect(ok).toBe(false)
     expect(auth.user.value).toBeNull()
     expect(auth.error.value).toBe('Usuario o clave invalidos.')
+  })
+
+  it('login() permite mantener el token solo durante la sesion', async () => {
+    api.apiRequest
+      .mockResolvedValueOnce({ key: 'tok-session' })
+      .mockResolvedValueOnce(sampleMe)
+
+    const auth = useAuth()
+    const ok = await auth.login('admin', 'admin123', { remember: false })
+
+    expect(ok).toBe(true)
+    expect(api.setToken).toHaveBeenCalledWith('tok-session', { persistent: false })
   })
 
   it('logout() limpia token y usuario', () => {

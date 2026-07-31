@@ -8,7 +8,7 @@ const user = ref(null)
 const loading = ref(false)
 const error = ref('')
 
-async function login(username, password) {
+async function login(username, password, { remember = true } = {}) {
   loading.value = true
   error.value = ''
   try {
@@ -16,7 +16,7 @@ async function login(username, password) {
       method: 'POST',
       body: { username, password },
     })
-    setToken(data.key)
+    setToken(data.key, { persistent: remember })
     user.value = await apiRequest('/auth/me/')
     return true
   } catch (err) {

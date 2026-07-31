@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+import '@fontsource-variable/inter'
 import './style.css'
 import './assets/styles/print.css'
 import App from './App.vue'

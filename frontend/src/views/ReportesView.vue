@@ -1,9 +1,10 @@
 <template>
-  <section class="reports-screen">
+  <section class="reports-workspace text-text-primary">
     <ReporteFiltros
-      v-model:filtros="filtros"
+      :filtros="filtros"
       :sucursales="sucursales"
       :loading="loading"
+      @update:filtros="updateFiltros"
       @aplicar="aplicarFiltros"
       @exportar="exportarCsv"
     />
@@ -39,6 +40,10 @@ function rangoPorDefecto() {
   const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
   const iso = (d) => d.toISOString().slice(0, 10)
   return { desde: iso(primero), hasta: iso(hoy) }
+}
+
+function updateFiltros(nextFilters) {
+  Object.assign(filtros, nextFilters)
 }
 
 onMounted(async () => {

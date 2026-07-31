@@ -4,10 +4,12 @@
       <form class="modal-card compact-modal" @submit.prevent="handleSubmit">
         <header class="modal-head">
           <div>
-            <p class="eyebrow">{{ editingId ? 'Edicion' : 'Alta' }} de usuario</p>
+            <p class="eyebrow">{{ editingId ? 'Edición' : 'Alta' }} de usuario</p>
             <h2>{{ editingId ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">&times;</button>
+          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+            <XMarkIcon aria-hidden="true" />
+          </button>
         </header>
 
         <section class="modal-section">
@@ -17,8 +19,8 @@
               <input v-model="form.username" required maxlength="150" />
             </label>
             <label>
-              Contrase&ntilde;a
-              <input v-model="form.password" type="password" :required="!editingId" :placeholder="editingId ? 'Dejar vacio para mantener' : ''" />
+              Contraseña
+              <input v-model="form.password" type="password" :required="!editingId" :placeholder="editingId ? 'Dejar vacío para mantener' : ''" />
             </label>
             <label>
               Nombre
@@ -36,8 +38,8 @@
               Rol
               <select v-model="form.rol" required>
                 <option value="superadmin">Superadmin</option>
-                <option value="administracion">Administracion</option>
-                <option value="tesoreria">Tesoreria</option>
+                <option value="administracion">Administración</option>
+                <option value="tesoreria">Tesorería</option>
                 <option value="caja">Caja</option>
                 <option value="consulta">Consulta</option>
               </select>
@@ -74,6 +76,7 @@
 
 <script setup>
 import { reactive, ref, watch } from 'vue'
+import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { useUsuarios } from '@/composables/useUsuarios'
 import { useToast } from '@/composables/useToast'
 
@@ -179,6 +182,6 @@ async function handleSubmit() {
   align-items: center;
   gap: 6px;
   font-size: 0.9rem;
-  color: #4a4a55;
+  color: var(--text-secondary);
 }
 </style>

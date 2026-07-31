@@ -1,42 +1,80 @@
 <template>
-  <div class="report-resumen">
-    <div class="stats-grid">
-      <article v-for="stat in stats" :key="stat.label" class="stat-card">
-        <span>{{ stat.label }}</span>
-        <strong>{{ stat.value }}</strong>
-        <small>{{ stat.detail }}</small>
+  <div class="reports-summary">
+    <div class="reports-metrics-grid cash-metrics-grid">
+      <article
+        v-for="(stat, index) in stats"
+        :key="stat.label"
+        class="reports-metric-card cash-metric-card border-border bg-surface"
+        :class="{ 'cash-metric-card-featured': index === 0 }"
+      >
+        <span class="cash-metric-icon" :class="`cash-metric-icon-${stat.tone}`">
+          <component :is="stat.icon" aria-hidden="true" />
+        </span>
+        <span class="cash-metric-copy">
+          <span>{{ stat.label }}</span>
+          <strong>{{ stat.value }}</strong>
+          <small>{{ stat.detail }}</small>
+        </span>
       </article>
     </div>
 
-    <div v-if="resumen" class="panel table-card small">
-      <div class="panel-head">
-        <div>
-          <h2>Cobrado por medio</h2>
-          <p>Distribucion del periodo seleccionado</p>
+    <section class="reports-distribution-card border-border bg-surface">
+      <header class="reports-distribution-head">
+        <div class="reports-distribution-title">
+          <span class="reports-distribution-icon">
+            <ChartPieIcon aria-hidden="true" />
+          </span>
+          <div>
+            <p class="eyebrow">Composición de ingresos</p>
+            <h2>Cobrado por medio</h2>
+            <p>Participación sobre el total del período seleccionado.</p>
+          </div>
+        </div>
+        <span class="reports-distribution-total">
+          Total&nbsp; $ {{ formatMoney(totalCobrado, { fractionDigits: 2 }) }}
+        </span>
+      </header>
+
+      <div v-if="porMedioRows.length" class="reports-distribution-list">
+        <div v-for="row in porMedioRows" :key="row.medio" class="reports-distribution-row">
+          <span class="reports-method-icon">
+            <component :is="paymentIcon(row.medio)" aria-hidden="true" />
+          </span>
+          <span class="reports-method-copy">
+            <span>
+              <strong>{{ paymentLabel(row.medio) }}</strong>
+              <small>{{ row.porcentaje }}%</small>
+            </span>
+            <span class="reports-progress" aria-hidden="true">
+              <span :style="{ width: `${row.porcentaje}%` }" />
+            </span>
+          </span>
+          <strong class="reports-method-total">
+            $ {{ formatMoney(row.total, { fractionDigits: 2 }) }}
+          </strong>
         </div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Medio</th>
-            <th>Total</th>
-            <th>Participacion</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in porMedioRows" :key="row.medio">
-            <td><span class="table-badge">{{ row.medio }}</span></td>
-            <td>$ {{ formatMoney(row.total, { fractionDigits: 2 }) }}</td>
-            <td>{{ row.porcentaje }}%</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+
+      <div v-else class="reports-distribution-empty">
+        <ChartPieIcon aria-hidden="true" />
+        <span>Todavía no hay cobranzas para distribuir en este período.</span>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import {
+  BanknotesIcon,
+  BuildingLibraryIcon,
+  ChartPieIcon,
+  CreditCardIcon,
+  ExclamationTriangleIcon,
+  LockClosedIcon,
+  QuestionMarkCircleIcon,
+  ReceiptPercentIcon,
+} from '@heroicons/vue/24/outline'
 import { formatMoney } from '@/lib/formatters'
 
 const props = defineProps({
@@ -60,40 +98,59 @@ const stats = computed(() => [
   {
     label: 'Total cobrado',
     value: `$ ${formatMoney(totalCobrado.value, { fractionDigits: 2 })}`,
-    detail: `${cantidadPagos.value} pagos en el periodo`,
+    detail: `${cantidadPagos.value} pagos en el período`,
+    tone: 'primary',
+    icon: BanknotesIcon,
   },
   {
     label: 'Cantidad de pagos',
     value: cantidadPagos.value,
-    detail: 'filtrados por el periodo y la sucursal',
+    detail: 'operaciones encontradas',
+    tone: 'success',
+    icon: ReceiptPercentIcon,
   },
   {
     label: 'Deuda neta',
     value: `$ ${formatMoney(deudaNeta.value, { fractionDigits: 2 })}`,
-    detail: 'saldo pendiente menos saldo a favor',
+    detail: 'saldo pendiente consolidado',
+    tone: 'warning',
+    icon: ExclamationTriangleIcon,
   },
   {
     label: 'Cajas cerradas',
     value: cajasCerradas.value,
-    detail: 'en el periodo seleccionado',
+    detail: 'en el período seleccionado',
+    tone: 'info',
+    icon: LockClosedIcon,
   },
 ])
 
 const porMedioRows = computed(() => {
   const porMedio = props.resumen?.cobranzas?.por_medio || {}
   const total = totalCobrado.value
-  return Object.entries(porMedio).map(([medio, totalMedio]) => ({
-    medio,
-    total: Number(totalMedio || 0),
-    porcentaje: total > 0 ? Math.round((Number(totalMedio || 0) / total) * 100) : 0,
-  }))
+  return Object.entries(porMedio)
+    .map(([medio, totalMedio]) => ({
+      medio,
+      total: Number(totalMedio || 0),
+      porcentaje: total > 0 ? Math.round((Number(totalMedio || 0) / total) * 100) : 0,
+    }))
+    .sort((a, b) => b.total - a.total)
 })
-</script>
 
-<style scoped>
-.report-resumen {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+function paymentIcon(method) {
+  if (method === 'efectivo') return BanknotesIcon
+  if (method === 'transferencia') return BuildingLibraryIcon
+  if (method === 'tarjeta') return CreditCardIcon
+  return QuestionMarkCircleIcon
 }
-</style>
+
+function paymentLabel(method) {
+  const labels = {
+    efectivo: 'Efectivo',
+    transferencia: 'Transferencia',
+    tarjeta: 'Tarjeta',
+    otro: 'Otro',
+  }
+  return labels[method] || method || 'Sin medio'
+}
+</script>

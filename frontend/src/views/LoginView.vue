@@ -1,53 +1,57 @@
 <template>
-  <main class="login-screen">
-    <div class="login-panel">
-      <div class="login-copy">
-        <span class="brand-mark">IP</span>
-        <p class="eyebrow">IPAC CRM</p>
-        <h1>Administracion y cobranzas en una sola vista.</h1>
-        <p>Un panel para encontrar alumnos, revisar sucursal, cargar datos y preparar el flujo de caja sin perder contexto.</p>
-      </div>
-
-      <form class="login-card" @submit.prevent="handleSubmit">
-        <h2>Ingresar</h2>
-        <label>
-          Usuario
-          <input v-model="form.username" autocomplete="username" required />
-        </label>
-        <label>
-          Clave
-          <input v-model="form.password" type="password" autocomplete="current-password" required />
-        </label>
-        <p v-if="localError" class="alert">{{ localError }}</p>
-        <button class="primary-button" type="submit" :disabled="loading">
-          {{ loading ? 'Ingresando...' : 'Entrar al CRM' }}
-        </button>
-      </form>
-    </div>
-  </main>
+  <MobileLogin
+    v-if="isMobile"
+    :loading="loading"
+    :error-message="localError"
+    @submit="handleSubmit"
+  />
+  <DesktopLogin
+    v-else
+    :loading="loading"
+    :error-message="localError"
+    @submit="handleSubmit"
+  />
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import DesktopLogin from '@/components/auth/DesktopLogin.vue'
+import MobileLogin from '@/components/auth/MobileLogin.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useToast } from '@/composables/useToast'
+
+const MOBILE_QUERY = '(max-width: 767px)'
 
 const router = useRouter()
 const { login, loading, error: authError } = useAuth()
 const toast = useToast()
-
-const form = reactive({ username: '', password: '' })
 const localError = ref('')
+const mediaQuery = window.matchMedia(MOBILE_QUERY)
+const isMobile = ref(mediaQuery.matches)
 
-async function handleSubmit() {
+function syncViewport(event) {
+  isMobile.value = event.matches
   localError.value = ''
-  const ok = await login(form.username, form.password)
+}
+
+onMounted(() => {
+  mediaQuery.addEventListener('change', syncViewport)
+})
+
+onBeforeUnmount(() => {
+  mediaQuery.removeEventListener('change', syncViewport)
+})
+
+async function handleSubmit({ username, password, remember }) {
+  localError.value = ''
+  const ok = await login(username, password, { remember })
   if (ok) {
     router.replace('/dashboard')
-  } else {
-    localError.value = authError.value || 'No se pudo iniciar sesion.'
-    toast.error(localError.value)
+    return
   }
+
+  localError.value = authError.value || 'No se pudo iniciar sesión.'
+  toast.error(localError.value)
 }
 </script>

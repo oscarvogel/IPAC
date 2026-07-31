@@ -1,80 +1,101 @@
 <template>
-  <div class="crm-list panel">
-    <div class="panel-head">
+  <section class="students-list-panel border-border bg-surface">
+    <header class="students-panel-head">
       <div>
-        <h2>Lista inteligente</h2>
-        <p>{{ filteredAlumnos.length }} alumnos visibles</p>
+        <p class="eyebrow">Base académica</p>
+        <h2>Alumnos</h2>
+        <p>{{ sortedAlumnos.length }} {{ studentCountLabel }}</p>
       </div>
-      <div class="status-tabs">
-        <span class="active">Todos</span>
-        <span>Con deuda</span>
-        <span>Nuevos</span>
-      </div>
-    </div>
+      <span class="students-list-count" aria-hidden="true">
+        <UserGroupIcon />
+        {{ sortedAlumnos.length }}
+      </span>
+    </header>
 
-    <div class="student-list">
+    <div class="students-list">
       <button
-        v-for="alumno in filteredAlumnos"
+        v-for="alumno in sortedAlumnos"
         :key="alumno.id"
         :class="{ selected: selectedAlumno?.id === alumno.id }"
-        class="student-row"
+        :aria-pressed="selectedAlumno?.id === alumno.id"
+        class="students-row"
         type="button"
         @click="$emit('select', alumno)"
       >
-        <span class="avatar">{{ avatarInitials(alumno) }}</span>
-        <span>
+        <span class="students-avatar">{{ avatarInitials(alumno) }}</span>
+
+        <span class="students-row-copy">
           <strong>{{ alumno.apellido }}, {{ alumno.nombre }}</strong>
-          <small>{{ alumno.legajo }} · {{ alumno.carrera_nombre || 'Sin carrera asignada' }}</small>
+          <small>
+            <IdentificationIcon aria-hidden="true" />
+            {{ alumno.legajo || 'Sin legajo' }}
+            <span aria-hidden="true">•</span>
+            {{ alumno.carrera_nombre || 'Sin carrera asignada' }}
+          </small>
         </span>
-        <span class="row-meta">
-          <small>{{ alumno.sucursal_nombre }}</small>
-          <em :class="'estado-badge ' + alumno.estado">{{ alumno.estado }}</em>
+
+        <span class="students-row-location">
+          <small>
+            <MapPinIcon aria-hidden="true" />
+            {{ alumno.sucursal_nombre || 'Sin sucursal' }}
+          </small>
+          <em :class="['students-status', alumno.estado]">
+            <component :is="statusIcon(alumno.estado)" aria-hidden="true" />
+            {{ alumno.estado || 'sin estado' }}
+          </em>
         </span>
+
+        <ChevronRightIcon class="students-row-chevron" aria-hidden="true" />
       </button>
 
-      <div v-if="!filteredAlumnos.length" class="empty-state">
-        No hay alumnos para el filtro actual.
+      <div v-if="!sortedAlumnos.length" class="students-empty-state">
+        <span><UserGroupIcon aria-hidden="true" /></span>
+        <strong>No encontramos alumnos</strong>
+        <p>Probá cambiando la búsqueda o los filtros seleccionados.</p>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import {
+  CheckCircleIcon,
+  ChevronRightIcon,
+  IdentificationIcon,
+  MapPinIcon,
+  PauseCircleIcon,
+  UserGroupIcon,
+} from '@heroicons/vue/24/outline'
 
 const props = defineProps({
   alumnos: { type: Array, required: true },
   selectedAlumno: { type: Object, default: null },
-  searchQuery: { type: String, default: '' },
-  sucursalFilter: { type: [String, Number], default: 'todas' },
 })
 
 defineEmits(['select'])
 
-const filteredAlumnos = computed(() => {
-  const query = props.searchQuery.trim().toLowerCase()
-  return props.alumnos.filter((alumno) => {
-    const matchesSucursal =
-      props.sucursalFilter === 'todas' ||
-      String(alumno.sucursal) === String(props.sucursalFilter)
-    const text = [
-      alumno.legajo,
-      alumno.nombre,
-      alumno.apellido,
-      alumno.dni,
-      alumno.email,
-      alumno.sucursal_nombre,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-    return matchesSucursal && (!query || text.includes(query))
-  })
-})
+const sortedAlumnos = computed(() =>
+  [...props.alumnos].sort((a, b) =>
+    `${a.apellido || ''} ${a.nombre || ''}`.localeCompare(
+      `${b.apellido || ''} ${b.nombre || ''}`,
+      'es',
+      { sensitivity: 'base' },
+    ),
+  ),
+)
+
+const studentCountLabel = computed(() =>
+  sortedAlumnos.value.length === 1 ? 'alumno visible' : 'alumnos visibles',
+)
+
+function statusIcon(status) {
+  return status === 'activo' ? CheckCircleIcon : PauseCircleIcon
+}
 
 function avatarInitials(alumno) {
-  const n = (alumno.nombre || '').trim()
-  const a = (alumno.apellido || '').trim()
-  return `${n.slice(0, 1)}${a.slice(0, 1)}`.toUpperCase() || '?'
+  const name = (alumno.nombre || '').trim()
+  const surname = (alumno.apellido || '').trim()
+  return `${name.slice(0, 1)}${surname.slice(0, 1)}`.toUpperCase() || '?'
 }
 </script>

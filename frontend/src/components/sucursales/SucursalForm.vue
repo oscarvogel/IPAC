@@ -5,25 +5,27 @@
         <header class="modal-head">
           <div>
             <p class="eyebrow">
-              {{ editingId ? 'Edicion de sucursal' : 'Alta de sucursal' }}
+              {{ editingId ? 'Edición de sucursal' : 'Alta de sucursal' }}
             </p>
             <h2>{{ editingId ? 'Editar sucursal' : 'Nueva sucursal' }}</h2>
             <span>
               {{
                 editingId
-                  ? 'Actualiza el codigo o nombre de la sucursal seleccionada.'
+                  ? 'Actualizá el código o nombre de la sucursal seleccionada.'
                   : 'Carga una nueva sucursal para empezar a operar.'
               }}
             </span>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">×</button>
+          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+            <XMarkIcon aria-hidden="true" />
+          </button>
         </header>
 
         <section class="modal-section">
           <h3>Datos de la sucursal</h3>
           <div class="modal-grid">
             <label>
-              Codigo
+              Código
               <input
                 v-model="form.codigo"
                 required
@@ -57,6 +59,7 @@
 
 <script setup>
 import { reactive, ref, watch } from 'vue'
+import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { useSucursales } from '@/composables/useSucursales'
 import { useToast } from '@/composables/useToast'
 
@@ -128,6 +131,6 @@ async function handleSubmit() {
   align-items: center;
   gap: 6px;
   font-size: 0.9rem;
-  color: #4a4a55;
+  color: var(--text-secondary);
 }
 </style>

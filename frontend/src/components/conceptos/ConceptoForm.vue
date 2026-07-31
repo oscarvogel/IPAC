@@ -5,7 +5,7 @@
         <header class="modal-head">
           <div>
             <p class="eyebrow">
-              {{ editingId ? 'Edicion de concepto' : 'Alta de concepto' }}
+              {{ editingId ? 'Edición de concepto' : 'Alta de concepto' }}
             </p>
             <h2>{{ editingId ? 'Editar concepto' : 'Nuevo concepto cobrable' }}</h2>
             <span>
@@ -16,7 +16,9 @@
               }}
             </span>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">×</button>
+          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+            <XMarkIcon aria-hidden="true" />
+          </button>
         </header>
 
         <section class="modal-section">
@@ -29,7 +31,7 @@
             <label>
               Tipo
               <select v-model="form.tipo" required>
-                <option value="matricula">Matricula</option>
+                <option value="matricula">Matrícula</option>
                 <option value="cuota">Cuota</option>
                 <option value="material">Material</option>
                 <option value="otro">Otro</option>
@@ -88,6 +90,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useConceptos } from '@/composables/useConceptos'
 import { useToast } from '@/composables/useToast'
@@ -184,6 +187,6 @@ async function handleSubmit() {
   align-items: center;
   gap: 6px;
   font-size: 0.9rem;
-  color: #4a4a55;
+  color: var(--text-secondary);
 }
 </style>

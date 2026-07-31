@@ -1,5 +1,5 @@
 <template>
-  <section class="cash-screen">
+  <section class="cash-workspace text-text-primary">
     <CajaHero
       :caja-hoy="cajaHoy"
       :fallback-sucursal="auth.user?.perfil?.sucursal?.nombre"
@@ -9,26 +9,21 @@
       @cerrar="openCerrar"
     />
 
-    <div class="stats-grid cash-stats">
-      <article class="stat-card">
-        <span>Total esperado</span>
-        <strong>$ {{ formatMoney(cajaTotales.total) }}</strong>
-        <small>incluye pagos y movimientos</small>
-      </article>
-      <article class="stat-card">
-        <span>Efectivo</span>
-        <strong>$ {{ formatMoney(cajaTotales.efectivo) }}</strong>
-        <small>saldo de efectivo</small>
-      </article>
-      <article class="stat-card">
-        <span>Transferencia</span>
-        <strong>$ {{ formatMoney(cajaTotales.transferencia) }}</strong>
-        <small>pagos bancarios</small>
-      </article>
-      <article class="stat-card">
-        <span>Movimientos</span>
-        <strong>{{ cajaMovimientos.length }}</strong>
-        <small>registrados hoy</small>
+    <div class="cash-metrics-grid">
+      <article
+        v-for="(stat, index) in stats"
+        :key="stat.label"
+        class="cash-metric-card border-border bg-surface"
+        :class="{ 'cash-metric-card-featured': index === 0 }"
+      >
+        <span class="cash-metric-icon" :class="`cash-metric-icon-${stat.tone}`">
+          <component :is="stat.icon" aria-hidden="true" />
+        </span>
+        <span class="cash-metric-copy">
+          <span>{{ stat.label }}</span>
+          <strong>{{ stat.value }}</strong>
+          <small>{{ stat.detail }}</small>
+        </span>
       </article>
     </div>
 
@@ -63,6 +58,12 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import {
+  ArrowsRightLeftIcon,
+  BanknotesIcon,
+  BuildingLibraryIcon,
+  WalletIcon,
+} from '@heroicons/vue/24/outline'
 import { useAuth } from '@/composables/useAuth'
 import { useCaja } from '@/composables/useCaja'
 import { useToast } from '@/composables/useToast'
@@ -84,6 +85,37 @@ const showCerrar = ref(false)
 const movimientoTipoInicial = ref('egreso')
 
 const puedeMover = computed(() => cajaHoy.value && cajaHoy.value.estado !== 'cerrada')
+
+const stats = computed(() => [
+  {
+    label: 'Total esperado',
+    value: `$ ${formatMoney(cajaTotales.value.total, { fractionDigits: 2 })}`,
+    detail: 'balance operativo del día',
+    tone: 'primary',
+    icon: WalletIcon,
+  },
+  {
+    label: 'Efectivo',
+    value: `$ ${formatMoney(cajaTotales.value.efectivo, { fractionDigits: 2 })}`,
+    detail: 'disponible en caja',
+    tone: 'success',
+    icon: BanknotesIcon,
+  },
+  {
+    label: 'Transferencias',
+    value: `$ ${formatMoney(cajaTotales.value.transferencia, { fractionDigits: 2 })}`,
+    detail: 'operaciones bancarias',
+    tone: 'info',
+    icon: BuildingLibraryIcon,
+  },
+  {
+    label: 'Movimientos',
+    value: cajaMovimientos.value.length,
+    detail: 'registrados en la jornada',
+    tone: 'warning',
+    icon: ArrowsRightLeftIcon,
+  },
+])
 
 function openMovimiento(tipo = 'egreso') {
   movimientoTipoInicial.value = tipo

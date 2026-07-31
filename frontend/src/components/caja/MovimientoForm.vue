@@ -8,7 +8,9 @@
             <h2>Registrar {{ form.tipo }}</h2>
             <span>Caja {{ cajaHoy?.sucursal_nombre }} · {{ cajaHoy?.fecha }}</span>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">×</button>
+          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+            <XMarkIcon aria-hidden="true" />
+          </button>
         </header>
         <section class="modal-section">
           <div class="modal-grid">
@@ -45,6 +47,7 @@
 
 <script setup>
 import { reactive } from 'vue'
+import { XMarkIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
   cajaHoy: { type: Object, required: true },

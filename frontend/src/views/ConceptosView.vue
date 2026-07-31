@@ -1,31 +1,70 @@
 <template>
-  <section class="concepts-screen">
-    <div class="stats-grid">
-      <article v-for="stat in stats" :key="stat.label" class="stat-card">
-        <span>{{ stat.label }}</span>
-        <strong>{{ stat.value }}</strong>
-        <small>{{ stat.detail }}</small>
+  <section class="concepts-workspace text-text-primary">
+    <div class="concepts-metrics-grid">
+      <article
+        v-for="(stat, index) in stats"
+        :key="stat.label"
+        class="concepts-metric-card border-border bg-surface"
+        :class="{ 'concepts-metric-card-featured': index === 0 }"
+      >
+        <span class="concepts-metric-icon" :class="`concepts-metric-icon-${stat.tone}`">
+          <component :is="stat.icon" aria-hidden="true" />
+        </span>
+        <span class="concepts-metric-copy">
+          <span>{{ stat.label }}</span>
+          <strong>{{ stat.value }}</strong>
+          <small>{{ stat.detail }}</small>
+        </span>
       </article>
     </div>
 
-    <div class="topbar-filters">
-      <input
-        v-model="searchQuery"
-        class="global-search"
-        placeholder="Buscar concepto..."
-      />
-      <select v-model="sucursalFilter" class="compact-select">
-        <option value="todas">Todas las sucursales</option>
-        <option v-for="sucursal in sucursales" :key="sucursal.id" :value="sucursal.id">
-          {{ sucursal.nombre }}
-        </option>
-      </select>
-      <label class="checkbox-inline">
-        <input v-model="onlyActive" type="checkbox" />
-        Solo activos
-      </label>
-      <button type="button" class="primary-button" @click="openNewConceptoForm">Nuevo concepto</button>
-    </div>
+    <section class="concepts-toolbar border-border bg-surface" aria-label="Filtros de conceptos">
+      <div class="concepts-toolbar-heading">
+        <span class="concepts-toolbar-icon">
+          <TagIcon aria-hidden="true" />
+        </span>
+        <div>
+          <p class="eyebrow">Gestión de aranceles</p>
+          <h2>Catálogo de conceptos</h2>
+          <p>Administrá matrículas, cuotas, materiales y otros cargos.</p>
+        </div>
+      </div>
+
+      <div class="concepts-filters">
+        <label class="concepts-search-field">
+          <MagnifyingGlassIcon aria-hidden="true" />
+          <span class="sr-only">Buscar concepto</span>
+          <input v-model="searchQuery" type="search" placeholder="Buscar concepto o tipo" />
+        </label>
+
+        <label class="concepts-branch-field">
+          <BuildingStorefrontIcon aria-hidden="true" />
+          <span class="sr-only">Filtrar por sucursal</span>
+          <select v-model="sucursalFilter">
+            <option value="todas">Todas las sucursales</option>
+            <option v-for="sucursal in sucursales" :key="sucursal.id" :value="sucursal.id">
+              {{ sucursal.nombre }}
+            </option>
+          </select>
+          <ChevronDownIcon class="concepts-select-chevron" aria-hidden="true" />
+        </label>
+
+        <label class="concepts-active-filter" :class="{ active: onlyActive }">
+          <input v-model="onlyActive" class="sr-only" type="checkbox" />
+          <CheckIcon aria-hidden="true" />
+          <span>Solo activos</span>
+        </label>
+
+        <button
+          type="button"
+          class="concepts-primary-action bg-primary hover:bg-primary-hover"
+          @click="openNewConceptoForm"
+        >
+          <PlusIcon aria-hidden="true" />
+          <span>Nuevo concepto</span>
+        </button>
+      </div>
+    </section>
 
     <ConceptoList
       :conceptos="filteredConceptos"
@@ -44,6 +83,17 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import {
+  BuildingStorefrontIcon,
+  CheckCircleIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  CurrencyDollarIcon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+  Squares2X2Icon,
+  TagIcon,
+} from '@heroicons/vue/24/outline'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useConceptos } from '@/composables/useConceptos'
 import { useToast } from '@/composables/useToast'
@@ -66,12 +116,16 @@ onMounted(async () => {
   await Promise.all([loadCatalogos(), loadConceptos()])
 })
 
+const branchConceptos = computed(() => {
+  if (sucursalFilter.value === 'todas') return conceptos.value
+  return conceptos.value.filter(
+    (concepto) => String(concepto.sucursal) === String(sucursalFilter.value),
+  )
+})
+
 const filteredConceptos = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
-  return conceptos.value.filter((concepto) => {
-    const matchesSucursal =
-      sucursalFilter.value === 'todas' ||
-      String(concepto.sucursal) === String(sucursalFilter.value)
+  return branchConceptos.value.filter((concepto) => {
     const matchesActive = !onlyActive.value || concepto.activo
     const text = [
       concepto.nombre,
@@ -83,36 +137,60 @@ const filteredConceptos = computed(() => {
       .join(' ')
       .toLowerCase()
     const matchesQuery = !query || text.includes(query)
-    return matchesSucursal && matchesActive && matchesQuery
+    return matchesActive && matchesQuery
   })
 })
 
-const totalActivos = computed(() => conceptos.value.filter((c) => c.activo).length)
+const totalActivos = computed(() => branchConceptos.value.filter((c) => c.activo).length)
 
 const promedioImporte = computed(() => {
-  const activos = conceptos.value.filter((c) => c.activo)
+  const activos = branchConceptos.value.filter((c) => c.activo)
   if (!activos.length) return 0
   const suma = activos.reduce((acc, c) => acc + Number(c.importe || 0), 0)
   return suma / activos.length
 })
 
 const tiposCount = computed(
-  () => new Set(conceptos.value.map((c) => c.tipo)).size,
+  () => new Set(branchConceptos.value.map((c) => c.tipo).filter(Boolean)).size,
 )
+
+const selectedBranchName = computed(() => {
+  if (sucursalFilter.value === 'todas') return 'en toda la institución'
+  const branch = sucursales.value.find(
+    (sucursal) => String(sucursal.id) === String(sucursalFilter.value),
+  )
+  return branch ? `en ${branch.nombre}` : 'en la sucursal seleccionada'
+})
 
 const stats = computed(() => [
   {
+    label: 'Total de conceptos',
+    value: branchConceptos.value.length,
+    detail: selectedBranchName.value,
+    tone: 'primary',
+    icon: TagIcon,
+  },
+  {
     label: 'Conceptos activos',
     value: totalActivos.value,
-    detail: `de un total de ${conceptos.value.length}`,
+    detail: `${branchConceptos.value.length - totalActivos.value} inactivos`,
+    tone: 'success',
+    icon: CheckCircleIcon,
   },
-  { label: 'Sucursales', value: sucursales.value.length, detail: 'Posadas y Eldorado' },
   {
     label: 'Importe promedio',
     value: `$ ${formatMoney(promedioImporte.value, { fractionDigits: 2 })}`,
     detail: 'sobre conceptos activos',
+    tone: 'info',
+    icon: CurrencyDollarIcon,
   },
-  { label: 'Tipos', value: tiposCount.value, detail: 'matricula, cuota, material, otro' },
+  {
+    label: 'Tipos configurados',
+    value: tiposCount.value,
+    detail: 'categorías de aranceles',
+    tone: 'warning',
+    icon: Squares2X2Icon,
+  },
 ])
 
 function openNewConceptoForm() {

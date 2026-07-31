@@ -8,7 +8,9 @@
             <h2>Cerrar caja del dia</h2>
             <span>Total esperado: $ {{ formatMoney(totalEsperado) }}</span>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">×</button>
+          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+            <XMarkIcon aria-hidden="true" />
+          </button>
         </header>
         <section class="modal-section">
           <div class="modal-grid">
@@ -26,6 +28,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { formatMoney } from '@/lib/formatters'
 
 const props = defineProps({

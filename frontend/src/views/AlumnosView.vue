@@ -1,38 +1,79 @@
 <template>
-  <div class="crm-screen">
-    <div class="stats-grid">
-      <article v-for="stat in stats" :key="stat.label" class="stat-card">
-        <span>{{ stat.label }}</span>
-        <strong>{{ stat.value }}</strong>
-        <small>{{ stat.detail }}</small>
+  <section class="students-screen text-text-primary">
+    <div class="students-stats">
+      <article
+        v-for="(stat, index) in stats"
+        :key="stat.label"
+        class="students-stat-card border-border bg-surface"
+        :class="{ 'students-stat-card-featured': index === 0 }"
+      >
+        <span class="students-stat-icon" :class="`students-stat-icon-${stat.tone}`">
+          <component :is="stat.icon" aria-hidden="true" />
+        </span>
+        <span class="students-stat-copy">
+          <span>{{ stat.label }}</span>
+          <strong>{{ stat.value }}</strong>
+          <small>{{ stat.detail }}</small>
+        </span>
       </article>
     </div>
 
-    <div class="topbar-filters">
-      <input
-        v-model="searchQuery"
-        class="global-search"
-        placeholder="Buscar alumno, DNI, legajo..."
-      />
-      <select v-model="sucursalFilter" class="compact-select">
-        <option value="todas">Todas las sucursales</option>
-        <option v-for="sucursal in sucursales" :key="sucursal.id" :value="sucursal.id">
-          {{ sucursal.nombre }}
-        </option>
-      </select>
-      <label class="checkbox-inline">
-        <input v-model="onlyActive" type="checkbox" />
-        Solo activos
-      </label>
-      <button type="button" class="primary-button" @click="openNewAlumnoForm">Nuevo alumno</button>
-    </div>
+    <section class="students-toolbar border-border bg-surface" aria-label="Filtros de alumnos">
+      <div class="students-toolbar-heading">
+        <span class="students-toolbar-icon">
+          <UserGroupIcon aria-hidden="true" />
+        </span>
+        <div>
+          <p class="eyebrow">Gestión académica</p>
+          <h2>Directorio de alumnos</h2>
+          <p>Encontrá y administrá cada legajo desde un solo lugar.</p>
+        </div>
+      </div>
 
-    <div class="crm-grid">
+      <div class="students-filters">
+        <label class="students-search-field">
+          <MagnifyingGlassIcon aria-hidden="true" />
+          <span class="sr-only">Buscar alumno</span>
+          <input
+            v-model="searchQuery"
+            type="search"
+            placeholder="Buscar por nombre, DNI o legajo"
+          />
+        </label>
+
+        <label class="students-branch-field">
+          <BuildingStorefrontIcon aria-hidden="true" />
+          <span class="sr-only">Filtrar por sucursal</span>
+          <select v-model="sucursalFilter">
+            <option value="todas">Todas las sucursales</option>
+            <option v-for="sucursal in sucursales" :key="sucursal.id" :value="sucursal.id">
+              {{ sucursal.nombre }}
+            </option>
+          </select>
+          <ChevronDownIcon class="students-select-chevron" aria-hidden="true" />
+        </label>
+
+        <label class="students-active-filter" :class="{ active: onlyActive }">
+          <input v-model="onlyActive" class="sr-only" type="checkbox" />
+          <CheckIcon aria-hidden="true" />
+          <span>Solo activos</span>
+        </label>
+
+        <button
+          type="button"
+          class="students-primary-action bg-primary hover:bg-primary-hover"
+          @click="openNewAlumnoForm"
+        >
+          <UserPlusIcon aria-hidden="true" />
+          <span>Nuevo alumno</span>
+        </button>
+      </div>
+    </section>
+
+    <div class="students-grid">
       <AlumnoList
-        :alumnos="filteredAlumnos"
+        :alumnos="visibleAlumnos"
         :selected-alumno="selectedAlumno"
-        :search-query="searchQuery"
-        :sucursal-filter="sucursalFilter"
         @select="onSelect"
       />
       <AlumnoDetail
@@ -75,16 +116,25 @@
       @close="showGenerarCuota = false"
       @saved="onCuotaGenerada"
     />
-  </div>
+  </section>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import {
+  BuildingStorefrontIcon,
+  CheckCircleIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  MagnifyingGlassIcon,
+  PauseCircleIcon,
+  UserGroupIcon,
+  UserPlusIcon,
+} from '@heroicons/vue/24/outline'
 import { useAlumnos } from '@/composables/useAlumnos'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { usePagos } from '@/composables/usePagos'
 import { useToast } from '@/composables/useToast'
-import { formatMoney } from '@/lib/formatters'
 import AlumnoList from '@/components/alumnos/AlumnoList.vue'
 import AlumnoDetail from '@/components/alumnos/AlumnoDetail.vue'
 import AlumnoForm from '@/components/alumnos/AlumnoForm.vue'
@@ -156,6 +206,10 @@ function closeEstadoCuenta() {
   showEstadoCuenta.value = false
 }
 
+function onCuotaGenerada() {
+  showGenerarCuota.value = false
+}
+
 async function handleToggleEstado(alumno) {
   try {
     if (alumno.estado === 'inactivo') {
@@ -170,23 +224,77 @@ async function handleToggleEstado(alumno) {
   }
 }
 
-const filteredAlumnos = computed(() => {
-  if (!onlyActive.value) return alumnos.value
-  return alumnos.value.filter((a) => a.estado === 'activo')
+const branchAlumnos = computed(() => {
+  if (sucursalFilter.value === 'todas') return alumnos.value
+  return alumnos.value.filter(
+    (alumno) => String(alumno.sucursal) === String(sucursalFilter.value),
+  )
 })
 
-const totalPagado = computed(() =>
-  pagos.value.reduce((sum, p) => sum + Number(p.importe || 0), 0),
+const visibleAlumnos = computed(() => {
+  const query = searchQuery.value.trim().toLocaleLowerCase('es')
+  return branchAlumnos.value.filter((alumno) => {
+    if (onlyActive.value && alumno.estado !== 'activo') return false
+    if (!query) return true
+    const searchable = [
+      alumno.legajo,
+      alumno.nombre,
+      alumno.apellido,
+      alumno.dni,
+      alumno.email,
+      alumno.sucursal_nombre,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('es')
+    return searchable.includes(query)
+  })
+})
+
+const activeCount = computed(
+  () => branchAlumnos.value.filter((alumno) => alumno.estado === 'activo').length,
 )
 
+const inactiveCount = computed(
+  () => branchAlumnos.value.filter((alumno) => alumno.estado !== 'activo').length,
+)
+
+const selectedBranchName = computed(() => {
+  if (sucursalFilter.value === 'todas') return 'en toda la institución'
+  const branch = sucursales.value.find(
+    (sucursal) => String(sucursal.id) === String(sucursalFilter.value),
+  )
+  return branch ? `en ${branch.nombre}` : 'en la sucursal seleccionada'
+})
+
 const stats = computed(() => [
-  { label: 'Alumnos activos', value: alumnos.value.length, detail: 'base cargada' },
-  { label: 'Sucursales', value: sucursales.value.length, detail: 'Posadas y Eldorado' },
-  { label: 'Pagos registrados', value: pagos.value.length, detail: 'movimientos cargados' },
   {
-    label: 'Cobrado total',
-    value: `$ ${formatMoney(totalPagado.value)}`,
-    detail: 'suma de pagos',
+    label: 'Total de alumnos',
+    value: branchAlumnos.value.length,
+    detail: selectedBranchName.value,
+    tone: 'primary',
+    icon: UserGroupIcon,
+  },
+  {
+    label: 'Alumnos activos',
+    value: activeCount.value,
+    detail: 'con matrícula vigente',
+    tone: 'success',
+    icon: CheckCircleIcon,
+  },
+  {
+    label: 'Inactivos',
+    value: inactiveCount.value,
+    detail: 'legajos en pausa o baja',
+    tone: 'warning',
+    icon: PauseCircleIcon,
+  },
+  {
+    label: 'Sucursales',
+    value: sucursales.value.length,
+    detail: 'sedes disponibles',
+    tone: 'info',
+    icon: BuildingStorefrontIcon,
   },
 ])
 </script>
