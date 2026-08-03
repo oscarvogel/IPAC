@@ -1,13 +1,22 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="$emit('close')">
-      <form class="modal-card" @submit.prevent="handleSubmit">
+    <div v-if="open" class="modal-backdrop" @click.self="requestClose">
+      <form
+        v-focus-trap="{ close: requestClose, busy: saving }"
+        v-form-validation
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sucursal-form-title"
+        :aria-busy="saving"
+        @submit.prevent="handleSubmit"
+      >
         <header class="modal-head">
           <div>
             <p class="eyebrow">
               {{ editingId ? 'Edición de sucursal' : 'Alta de sucursal' }}
             </p>
-            <h2>{{ editingId ? 'Editar sucursal' : 'Nueva sucursal' }}</h2>
+            <h2 id="sucursal-form-title">{{ editingId ? 'Editar sucursal' : 'Nueva sucursal' }}</h2>
             <span>
               {{
                 editingId
@@ -16,7 +25,7 @@
               }}
             </span>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+          <button class="icon-button" type="button" aria-label="Cerrar formulario" @click="requestClose">
             <XMarkIcon aria-hidden="true" />
           </button>
         </header>
@@ -45,7 +54,7 @@
         </section>
 
         <footer class="modal-actions">
-          <button class="secondary-button" type="button" @click="$emit('close')">
+          <button class="secondary-button" type="button" :disabled="saving" @click="requestClose">
             Cancelar
           </button>
           <button class="primary-button modal-submit" :disabled="saving" type="submit">
@@ -67,6 +76,7 @@ import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { useSucursales } from '@/composables/useSucursales'
 import { useToast } from '@/composables/useToast'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -86,6 +96,10 @@ const form = reactive({
 
 const editingId = ref(null)
 const saving = ref(false)
+
+function requestClose() {
+  if (!saving.value) emit('close')
+}
 
 function resetForm() {
   Object.assign(form, { codigo: '', nombre: '', activa: true })

@@ -5,9 +5,9 @@
         v-if="open"
         class="confirm-dialog-backdrop"
         @click.self="cancel"
-        @keydown.esc="cancel"
       >
         <section
+          v-focus-trap="{ close: cancel, busy: loading }"
           class="confirm-dialog-card"
           :class="`tone-${tone}`"
           role="alertdialog"
@@ -27,7 +27,7 @@
           </div>
 
           <div class="confirm-dialog-actions">
-            <button ref="cancelButton" type="button" class="confirm-cancel" :disabled="loading" @click="cancel">
+            <button type="button" class="confirm-cancel" :disabled="loading" @click="cancel">
               Cancelar
             </button>
             <button type="button" class="confirm-submit" :disabled="loading" @click="$emit('confirm')">
@@ -43,12 +43,12 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue'
 import {
   ArrowPathIcon,
   ExclamationTriangleIcon,
   NoSymbolIcon,
 } from '@heroicons/vue/24/outline'
+import { vFocusTrap } from '@/directives/accessibility'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -61,24 +61,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['cancel', 'confirm'])
-const cancelButton = ref(null)
 const titleId = `confirm-title-${Math.random().toString(36).slice(2, 8)}`
 const descriptionId = `confirm-description-${Math.random().toString(36).slice(2, 8)}`
-let previousFocus = null
-
-watch(
-  () => props.open,
-  async (isOpen) => {
-    if (isOpen) {
-      previousFocus = document.activeElement
-      await nextTick()
-      cancelButton.value?.focus()
-      return
-    }
-    previousFocus?.focus?.()
-    previousFocus = null
-  },
-)
 
 function cancel() {
   if (props.loading) return

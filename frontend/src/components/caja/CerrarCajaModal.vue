@@ -1,14 +1,23 @@
 <template>
   <Teleport to="body">
-    <div class="modal-backdrop" @click.self="$emit('close')">
-      <form class="modal-card compact-modal" @submit.prevent="submit">
+    <div class="modal-backdrop" @click.self="requestClose">
+      <form
+        v-focus-trap="{ close: requestClose, busy: loading }"
+        v-form-validation
+        class="modal-card compact-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cerrar-caja-title"
+        :aria-busy="loading"
+        @submit.prevent="submit"
+      >
         <header class="modal-head">
           <div>
             <p class="eyebrow">Cierre de caja</p>
-            <h2>Cerrar caja del dia</h2>
+            <h2 id="cerrar-caja-title">Cerrar caja del día</h2>
             <span>Total esperado: $ {{ formatMoney(totalEsperado) }}</span>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+          <button class="icon-button" type="button" aria-label="Cerrar formulario" @click="requestClose">
             <XMarkIcon aria-hidden="true" />
           </button>
         </header>
@@ -18,7 +27,7 @@
           </div>
         </section>
         <footer class="modal-actions">
-          <button class="secondary-button" type="button" @click="$emit('close')">Cancelar</button>
+          <button class="secondary-button" type="button" :disabled="loading" @click="requestClose">Cancelar</button>
           <button class="primary-button modal-submit" :disabled="loading" type="submit">
             <AppButtonContent :loading="loading" label="Confirmar cierre" loading-label="Cerrando…" />
           </button>
@@ -33,6 +42,7 @@ import { ref, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { formatMoney } from '@/lib/formatters'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
   totalEsperado: { type: Number, default: 0 },
@@ -42,6 +52,10 @@ const props = defineProps({
 const emit = defineEmits(['close', 'submit'])
 
 const totalContado = ref(Number(props.totalEsperado || 0).toFixed(2))
+
+function requestClose() {
+  if (!props.loading) emit('close')
+}
 
 // Si cambia el total esperado (por un reload de caja), mantenemos el
 // valor cargado solo la primera vez; despues el usuario lo edita a mano.

@@ -1,14 +1,23 @@
 <template>
   <Teleport to="body">
-    <div class="modal-backdrop" @click.self="$emit('close')">
-      <form class="modal-card compact-modal" @submit.prevent="submit">
+    <div class="modal-backdrop" @click.self="requestClose">
+      <form
+        v-focus-trap="{ close: requestClose, busy: loading }"
+        v-form-validation
+        class="modal-card compact-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="movimiento-form-title"
+        :aria-busy="loading"
+        @submit.prevent="submit"
+      >
         <header class="modal-head">
           <div>
             <p class="eyebrow">Movimiento de caja</p>
-            <h2>Registrar {{ form.tipo }}</h2>
+            <h2 id="movimiento-form-title">Registrar {{ form.tipo }}</h2>
             <span>Caja {{ cajaHoy?.sucursal_nombre }} · {{ cajaHoy?.fecha }}</span>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+          <button class="icon-button" type="button" aria-label="Cerrar formulario" @click="requestClose">
             <XMarkIcon aria-hidden="true" />
           </button>
         </header>
@@ -37,7 +46,7 @@
           </div>
         </section>
         <footer class="modal-actions">
-          <button class="secondary-button" type="button" @click="$emit('close')">Cancelar</button>
+          <button class="secondary-button" type="button" :disabled="loading" @click="requestClose">Cancelar</button>
           <button class="primary-button modal-submit" :disabled="loading" type="submit">
             <AppButtonContent :loading="loading" label="Guardar movimiento" loading-label="Guardando…" />
           </button>
@@ -51,6 +60,7 @@
 import { reactive } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
   cajaHoy: { type: Object, required: true },
@@ -66,6 +76,10 @@ const form = reactive({
   importe: '',
   descripcion: '',
 })
+
+function requestClose() {
+  if (!props.loading) emit('close')
+}
 
 function submit() {
   emit('submit', {

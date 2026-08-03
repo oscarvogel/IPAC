@@ -25,6 +25,8 @@ describe('transiciones entre vistas', () => {
 
     const transition = wrapper.get('transition-stub[name="route-view"]')
     expect(transition.attributes('mode')).toBe('out-in')
+    expect(wrapper.get('.skip-link').attributes('href')).toBe('#main-content')
+    expect(wrapper.get('#main-content').attributes('tabindex')).toBe('-1')
     expect(wrapper.find('.view-one').exists()).toBe(true)
 
     await router.push('/dos')

@@ -20,8 +20,7 @@
       <button
         class="icon-button"
         type="button"
-        :title="periodLabel"
-        aria-label="Período actual"
+        :aria-label="`Período actual: ${periodLabel}`"
       >
         <CalendarDaysIcon aria-hidden="true" />
       </button>

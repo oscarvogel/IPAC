@@ -1,5 +1,6 @@
 <template>
   <AppToaster />
+  <AppTooltipLayer />
   <RouterView />
 </template>
 
@@ -8,6 +9,7 @@ import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import AppToaster from '@/components/ui/AppToaster.vue'
+import AppTooltipLayer from '@/components/ui/AppTooltipLayer.vue'
 
 const { fetchCurrentUser } = useAuth()
 

@@ -25,7 +25,7 @@
         </div>
       </div>
 
-      <form class="mobile-login-form" @submit.prevent="submitForm">
+      <form v-form-validation class="mobile-login-form" @submit.prevent="submitForm">
         <label class="mobile-field">
           <span>Usuario</span>
           <span class="mobile-input-wrap">
@@ -119,6 +119,7 @@ import {
   UserIcon,
 } from '@heroicons/vue/24/outline'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import { vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
   loading: {
