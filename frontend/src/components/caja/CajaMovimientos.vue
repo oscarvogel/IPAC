@@ -51,6 +51,40 @@
         </tbody>
       </table>
 
+      <div v-if="movimientos.length" class="mobile-record-list cash-mobile-list" role="list">
+        <article
+          v-for="movimiento in movimientos"
+          :key="`mobile-${movimiento.id}`"
+          class="mobile-record-card cash-mobile-card"
+          role="listitem"
+        >
+          <header class="mobile-record-head">
+            <span :class="['mobile-record-icon', movementTone(movimiento.tipo)]">
+              <component :is="movementIcon(movimiento.tipo)" aria-hidden="true" />
+            </span>
+            <span class="mobile-record-title">
+              <strong>{{ movimiento.tipo_label || movementLabel(movimiento.tipo) }}</strong>
+              <small>{{ paymentLabel(movimiento.medio) }}</small>
+            </span>
+            <strong :class="['mobile-record-amount', { negative: isNegative(movimiento.tipo) }]">
+              {{ isNegative(movimiento.tipo) ? '−' : '+' }}
+              $ {{ formatMoney(movimiento.importe, { fractionDigits: 2 }) }}
+            </strong>
+          </header>
+
+          <p class="mobile-record-description">
+            {{ movimiento.descripcion || 'Sin descripción' }}
+          </p>
+
+          <footer class="mobile-record-footer">
+            <span class="cash-payment-method">
+              <component :is="paymentIcon(movimiento.medio)" aria-hidden="true" />
+              {{ paymentLabel(movimiento.medio) }}
+            </span>
+          </footer>
+        </article>
+      </div>
+
       <div v-if="!movimientos.length" class="cash-movements-empty">
         <span><ReceiptPercentIcon aria-hidden="true" /></span>
         <strong>La caja todavía no tiene movimientos</strong>

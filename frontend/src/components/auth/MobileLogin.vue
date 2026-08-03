@@ -79,7 +79,7 @@
           type="submit"
           :disabled="loading"
         >
-          {{ loading ? 'Ingresando…' : 'Ingresar' }}
+          <AppButtonContent :loading="loading" label="Ingresar" loading-label="Ingresando…" />
         </button>
       </form>
 
@@ -118,6 +118,7 @@ import {
   PhoneIcon,
   UserIcon,
 } from '@heroicons/vue/24/outline'
+import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 
 const props = defineProps({
   loading: {

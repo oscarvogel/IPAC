@@ -52,7 +52,7 @@
         <footer class="modal-actions">
           <button class="secondary-button" type="button" @click="$emit('close')">Cancelar</button>
           <button class="primary-button modal-submit" :disabled="saving" type="submit">
-            {{ saving ? 'Generando...' : 'Generar cuota' }}
+            <AppButtonContent :loading="saving" label="Generar cuota" loading-label="Generando…" />
           </button>
         </footer>
       </form>
@@ -64,6 +64,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { usePagos } from '@/composables/usePagos'
 import { useToast } from '@/composables/useToast'
+import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },

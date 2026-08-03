@@ -80,7 +80,11 @@
             Cancelar
           </button>
           <button class="primary-button modal-submit" :disabled="saving" type="submit">
-            {{ saving ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Crear concepto' }}
+            <AppButtonContent
+              :loading="saving"
+              :label="editingId ? 'Guardar cambios' : 'Crear concepto'"
+              loading-label="Guardando…"
+            />
           </button>
         </footer>
       </form>
@@ -94,6 +98,7 @@ import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useConceptos } from '@/composables/useConceptos'
 import { useToast } from '@/composables/useToast'
+import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },

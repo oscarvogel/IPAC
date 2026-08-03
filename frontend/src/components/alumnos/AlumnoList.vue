@@ -50,8 +50,8 @@
 
       <div v-if="!sortedAlumnos.length" class="students-empty-state">
         <span><UserGroupIcon aria-hidden="true" /></span>
-        <strong>No encontramos alumnos</strong>
-        <p>Probá cambiando la búsqueda o los filtros seleccionados.</p>
+        <strong>{{ filtered ? 'No encontramos alumnos' : 'Todavía no hay alumnos cargados' }}</strong>
+        <p>{{ filtered ? 'Probá cambiando la búsqueda o los filtros seleccionados.' : 'Creá el primer legajo para comenzar a gestionar alumnos.' }}</p>
       </div>
     </div>
   </section>
@@ -71,6 +71,7 @@ import {
 const props = defineProps({
   alumnos: { type: Array, required: true },
   selectedAlumno: { type: Object, default: null },
+  filtered: { type: Boolean, default: false },
 })
 
 defineEmits(['select'])

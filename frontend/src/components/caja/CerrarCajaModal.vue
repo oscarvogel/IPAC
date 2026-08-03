@@ -19,7 +19,9 @@
         </section>
         <footer class="modal-actions">
           <button class="secondary-button" type="button" @click="$emit('close')">Cancelar</button>
-          <button class="primary-button modal-submit" :disabled="loading" type="submit">Confirmar cierre</button>
+          <button class="primary-button modal-submit" :disabled="loading" type="submit">
+            <AppButtonContent :loading="loading" label="Confirmar cierre" loading-label="Cerrando…" />
+          </button>
         </footer>
       </form>
     </div>
@@ -30,6 +32,7 @@
 import { ref, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { formatMoney } from '@/lib/formatters'
+import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 
 const props = defineProps({
   totalEsperado: { type: Number, default: 0 },

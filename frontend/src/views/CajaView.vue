@@ -1,5 +1,13 @@
 <template>
   <section class="cash-workspace text-text-primary">
+    <AppPageState
+      v-if="!pageReady"
+      :loading="!pageError"
+      :error="pageError"
+      label="la caja"
+      @retry="loadPage"
+    />
+    <template v-else>
     <CajaHero
       :caja-hoy="cajaHoy"
       :fallback-sucursal="auth.user?.perfil?.sucursal?.nombre"
@@ -53,6 +61,7 @@
       @close="showCerrar = false"
       @submit="submitCerrar"
     />
+    </template>
   </section>
 </template>
 
@@ -73,16 +82,19 @@ import CajaMovimientos from '@/components/caja/CajaMovimientos.vue'
 import CajaPrintSummary from '@/components/caja/CajaPrintSummary.vue'
 import MovimientoForm from '@/components/caja/MovimientoForm.vue'
 import CerrarCajaModal from '@/components/caja/CerrarCajaModal.vue'
+import AppPageState from '@/components/ui/AppPageState.vue'
 
 const auth = useAuth()
 const caja = useCaja()
 const toast = useToast()
 
-const { cajaHoy, cajaMovimientos, cajaTotales, loading } = caja
+const { cajaHoy, cajaMovimientos, cajaTotales, loading, error: cajaError } = caja
 
 const showMovimiento = ref(false)
 const showCerrar = ref(false)
 const movimientoTipoInicial = ref('egreso')
+const pageReady = ref(false)
+const pageError = ref('')
 
 const puedeMover = computed(() => cajaHoy.value && cajaHoy.value.estado !== 'cerrada')
 
@@ -154,7 +166,16 @@ function printCajaResumen() {
   window.print()
 }
 
-onMounted(() => {
-  caja.loadCajaHoy()
-})
+onMounted(loadPage)
+
+async function loadPage() {
+  pageReady.value = false
+  pageError.value = ''
+  await caja.loadCajaHoy()
+  if (cajaError.value) {
+    pageError.value = cajaError.value
+    return
+  }
+  pageReady.value = true
+}
 </script>

@@ -38,7 +38,9 @@
         </section>
         <footer class="modal-actions">
           <button class="secondary-button" type="button" @click="$emit('close')">Cancelar</button>
-          <button class="primary-button modal-submit" :disabled="loading" type="submit">Guardar movimiento</button>
+          <button class="primary-button modal-submit" :disabled="loading" type="submit">
+            <AppButtonContent :loading="loading" label="Guardar movimiento" loading-label="Guardando…" />
+          </button>
         </footer>
       </form>
     </div>
@@ -48,6 +50,7 @@
 <script setup>
 import { reactive } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
+import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 
 const props = defineProps({
   cajaHoy: { type: Object, required: true },

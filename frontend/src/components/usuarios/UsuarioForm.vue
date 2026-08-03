@@ -66,7 +66,11 @@
         <footer class="modal-actions">
           <button class="secondary-button" type="button" @click="$emit('close')">Cancelar</button>
           <button class="primary-button modal-submit" :disabled="saving" type="submit">
-            {{ saving ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Crear usuario' }}
+            <AppButtonContent
+              :loading="saving"
+              :label="editingId ? 'Guardar cambios' : 'Crear usuario'"
+              loading-label="Guardando…"
+            />
           </button>
         </footer>
       </form>
@@ -79,6 +83,7 @@ import { reactive, ref, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { useUsuarios } from '@/composables/useUsuarios'
 import { useToast } from '@/composables/useToast'
+import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },

@@ -79,6 +79,65 @@
         </tbody>
       </table>
 
+      <div v-if="pagos.length" class="mobile-record-list reports-mobile-list" role="list">
+        <article
+          v-for="pago in pagos"
+          :key="`mobile-${pago.id}`"
+          class="mobile-record-card report-mobile-card"
+          role="listitem"
+        >
+          <header class="mobile-record-head">
+            <span class="mobile-record-icon info">
+              <DocumentTextIcon aria-hidden="true" />
+            </span>
+            <span class="mobile-record-title">
+              <strong>{{ pago.numero_recibo || 'Sin número' }}</strong>
+              <small>{{ formatDate(pago.fecha) || 'Sin fecha' }}</small>
+            </span>
+            <strong class="mobile-record-amount">
+              $ {{ formatMoney(pago.importe, { fractionDigits: 2 }) }}
+            </strong>
+          </header>
+
+          <div class="report-mobile-student">
+            <UserCircleIcon aria-hidden="true" />
+            <span>
+              <small>Alumno</small>
+              <strong>{{ pago.alumno_nombre || 'Sin alumno' }}</strong>
+            </span>
+          </div>
+
+          <dl class="mobile-record-meta">
+            <div>
+              <dt>Concepto</dt>
+              <dd>{{ pago.concepto_nombre || 'Pago a cuenta' }}</dd>
+            </div>
+            <div>
+              <dt>Sucursal</dt>
+              <dd><MapPinIcon aria-hidden="true" />{{ pago.sucursal_nombre || 'Sin sucursal' }}</dd>
+            </div>
+          </dl>
+
+          <footer class="mobile-record-footer">
+            <span class="reports-payment-method">
+              <component :is="paymentIcon(pago.medio)" aria-hidden="true" />
+              {{ paymentLabel(pago.medio) }}
+            </span>
+            <button
+              v-if="pago.id"
+              class="mobile-record-action"
+              type="button"
+              :disabled="printingId === pago.id"
+              @click="printRecibo(pago)"
+            >
+              <ArrowPathIcon v-if="printingId === pago.id" class="is-spinning" aria-hidden="true" />
+              <PrinterIcon v-else aria-hidden="true" />
+              <span>{{ printingId === pago.id ? 'Preparando…' : 'Imprimir recibo' }}</span>
+            </button>
+          </footer>
+        </article>
+      </div>
+
       <div v-if="!pagos.length" class="reports-payments-empty">
         <span><DocumentMagnifyingGlassIcon aria-hidden="true" /></span>
         <strong>No encontramos pagos</strong>
@@ -106,6 +165,7 @@ import {
   UserCircleIcon,
 } from '@heroicons/vue/24/outline'
 import { usePagos } from '@/composables/usePagos'
+import { useToast } from '@/composables/useToast'
 import { formatDate, formatMoney } from '@/lib/formatters'
 import ReciboPrintView from '@/components/ui/ReciboPrintView.vue'
 
@@ -114,6 +174,7 @@ defineProps({
 })
 
 const { getRecibo } = usePagos()
+const toast = useToast()
 
 const reciboData = ref(null)
 const printingId = ref(null)
@@ -142,8 +203,8 @@ async function printRecibo(pago) {
     reciboData.value = await getRecibo(pago.id)
     await nextTick()
     window.print()
-  } catch {
-    // Si falla, el recibo queda vacío y no se imprime nada.
+  } catch (err) {
+    toast.error(err.message || 'No se pudo preparar el recibo para imprimir.')
   } finally {
     printingId.value = null
   }

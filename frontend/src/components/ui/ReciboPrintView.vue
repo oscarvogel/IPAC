@@ -9,9 +9,11 @@
       <p>{{ recibo?.pago?.sucursal_nombre }} &middot; {{ formatDate(recibo?.pago?.fecha) }}</p>
     </div>
     <table class="recibo-alumno">
-      <tr><td>Alumno</td><td><strong>{{ recibo?.pago?.alumno_nombre || '—' }}</strong></td></tr>
-      <tr><td>Legajo</td><td><strong>{{ recibo?.pago?.alumno_legajo || '—' }}</strong></td></tr>
-      <tr><td>Medio</td><td><strong>{{ recibo?.pago?.medio || '—' }}</strong></td></tr>
+      <tbody>
+        <tr><td>Alumno</td><td><strong>{{ recibo?.pago?.alumno_nombre || '—' }}</strong></td></tr>
+        <tr><td>Legajo</td><td><strong>{{ recibo?.pago?.alumno_legajo || '—' }}</strong></td></tr>
+        <tr><td>Medio</td><td><strong>{{ recibo?.pago?.medio || '—' }}</strong></td></tr>
+      </tbody>
     </table>
     <table class="recibo-detalle">
       <thead>
