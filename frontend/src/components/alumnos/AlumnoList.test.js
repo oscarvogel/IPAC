@@ -40,8 +40,14 @@ describe('directorio de alumnos', () => {
   })
 
   it('muestra una orientación útil cuando el filtro no devuelve resultados', () => {
-    const wrapper = mount(AlumnoList, { props: { alumnos: [] } })
+    const wrapper = mount(AlumnoList, { props: { alumnos: [], filtered: true } })
 
     expect(wrapper.find('.students-empty-state').text()).toContain('No encontramos alumnos')
+  })
+
+  it('diferencia una base vacía de un filtro sin coincidencias', () => {
+    const wrapper = mount(AlumnoList, { props: { alumnos: [] } })
+
+    expect(wrapper.find('.students-empty-state').text()).toContain('Todavía no hay alumnos')
   })
 })

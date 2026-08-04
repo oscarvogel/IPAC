@@ -1,14 +1,23 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="$emit('close')">
-      <section class="modal-card account-modal">
+    <div v-if="open" class="modal-backdrop" @click.self="requestClose">
+      <section
+        v-focus-trap="{ close: requestClose, busy: Boolean(printingId) }"
+        class="modal-card account-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="estado-cuenta-title"
+        :aria-busy="loading"
+      >
         <header class="modal-head">
           <div>
             <p class="eyebrow">Estado de cuenta</p>
-            <h2>{{ alumno?.nombre }} {{ alumno?.apellido }}</h2>
+            <h2 id="estado-cuenta-title">{{ alumno?.nombre }} {{ alumno?.apellido }}</h2>
             <span>Resumen de cuotas, pagos y saldo a favor.</span>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">&times;</button>
+          <button class="icon-button" type="button" aria-label="Cerrar estado de cuenta" @click="requestClose">
+            <XMarkIcon aria-hidden="true" />
+          </button>
         </header>
 
         <section v-if="loading" class="modal-section">
@@ -74,10 +83,12 @@
                     class="print-recibo-btn"
                     type="button"
                     title="Imprimir recibo"
+                    aria-label="Imprimir recibo"
                     :disabled="printingId === pago.id"
                     @click="printRecibo(pago)"
                   >
-                    {{ printingId === pago.id ? '...' : '🖨' }}
+                    <ArrowPathIcon v-if="printingId === pago.id" class="is-spinning" aria-hidden="true" />
+                    <PrinterIcon v-else aria-hidden="true" />
                   </button>
                 </div>
               </div>
@@ -100,10 +111,12 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
+import { ArrowPathIcon, PrinterIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { usePagos } from '@/composables/usePagos'
 import { useToast } from '@/composables/useToast'
 import { formatMoney, formatDate } from '@/lib/formatters'
 import ReciboPrintView from '@/components/ui/ReciboPrintView.vue'
+import { vFocusTrap } from '@/directives/accessibility'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -112,13 +125,17 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-const { getEstadoCuenta } = usePagos()
+const { getEstadoCuenta, getRecibo } = usePagos()
 const toast = useToast()
 
 const data = ref(null)
 const loading = ref(false)
 const reciboData = ref(null)
 const printingId = ref(null)
+
+function requestClose() {
+  if (!printingId.value) emit('close')
+}
 
 async function printRecibo(pago) {
   if (!pago.id || printingId.value) return
@@ -127,8 +144,8 @@ async function printRecibo(pago) {
     reciboData.value = await getRecibo(pago.id)
     await nextTick()
     window.print()
-  } catch {
-    // falla silenciosa
+  } catch (err) {
+    toast.error(err.message || 'No se pudo preparar el recibo para imprimir.')
   } finally {
     printingId.value = null
   }
@@ -173,13 +190,20 @@ watch(
 }
 
 .print-recibo-btn {
-  padding: 2px 6px;
+  width: 32px;
+  height: 32px;
+  padding: 7px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
+}
+
+.print-recibo-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .print-recibo-btn:disabled {

@@ -1,5 +1,13 @@
 <template>
   <section class="students-screen text-text-primary">
+    <AppPageState
+      v-if="!pageReady"
+      :loading="!pageError"
+      :error="pageError"
+      label="los alumnos"
+      @retry="loadPage"
+    />
+    <template v-else>
     <div class="students-stats">
       <article
         v-for="(stat, index) in stats"
@@ -74,6 +82,7 @@
       <AlumnoList
         :alumnos="visibleAlumnos"
         :selected-alumno="selectedAlumno"
+        :filtered="hasActiveFilters"
         @select="onSelect"
       />
       <AlumnoDetail
@@ -116,6 +125,18 @@
       @close="showGenerarCuota = false"
       @saved="onCuotaGenerada"
     />
+
+    <ConfirmDialog
+      :open="Boolean(pendingDeactivateAlumno)"
+      title="Dar de baja al alumno"
+      description="El legajo dejará de estar activo, pero conservará su información y estado de cuenta."
+      :subject="pendingDeactivateAlumno ? `${pendingDeactivateAlumno.nombre} ${pendingDeactivateAlumno.apellido}` : ''"
+      confirm-label="Dar de baja"
+      :loading="changingAlumnoStatus"
+      @cancel="pendingDeactivateAlumno = null"
+      @confirm="confirmDeactivateAlumno"
+    />
+    </template>
   </section>
 </template>
 
@@ -141,8 +162,18 @@ import AlumnoForm from '@/components/alumnos/AlumnoForm.vue'
 import PagoForm from '@/components/alumnos/PagoForm.vue'
 import EstadoCuentaModal from '@/components/alumnos/EstadoCuentaModal.vue'
 import GenerarCuotaModal from '@/components/alumnos/GenerarCuotaModal.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import AppPageState from '@/components/ui/AppPageState.vue'
 
-const { alumnos, selectedAlumno, setSelected, loadAlumnos, deactivateAlumno, reactivateAlumno } = useAlumnos()
+const {
+  alumnos,
+  selectedAlumno,
+  error: alumnosError,
+  setSelected,
+  loadAlumnos,
+  deactivateAlumno,
+  reactivateAlumno,
+} = useAlumnos()
 const toast = useToast()
 const { sucursales, conceptos, loadCatalogos } = useCatalogos()
 const { pagos, loadPagos } = usePagos()
@@ -156,10 +187,24 @@ const editingAlumno = ref(null)
 const showPagoForm = ref(false)
 const showEstadoCuenta = ref(false)
 const showGenerarCuota = ref(false)
+const pendingDeactivateAlumno = ref(null)
+const changingAlumnoStatus = ref(false)
+const pageReady = ref(false)
+const pageError = ref('')
 
-onMounted(async () => {
-  await Promise.all([loadCatalogos(), loadAlumnos(), loadPagos()])
-})
+onMounted(loadPage)
+
+async function loadPage() {
+  pageReady.value = false
+  pageError.value = ''
+  try {
+    await Promise.all([loadCatalogos(), loadAlumnos(), loadPagos()])
+    if (alumnosError.value) throw new Error(alumnosError.value)
+    pageReady.value = true
+  } catch (err) {
+    pageError.value = err.message || 'No se pudo cargar el directorio de alumnos.'
+  }
+}
 
 function onSelect(alumno) {
   setSelected(alumno.id)
@@ -211,16 +256,30 @@ function onCuotaGenerada() {
 }
 
 async function handleToggleEstado(alumno) {
+  if (alumno.estado !== 'inactivo') {
+    pendingDeactivateAlumno.value = alumno
+    return
+  }
+
   try {
-    if (alumno.estado === 'inactivo') {
-      await reactivateAlumno(alumno.id)
-      toast.success('Alumno reactivado')
-    } else {
-      await deactivateAlumno(alumno.id)
-      toast.success('Alumno dado de baja')
-    }
+    await reactivateAlumno(alumno.id)
+    toast.success('Alumno reactivado')
   } catch (err) {
     toast.error(err.message || 'Error al cambiar estado del alumno')
+  }
+}
+
+async function confirmDeactivateAlumno() {
+  if (!pendingDeactivateAlumno.value) return
+  changingAlumnoStatus.value = true
+  try {
+    await deactivateAlumno(pendingDeactivateAlumno.value.id)
+    toast.success('Alumno dado de baja')
+    pendingDeactivateAlumno.value = null
+  } catch (err) {
+    toast.error(err.message || 'Error al cambiar estado del alumno')
+  } finally {
+    changingAlumnoStatus.value = false
   }
 }
 
@@ -250,6 +309,12 @@ const visibleAlumnos = computed(() => {
     return searchable.includes(query)
   })
 })
+
+const hasActiveFilters = computed(() => Boolean(
+  searchQuery.value.trim()
+  || sucursalFilter.value !== 'todas'
+  || onlyActive.value,
+))
 
 const activeCount = computed(
   () => branchAlumnos.value.filter((alumno) => alumno.estado === 'activo').length,

@@ -1,33 +1,44 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="$emit('close')">
-      <form class="modal-card" @submit.prevent="handleSubmit">
+    <div v-if="open" class="modal-backdrop" @click.self="requestClose">
+      <form
+        v-focus-trap="{ close: requestClose, busy: saving }"
+        v-form-validation
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="alumno-form-title"
+        :aria-busy="saving"
+        @submit.prevent="handleSubmit"
+      >
         <header class="modal-head">
           <div>
             <p class="eyebrow">{{ editingId ? 'Edicion de alumno' : 'Alta de alumno' }}</p>
-            <h2>{{ editingId ? 'Editar alumno' : 'Nuevo alumno' }}</h2>
+            <h2 id="alumno-form-title">{{ editingId ? 'Editar alumno' : 'Nuevo alumno' }}</h2>
             <span>
               {{ editingId ? 'Actualiza los datos administrativos del alumno seleccionado.' : 'Datos administrativos iniciales para operar en el CRM.' }}
             </span>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">×</button>
+          <button class="icon-button" type="button" aria-label="Cerrar formulario" @click="requestClose">
+            <XMarkIcon aria-hidden="true" />
+          </button>
         </header>
 
         <section class="modal-section">
           <h3>Identificacion</h3>
           <div class="modal-grid">
-            <label>Legajo<input v-model="form.legajo" required /></label>
-            <label>DNI<input v-model="form.dni" required /></label>
-            <label>Nombre<input v-model="form.nombre" required /></label>
-            <label>Apellido<input v-model="form.apellido" required /></label>
+            <label>Legajo<input v-model="form.legajo" name="legajo" autocomplete="off" required /></label>
+            <label>DNI<input v-model="form.dni" name="dni" inputmode="numeric" autocomplete="off" required /></label>
+            <label>Nombre<input v-model="form.nombre" name="nombre" autocomplete="given-name" required /></label>
+            <label>Apellido<input v-model="form.apellido" name="apellido" autocomplete="family-name" required /></label>
           </div>
         </section>
 
         <section class="modal-section">
           <h3>Contacto y cursada</h3>
           <div class="modal-grid">
-            <label>Email<input v-model="form.email" type="email" /></label>
-            <label>Telefono<input v-model="form.telefono" /></label>
+            <label>Email<input v-model="form.email" name="email" type="email" autocomplete="email" /></label>
+            <label>Teléfono<input v-model="form.telefono" name="telefono" type="tel" inputmode="tel" autocomplete="tel" /></label>
             <label>
               Sucursal
               <select v-model="form.sucursal" required>
@@ -45,9 +56,13 @@
         </section>
 
         <footer class="modal-actions">
-          <button class="secondary-button" type="button" @click="$emit('close')">Cancelar</button>
+          <button class="secondary-button" type="button" :disabled="saving" @click="requestClose">Cancelar</button>
           <button class="primary-button modal-submit" :disabled="saving" type="submit">
-            {{ saving ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Guardar alumno' }}
+            <AppButtonContent
+              :loading="saving"
+              :label="editingId ? 'Guardar cambios' : 'Guardar alumno'"
+              loading-label="Guardando…"
+            />
           </button>
         </footer>
       </form>
@@ -57,9 +72,12 @@
 
 <script setup>
 import { reactive, ref, watch } from 'vue'
+import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { useAlumnos } from '@/composables/useAlumnos'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useToast } from '@/composables/useToast'
+import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -85,6 +103,10 @@ const form = reactive({
 
 const editingId = ref(null)
 const saving = ref(false)
+
+function requestClose() {
+  if (!saving.value) emit('close')
+}
 
 function resetForm() {
   Object.assign(form, {

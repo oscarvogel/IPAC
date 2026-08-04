@@ -56,5 +56,10 @@ describe('experiencia de caja', () => {
     expect(amounts[0].classes()).not.toContain('negative')
     expect(amounts[1].text()).toContain('−')
     expect(amounts[1].classes()).toContain('negative')
+
+    const mobileCards = wrapper.findAll('.cash-mobile-list .mobile-record-card')
+    expect(mobileCards).toHaveLength(2)
+    expect(mobileCards[0].text()).toContain('Apertura')
+    expect(mobileCards[1].get('.mobile-record-amount').classes()).toContain('negative')
   })
 })

@@ -1,5 +1,13 @@
 <template>
   <section class="users-workspace text-text-primary">
+    <AppPageState
+      v-if="!pageReady"
+      :loading="!pageError"
+      :error="pageError"
+      label="los usuarios"
+      @retry="loadPage"
+    />
+    <template v-else>
     <div class="users-metrics-grid cash-metrics-grid">
       <article
         v-for="(stat, index) in stats"
@@ -82,8 +90,9 @@
 
     <UsuarioList
       :usuarios="filteredUsuarios"
+      :filtered="hasActiveFilters"
       @edit="openEditForm"
-      @deactivate="confirmDeactivate"
+      @deactivate="requestDeactivate"
     />
 
     <UsuarioForm
@@ -93,6 +102,18 @@
       @close="closeUsuarioForm"
       @saved="onUsuarioSaved"
     />
+
+    <ConfirmDialog
+      :open="Boolean(pendingDeactivateUsuario)"
+      title="Desactivar usuario"
+      description="El usuario perderá el acceso al CRM hasta que vuelva a ser activado. Su historial permanecerá sin cambios."
+      :subject="pendingDeactivateUsuario?.username || ''"
+      confirm-label="Desactivar usuario"
+      :loading="deactivatingUsuario"
+      @cancel="pendingDeactivateUsuario = null"
+      @confirm="confirmDeactivate"
+    />
+    </template>
   </section>
 </template>
 
@@ -115,9 +136,11 @@ import { useCatalogos } from '@/composables/useCatalogos'
 import { useToast } from '@/composables/useToast'
 import UsuarioForm from '@/components/usuarios/UsuarioForm.vue'
 import UsuarioList from '@/components/usuarios/UsuarioList.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import AppPageState from '@/components/ui/AppPageState.vue'
 
 const { sucursales, loadCatalogos } = useCatalogos()
-const { usuarios, loadUsuarios, deactivateUsuario } = useUsuarios()
+const { usuarios, error: usuariosError, loadUsuarios, deactivateUsuario } = useUsuarios()
 const toast = useToast()
 
 const searchQuery = ref('')
@@ -127,10 +150,24 @@ const onlyActive = ref(false)
 
 const showUsuarioForm = ref(false)
 const editingUsuario = ref(null)
+const pendingDeactivateUsuario = ref(null)
+const deactivatingUsuario = ref(false)
+const pageReady = ref(false)
+const pageError = ref('')
 
-onMounted(async () => {
-  await Promise.all([loadCatalogos(), loadUsuarios()])
-})
+onMounted(loadPage)
+
+async function loadPage() {
+  pageReady.value = false
+  pageError.value = ''
+  try {
+    await Promise.all([loadCatalogos(), loadUsuarios()])
+    if (usuariosError.value) throw new Error(usuariosError.value)
+    pageReady.value = true
+  } catch (err) {
+    pageError.value = err.message || 'No se pudo cargar el directorio de usuarios.'
+  }
+}
 
 const branchUsuarios = computed(() => {
   if (sucursalFilter.value === 'todas') return usuarios.value
@@ -157,6 +194,13 @@ const filteredUsuarios = computed(() => {
     return !query || searchable.includes(query)
   })
 })
+
+const hasActiveFilters = computed(() => Boolean(
+  searchQuery.value.trim()
+  || sucursalFilter.value !== 'todas'
+  || rolFilter.value
+  || onlyActive.value,
+))
 
 const activeCount = computed(
   () => branchUsuarios.value.filter((usuario) => usuario.is_active).length,
@@ -230,12 +274,21 @@ function onUsuarioSaved() {
   closeUsuarioForm()
 }
 
-async function confirmDeactivate(usuario) {
+function requestDeactivate(usuario) {
+  pendingDeactivateUsuario.value = usuario
+}
+
+async function confirmDeactivate() {
+  if (!pendingDeactivateUsuario.value) return
+  deactivatingUsuario.value = true
   try {
-    await deactivateUsuario(usuario.id)
+    await deactivateUsuario(pendingDeactivateUsuario.value.id)
     toast.success('Usuario desactivado')
+    pendingDeactivateUsuario.value = null
   } catch (err) {
     toast.error(err.message || 'No se pudo desactivar el usuario.')
+  } finally {
+    deactivatingUsuario.value = false
   }
 }
 </script>

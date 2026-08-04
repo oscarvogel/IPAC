@@ -33,7 +33,7 @@
       </router-link>
     </nav>
 
-    <div class="sidebar-footer">
+    <div ref="userArea" class="sidebar-footer">
       <div class="sidebar-user">
         <span class="sidebar-avatar">
           <UserIcon aria-hidden="true" />
@@ -42,8 +42,49 @@
           <small>{{ user?.perfil?.sucursal?.nombre || 'Sin sucursal' }}</small>
           <strong>{{ user?.username || 'Invitado' }}</strong>
         </span>
-        <EllipsisVerticalIcon class="sidebar-user-menu" aria-hidden="true" />
+        <button
+          class="sidebar-user-menu"
+          type="button"
+          aria-label="Ver información de la sesión"
+          aria-controls="sidebar-session-menu"
+          :aria-expanded="userMenuOpen"
+          @click="userMenuOpen = !userMenuOpen"
+        >
+          <EllipsisVerticalIcon aria-hidden="true" />
+        </button>
       </div>
+
+      <Transition name="session-menu">
+        <section
+          v-if="userMenuOpen"
+          id="sidebar-session-menu"
+          class="sidebar-session-menu"
+          role="region"
+          aria-label="Detalles de la sesión"
+        >
+          <dl>
+            <div>
+              <dt><ShieldCheckIcon aria-hidden="true" /> Rol</dt>
+              <dd>{{ currentRoleLabel }}</dd>
+            </div>
+            <div>
+              <dt><BuildingStorefrontIcon aria-hidden="true" /> Sucursal</dt>
+              <dd>{{ user?.perfil?.sucursal?.nombre || 'Sin asignar' }}</dd>
+            </div>
+            <div>
+              <dt><GlobeAltIcon aria-hidden="true" /> Alcance</dt>
+              <dd>{{ user?.perfil?.puede_ver_todas_las_sucursales ? 'Todas las sedes' : 'Sede asignada' }}</dd>
+            </div>
+          </dl>
+
+          <button v-if="canManageUsers" type="button" class="session-manage-users" @click="openUsers">
+            <Cog6ToothIcon aria-hidden="true" />
+            <span>Gestionar usuarios</span>
+            <ArrowRightIcon aria-hidden="true" />
+          </button>
+        </section>
+      </Transition>
+
       <div class="sidebar-footer-divider" />
       <button type="button" class="logout-button" @click="handleLogout">
         <ArrowRightOnRectangleIcon aria-hidden="true" />
@@ -54,14 +95,19 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
+  ArrowRightIcon,
   ArrowRightOnRectangleIcon,
   BuildingOffice2Icon,
+  BuildingStorefrontIcon,
   ChartBarSquareIcon,
+  Cog6ToothIcon,
   EllipsisVerticalIcon,
+  GlobeAltIcon,
   HomeIcon,
+  ShieldCheckIcon,
   TagIcon,
   UserGroupIcon,
   UserIcon,
@@ -73,11 +119,25 @@ import { useAuth } from '@/composables/useAuth'
 defineEmits(['close'])
 
 const router = useRouter()
+const route = useRoute()
 const { user, logout } = useAuth()
+const userArea = ref(null)
+const userMenuOpen = ref(false)
 
 const canManageUsers = computed(() => {
   const rol = user.value?.perfil?.rol
   return rol === 'superadmin' || rol === 'administracion'
+})
+
+const currentRoleLabel = computed(() => {
+  const labels = {
+    superadmin: 'Superadmin',
+    administracion: 'Administración',
+    tesoreria: 'Tesorería',
+    caja: 'Caja',
+    consulta: 'Consulta',
+  }
+  return labels[user.value?.perfil?.rol] || 'Sin rol'
 })
 
 const modules = computed(() => {
@@ -96,7 +156,39 @@ const modules = computed(() => {
 })
 
 function handleLogout() {
+  userMenuOpen.value = false
   logout()
   router.replace('/login')
 }
+
+function openUsers() {
+  userMenuOpen.value = false
+  router.push('/usuarios')
+}
+
+function handleDocumentPointerDown(event) {
+  if (!userMenuOpen.value || userArea.value?.contains(event.target)) return
+  userMenuOpen.value = false
+}
+
+function handleDocumentKeydown(event) {
+  if (event.key === 'Escape') userMenuOpen.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+  document.addEventListener('keydown', handleDocumentKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  document.removeEventListener('keydown', handleDocumentKeydown)
+})
+
+watch(
+  () => route.path,
+  () => {
+    userMenuOpen.value = false
+  },
+)
 </script>

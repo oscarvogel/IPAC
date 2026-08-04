@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import ReporteFiltros from './ReporteFiltros.vue'
 import ReporteResumen from './ReporteResumen.vue'
+import PagosListado from './PagosListado.vue'
 
 describe('experiencia de reportes', () => {
   it('sincroniza los filtros antes de solicitar el reporte', async () => {
@@ -48,5 +49,28 @@ describe('experiencia de reportes', () => {
     expect(rows[0].text()).toContain('Transferencia')
     expect(rows[0].text()).toContain('75%')
     expect(wrapper.text()).toContain('3 pagos en el período')
+  })
+
+  it('presenta cada pago como tarjeta móvil sin perder datos clave', () => {
+    const wrapper = mount(PagosListado, {
+      props: {
+        pagos: [{
+          id: 7,
+          numero_recibo: 'REC-000007',
+          fecha: '2026-07-31',
+          alumno_nombre: 'Ana Gómez',
+          concepto_nombre: 'Cuota mensual',
+          sucursal_nombre: 'Posadas',
+          medio: 'transferencia',
+          importe: 25000,
+        }],
+      },
+    })
+
+    const card = wrapper.get('.reports-mobile-list .mobile-record-card')
+    expect(card.text()).toContain('REC-000007')
+    expect(card.text()).toContain('Ana Gómez')
+    expect(card.text()).toContain('Cuota mensual')
+    expect(card.get('.mobile-record-action').text()).toContain('Imprimir recibo')
   })
 })

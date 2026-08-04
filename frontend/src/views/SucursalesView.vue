@@ -1,5 +1,13 @@
 <template>
   <section class="branches-workspace text-text-primary">
+    <AppPageState
+      v-if="!pageReady"
+      :loading="!pageError"
+      :error="pageError"
+      label="las sucursales"
+      @retry="loadPage"
+    />
+    <template v-else>
     <div class="branches-metrics-grid cash-metrics-grid">
       <article
         v-for="(stat, index) in stats"
@@ -43,7 +51,7 @@
       :sucursales="sucursales"
       :carreras="carreras"
       @edit="openEditForm"
-      @deactivate="confirmDeactivate"
+      @deactivate="requestDeactivate"
     />
 
     <SucursalForm
@@ -52,6 +60,18 @@
       @close="closeSucursalForm"
       @saved="onSucursalSaved"
     />
+
+    <ConfirmDialog
+      :open="Boolean(pendingDeactivateSucursal)"
+      title="Desactivar sucursal"
+      description="La sede dejará de estar disponible para nuevas operaciones. Sus alumnos, carreras y movimientos permanecerán registrados."
+      :subject="pendingDeactivateSucursal?.nombre || ''"
+      confirm-label="Desactivar sede"
+      :loading="deactivatingSucursal"
+      @cancel="pendingDeactivateSucursal = null"
+      @confirm="confirmDeactivate"
+    />
+    </template>
   </section>
 </template>
 
@@ -69,17 +89,33 @@ import { useSucursales } from '@/composables/useSucursales'
 import { useToast } from '@/composables/useToast'
 import SucursalForm from '@/components/sucursales/SucursalForm.vue'
 import SucursalList from '@/components/sucursales/SucursalList.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import AppPageState from '@/components/ui/AppPageState.vue'
 
-const { sucursales, loadSucursales, updateSucursal } = useSucursales()
+const { sucursales, error: sucursalesError, loadSucursales, updateSucursal } = useSucursales()
 const { carreras, loadCatalogos } = useCatalogos()
 const toast = useToast()
 
 const showSucursalForm = ref(false)
 const editingSucursal = ref(null)
+const pendingDeactivateSucursal = ref(null)
+const deactivatingSucursal = ref(false)
+const pageReady = ref(false)
+const pageError = ref('')
 
-onMounted(async () => {
-  await Promise.all([loadSucursales(), loadCatalogos()])
-})
+onMounted(loadPage)
+
+async function loadPage() {
+  pageReady.value = false
+  pageError.value = ''
+  try {
+    await Promise.all([loadSucursales(true), loadCatalogos()])
+    if (sucursalesError.value) throw new Error(sucursalesError.value)
+    pageReady.value = true
+  } catch (err) {
+    pageError.value = err.message || 'No se pudo cargar el directorio de sucursales.'
+  }
+}
 
 const totalActivas = computed(() => sucursales.value.filter((s) => s.activa).length)
 
@@ -133,12 +169,21 @@ function onSucursalSaved() {
   closeSucursalForm()
 }
 
-async function confirmDeactivate(sucursal) {
+function requestDeactivate(sucursal) {
+  pendingDeactivateSucursal.value = sucursal
+}
+
+async function confirmDeactivate() {
+  if (!pendingDeactivateSucursal.value) return
+  deactivatingSucursal.value = true
   try {
-    await updateSucursal(sucursal.id, { activa: false })
+    await updateSucursal(pendingDeactivateSucursal.value.id, { activa: false })
     toast.success('Sucursal desactivada')
+    pendingDeactivateSucursal.value = null
   } catch (err) {
     toast.error(err.message || 'No se pudo desactivar la sucursal.')
+  } finally {
+    deactivatingSucursal.value = false
   }
 }
 </script>

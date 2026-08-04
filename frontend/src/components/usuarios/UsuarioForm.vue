@@ -1,13 +1,22 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="$emit('close')">
-      <form class="modal-card compact-modal" @submit.prevent="handleSubmit">
+    <div v-if="open" class="modal-backdrop" @click.self="requestClose">
+      <form
+        v-focus-trap="{ close: requestClose, busy: saving }"
+        v-form-validation
+        class="modal-card compact-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="usuario-form-title"
+        :aria-busy="saving"
+        @submit.prevent="handleSubmit"
+      >
         <header class="modal-head">
           <div>
             <p class="eyebrow">{{ editingId ? 'Edición' : 'Alta' }} de usuario</p>
-            <h2>{{ editingId ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
+            <h2 id="usuario-form-title">{{ editingId ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">
+          <button class="icon-button" type="button" aria-label="Cerrar formulario" @click="requestClose">
             <XMarkIcon aria-hidden="true" />
           </button>
         </header>
@@ -16,23 +25,30 @@
           <div class="modal-grid">
             <label>
               Usuario
-              <input v-model="form.username" required maxlength="150" />
+              <input v-model="form.username" name="username" autocomplete="username" required maxlength="150" />
             </label>
             <label>
               Contraseña
-              <input v-model="form.password" type="password" :required="!editingId" :placeholder="editingId ? 'Dejar vacío para mantener' : ''" />
+              <input
+                v-model="form.password"
+                name="password"
+                type="password"
+                autocomplete="new-password"
+                :required="!editingId"
+                :placeholder="editingId ? 'Dejar vacío para mantener' : ''"
+              />
             </label>
             <label>
               Nombre
-              <input v-model="form.first_name" />
+              <input v-model="form.first_name" name="first_name" autocomplete="given-name" />
             </label>
             <label>
               Apellido
-              <input v-model="form.last_name" />
+              <input v-model="form.last_name" name="last_name" autocomplete="family-name" />
             </label>
             <label>
               Email
-              <input v-model="form.email" type="email" />
+              <input v-model="form.email" name="email" type="email" autocomplete="email" />
             </label>
             <label>
               Rol
@@ -64,9 +80,13 @@
         </section>
 
         <footer class="modal-actions">
-          <button class="secondary-button" type="button" @click="$emit('close')">Cancelar</button>
+          <button class="secondary-button" type="button" :disabled="saving" @click="requestClose">Cancelar</button>
           <button class="primary-button modal-submit" :disabled="saving" type="submit">
-            {{ saving ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Crear usuario' }}
+            <AppButtonContent
+              :loading="saving"
+              :label="editingId ? 'Guardar cambios' : 'Crear usuario'"
+              loading-label="Guardando…"
+            />
           </button>
         </footer>
       </form>
@@ -79,6 +99,8 @@ import { reactive, ref, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { useUsuarios } from '@/composables/useUsuarios'
 import { useToast } from '@/composables/useToast'
+import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -105,6 +127,10 @@ const form = reactive({
 
 const editingId = ref(null)
 const saving = ref(false)
+
+function requestClose() {
+  if (!saving.value) emit('close')
+}
 
 function resetForm() {
   Object.assign(form, {

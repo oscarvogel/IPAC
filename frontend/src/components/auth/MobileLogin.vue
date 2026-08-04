@@ -25,7 +25,7 @@
         </div>
       </div>
 
-      <form class="mobile-login-form" @submit.prevent="submitForm">
+      <form v-form-validation class="mobile-login-form" @submit.prevent="submitForm">
         <label class="mobile-field">
           <span>Usuario</span>
           <span class="mobile-input-wrap">
@@ -79,7 +79,7 @@
           type="submit"
           :disabled="loading"
         >
-          {{ loading ? 'Ingresando…' : 'Ingresar' }}
+          <AppButtonContent :loading="loading" label="Ingresar" loading-label="Ingresando…" />
         </button>
       </form>
 
@@ -118,6 +118,8 @@ import {
   PhoneIcon,
   UserIcon,
 } from '@heroicons/vue/24/outline'
+import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import { vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
   loading: {
