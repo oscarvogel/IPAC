@@ -5,7 +5,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
+from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
 
 
 class SucursalSeedTests(TestCase):
@@ -443,4 +443,285 @@ class ApiInicialTests(APITestCase):
         self.assertIn("Perez, Pedro", exportacion.content.decode("utf-8-sig"))
         self.assertNotIn("Silva, Elena", exportacion.content.decode("utf-8-sig"))
 
+
+
+class CobroEndpointTests(APITestCase):
+    """Cubre POST /api/pagos/cobrar/ con aplicaciones manuales, automaticas, pago a cuenta, excedente y caja cerrada."""
+
+    def setUp(self):
+        self.posadas = Sucursal.objects.create(codigo="POS", nombre="Posadas")
+        self.eldorado = Sucursal.objects.create(codigo="ELD", nombre="Eldorado")
+        self.cajero = User.objects.create_user("cajero", password="cajero123")
+        PerfilUsuario.objects.create(
+            user=self.cajero,
+            rol=PerfilUsuario.Rol.CAJA,
+            sucursal=self.posadas,
+        )
+        self.alumno = Alumno.objects.create(
+            legajo="POS-100",
+            nombre="Lucia",
+            apellido="Ramirez",
+            dni="35111222",
+            sucursal=self.posadas,
+        )
+        self.concepto = ConceptoCobrable.objects.create(
+            nombre="Cuota mensual",
+            tipo=ConceptoCobrable.Tipo.CUOTA,
+            importe=10000,
+            sucursal=self.posadas,
+        )
+        hoy = timezone.localdate()
+        self.cuota_1 = Cuota.objects.create(
+            alumno=self.alumno,
+            concepto=self.concepto,
+            sucursal=self.posadas,
+            periodo="2026-07",
+            fecha_emision=hoy,
+            fecha_vencimiento=hoy,
+            importe="10000.00",
+        )
+        self.cuota_2 = Cuota.objects.create(
+            alumno=self.alumno,
+            concepto=self.concepto,
+            sucursal=self.posadas,
+            periodo="2026-08",
+            fecha_emision=hoy,
+            fecha_vencimiento=hoy,
+            importe="10000.00",
+        )
+
+    def _abrir_caja(self):
+        self.client.force_authenticate(user=self.cajero)
+        return self.client.get(f"/api/cajas/hoy/?sucursal={self.posadas.id}").data
+
+    def test_cobro_con_aplicaciones_manuales_genera_pago_y_aplicaciones(self):
+        caja = self._abrir_caja()
+        self.assertEqual(caja["estado"], CajaDiaria.Estado.ABIERTA)
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "15000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "observacion": "Cobro manual",
+                "aplicaciones": [
+                    {"cuota_id": self.cuota_1.id, "importe": "10000.00"},
+                    {"cuota_id": self.cuota_2.id, "importe": "5000.00"},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(Pago.objects.count(), 1)
+        self.assertEqual(AplicacionPago.objects.count(), 2)
+        self.assertEqual(MovimientoCaja.objects.count(), 1)
+
+        self.cuota_1.refresh_from_db()
+        self.cuota_2.refresh_from_db()
+        self.assertEqual(self.cuota_1.estado, Cuota.Estado.PAGADA)
+        self.assertEqual(self.cuota_2.estado, Cuota.Estado.PARCIAL)
+
+        self.assertEqual(str(response.data["importe_aplicado"]), "15000.00")
+        self.assertEqual(str(response.data["saldo_a_favor"]), "0.00")
+        self.assertEqual(len(response.data["aplicaciones"]), 2)
+        self.assertTrue(response.data["numero_recibo"].startswith("REC-"))
+
+    def test_cobro_modo_automatico_aplica_a_cuotas_mas_antiguas(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "12000.00",
+                "medio": Pago.Medio.TRANSFERENCIA,
+                "modo_automatico": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.cuota_1.refresh_from_db()
+        self.cuota_2.refresh_from_db()
+        self.assertEqual(self.cuota_1.estado, Cuota.Estado.PAGADA)
+        self.assertEqual(self.cuota_2.estado, Cuota.Estado.PARCIAL)
+        self.assertEqual(str(response.data["importe_aplicado"]), "12000.00")
+        self.assertEqual(str(response.data["saldo_a_favor"]), "0.00")
+        self.assertEqual(AplicacionPago.objects.filter(cuota=self.cuota_1).first().importe, Decimal("10000.00"))
+        self.assertEqual(AplicacionPago.objects.filter(cuota=self.cuota_2).first().importe, Decimal("2000.00"))
+
+    def test_cobro_pago_a_cuenta_sin_aplicaciones_genera_saldo_a_favor(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "5000.00",
+                "medio": Pago.Medio.EFECTIVO,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(AplicacionPago.objects.count(), 0)
+        self.assertEqual(str(response.data["saldo_a_favor"]), "5000.00")
+        self.assertEqual(str(response.data["importe_aplicado"]), "0.00")
+
+    def test_cobro_con_excedente_aplica_y_deja_saldo_a_favor(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "25000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "modo_automatico": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(str(response.data["importe_aplicado"]), "20000.00")
+        self.assertEqual(str(response.data["saldo_a_favor"]), "5000.00")
+        self.cuota_1.refresh_from_db()
+        self.cuota_2.refresh_from_db()
+        self.assertEqual(self.cuota_1.estado, Cuota.Estado.PAGADA)
+        self.assertEqual(self.cuota_2.estado, Cuota.Estado.PAGADA)
+
+    def test_cobro_rechaza_si_caja_esta_cerrada(self):
+        caja_data = self._abrir_caja()
+        self.client.post(
+            f"/api/cajas/{caja_data['id']}/cerrar/",
+            {"total_contado": "0.00"},
+            format="json",
+        )
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "10000.00",
+                "medio": Pago.Medio.EFECTIVO,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cerrada", response.data["detail"].lower())
+        self.assertEqual(Pago.objects.count(), 0)
+
+    def test_cobro_rechaza_aplicacion_que_supera_saldo_de_cuota(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "20000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "aplicaciones": [
+                    {"cuota_id": self.cuota_1.id, "importe": "15000.00"},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("aplicaciones", response.data)
+        self.assertEqual(Pago.objects.count(), 0)
+        self.assertEqual(AplicacionPago.objects.count(), 0)
+
+    def test_cobro_rechaza_si_suma_de_aplicaciones_supera_importe(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "10000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "aplicaciones": [
+                    {"cuota_id": self.cuota_1.id, "importe": "8000.00"},
+                    {"cuota_id": self.cuota_2.id, "importe": "5000.00"},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Pago.objects.count(), 0)
+
+    def test_cobro_rechaza_si_cuota_es_de_otro_alumno(self):
+        otro = Alumno.objects.create(
+            legajo="POS-200",
+            nombre="Mario",
+            apellido="Suarez",
+            dni="40111222",
+            sucursal=self.posadas,
+        )
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": otro.id,
+                "importe": "5000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "aplicaciones": [
+                    {"cuota_id": self.cuota_1.id, "importe": "5000.00"},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Pago.objects.count(), 0)
+
+    def test_cobro_atomico_si_falla_no_genera_pago(self):
+        self._abrir_caja()
+
+        # Cuota con saldo suficiente, pero el monto es negativo: el serializer debe rechazarlo.
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "-100.00",
+                "medio": Pago.Medio.EFECTIVO,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Pago.objects.count(), 0)
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
+
+    def test_cobro_actualiza_estado_cuenta_del_alumno(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "10000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "modo_automatico": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+
+        estado = self.client.get(f"/api/alumnos/{self.alumno.id}/estado-cuenta/")
+        self.assertEqual(estado.status_code, status.HTTP_200_OK)
+        self.assertEqual(str(estado.data["resumen"]["saldo_pendiente"]), "10000.00")
+        self.assertEqual(str(estado.data["resumen"]["saldo_a_favor"]), "0.00")
+        self.assertEqual(str(estado.data["resumen"]["saldo_neto"]), "10000.00")
+
+
 # Create your tests here.
+
+from decimal import Decimal
+

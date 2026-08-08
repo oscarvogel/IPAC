@@ -21,6 +21,7 @@ from .serializers import (
     CajaDiariaSerializer,
     CarreraCursoSerializer,
     ConceptoCobrableSerializer,
+    CobroSerializer,
     CurrentUserSerializer,
     CuotaSerializer,
     LoginSerializer,
@@ -306,6 +307,92 @@ class PagoViewSet(viewsets.ModelViewSet):
             descripcion=f"Pago {pago.alumno}",
             pago=pago,
         )
+
+    @action(detail=False, methods=["post"], url_path="cobrar")
+    def cobrar(self, request):
+        """Crea un pago, lo aplica a las cuotas y registra el movimiento de caja en una sola transaccion.
+
+        Acepta los modos:
+        - aplicaciones ausente o lista vacia: pago a cuenta (sin aplicaciones, todo como saldo a favor).
+        - aplicaciones="auto" o modo_automatico=true: aplica a la cuota mas antigua primero.
+        - aplicaciones=[{cuota_id, importe}, ...]: aplica exactamente esos importes a esas cuotas.
+        """
+        serializer = CobroSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        alumno = data["alumno"]
+        importe = data["importe"]
+        medio = data["medio"]
+        observacion = data.get("observacion", "")
+        concepto = data.get("concepto")
+        aplicaciones = data.get("aplicaciones") or []
+        modo_automatico = bool(data.get("modo_automatico", False))
+
+        caja = get_or_create_cashbox(request.user, alumno.sucursal)
+        if caja.estado == CajaDiaria.Estado.CERRADA:
+            return Response(
+                {"detail": "La caja del dia esta cerrada. No se pueden registrar cobros."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            pago = Pago.objects.create(
+                alumno=alumno,
+                concepto=concepto,
+                sucursal=alumno.sucursal,
+                importe=importe,
+                medio=medio,
+                observacion=observacion,
+            )
+            self._aplicar_pago_a_cuotas(pago, aplicaciones, modo_automatico=modo_automatico)
+            MovimientoCaja.objects.create(
+                caja=caja,
+                tipo=MovimientoCaja.Tipo.PAGO,
+                medio=medio,
+                importe=importe,
+                descripcion=f"Cobro {alumno}",
+                pago=pago,
+            )
+
+        return Response(self.get_serializer(pago).data, status=status.HTTP_201_CREATED)
+
+    def _aplicar_pago_a_cuotas(self, pago, aplicaciones, *, modo_automatico):
+        """Aplica el pago a las cuotas segun el modo elegido sin exceder el importe del pago."""
+        restante = pago.importe
+        if aplicaciones and not modo_automatico:
+            items = []
+            for item in aplicaciones:
+                cid = item.get("cuota_id") or item.get("cuota")
+                items.append((cid, item["importe"]))
+            items.sort(key=lambda x: x[0])
+            for cid, importe in items:
+                if restante <= Decimal("0"):
+                    break
+                cuota = Cuota.objects.get(pk=cid)
+                importe_item = min(importe, restante, cuota.saldo)
+                if importe_item <= Decimal("0"):
+                    continue
+                AplicacionPago.objects.create(pago=pago, cuota=cuota, importe=importe_item)
+                cuota.actualizar_estado()
+                restante -= importe_item
+        elif modo_automatico:
+            cuotas = list(
+                Cuota.objects.filter(alumno=pago.alumno)
+                .exclude(estado=Cuota.Estado.ANULADA)
+                .exclude(estado=Cuota.Estado.PAGADA)
+                .order_by("fecha_vencimiento", "id")
+            )
+            for cuota in cuotas:
+                if restante <= Decimal("0"):
+                    break
+                saldo = cuota.saldo
+                if saldo <= Decimal("0"):
+                    continue
+                importe_item = min(restante, saldo)
+                AplicacionPago.objects.create(pago=pago, cuota=cuota, importe=importe_item)
+                cuota.actualizar_estado()
+                restante -= importe_item
+        # Si no hay aplicaciones y no es automatico: pago a cuenta (sin aplicaciones).
 
     @action(detail=True, methods=["get"], url_path="recibo")
     def recibo(self, request, pk=None):
