@@ -249,6 +249,7 @@ class PagoSerializer(serializers.ModelSerializer):
     sucursal = serializers.PrimaryKeyRelatedField(read_only=True)
     importe_aplicado = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     saldo_a_favor = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    aplicaciones = AplicacionPagoSerializer(many=True, read_only=True)
 
     class Meta:
         model = Pago
@@ -268,6 +269,7 @@ class PagoSerializer(serializers.ModelSerializer):
             "numero_recibo",
             "importe_aplicado",
             "saldo_a_favor",
+            "aplicaciones",
         ]
         read_only_fields = ["numero_recibo"]
 
