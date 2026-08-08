@@ -1,62 +1,63 @@
 <template>
   <Teleport to="body">
-    <div v-if="messages.length" class="app-toaster" role="status" aria-live="polite">
-      <button
-        v-for="msg in messages"
-        :key="msg.id"
-        :class="['toast', `toast-${msg.type}`]"
-        type="button"
-        @click="dismiss(msg.id)"
-      >
-        {{ msg.text }}
-      </button>
+    <div class="app-toaster" aria-label="Notificaciones">
+      <TransitionGroup name="toast-stack">
+        <article
+          v-for="message in messages"
+          :key="message.id"
+          :class="['toast-message', `toast-message-${message.type}`]"
+          :role="message.type === 'error' ? 'alert' : 'status'"
+          :aria-live="message.type === 'error' ? 'assertive' : 'polite'"
+        >
+          <span class="toast-message-icon">
+            <component :is="iconFor(message.type)" aria-hidden="true" />
+          </span>
+
+          <span class="toast-message-copy">
+            <strong>{{ message.title }}</strong>
+            <span>{{ message.text }}</span>
+          </span>
+
+          <button
+            type="button"
+            class="toast-message-close"
+            :aria-label="`Cerrar notificación: ${message.text}`"
+            @click="dismiss(message.id)"
+          >
+            <XMarkIcon aria-hidden="true" />
+          </button>
+
+          <span
+            v-if="message.duration > 0"
+            class="toast-message-progress"
+            :style="{ '--toast-duration': `${message.duration}ms` }"
+            aria-hidden="true"
+          />
+        </article>
+      </TransitionGroup>
     </div>
   </Teleport>
 </template>
 
 <script setup>
+import {
+  CheckCircleIcon,
+  ExclamationCircleIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+  XMarkIcon,
+} from '@heroicons/vue/24/outline'
 import { useToast } from '@/composables/useToast'
 
 const { messages, dismiss } = useToast()
+
+function iconFor(type) {
+  const icons = {
+    success: CheckCircleIcon,
+    error: ExclamationCircleIcon,
+    warning: ExclamationTriangleIcon,
+    info: InformationCircleIcon,
+  }
+  return icons[type] || InformationCircleIcon
+}
 </script>
-
-<style scoped>
-.app-toaster {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-width: 360px;
-  pointer-events: none;
-}
-
-.toast {
-  pointer-events: auto;
-  padding: 0.75rem 1rem;
-  border: 0;
-  border-radius: 8px;
-  background: #1f2030;
-  color: #fff;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.875rem;
-  text-align: left;
-  line-height: 1.4;
-}
-
-.toast-success {
-  background: #1f7a4d;
-}
-
-.toast-error {
-  background: #a8313a;
-}
-
-.toast-info {
-  background: #2c4f9c;
-}
-</style>

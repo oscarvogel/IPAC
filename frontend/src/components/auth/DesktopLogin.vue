@@ -35,7 +35,7 @@
     </section>
 
     <section class="desktop-login-access bg-background">
-      <form class="desktop-login-form border-border bg-surface" @submit.prevent="submitForm">
+      <form v-form-validation class="desktop-login-form border-border bg-surface" @submit.prevent="submitForm">
         <div class="desktop-form-brand">
           <img src="/logo-ipac.jpg" alt="IPAC" />
           <span>IPAC CRM</span>
@@ -95,7 +95,7 @@
           type="submit"
           :disabled="loading"
         >
-          {{ loading ? 'Ingresando…' : 'Entrar al CRM' }}
+          <AppButtonContent :loading="loading" label="Entrar al CRM" loading-label="Ingresando…" />
         </button>
       </form>
 
@@ -133,6 +133,8 @@ import {
   UserIcon,
   WalletIcon,
 } from '@heroicons/vue/24/outline'
+import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import { vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
   loading: {

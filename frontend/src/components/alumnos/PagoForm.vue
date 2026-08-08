@@ -1,14 +1,25 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="$emit('close')">
-      <form class="modal-card compact-modal" @submit.prevent="handleSubmit">
+    <div v-if="open" class="modal-backdrop" @click.self="requestClose">
+      <form
+        v-focus-trap="{ close: requestClose, busy: saving }"
+        v-form-validation
+        class="modal-card compact-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pago-form-title"
+        :aria-busy="saving"
+        @submit.prevent="handleSubmit"
+      >
         <header class="modal-head">
           <div>
             <p class="eyebrow">Cobranza</p>
-            <h2>Registrar pago</h2>
+            <h2 id="pago-form-title">Registrar pago</h2>
             <span v-if="alumno">{{ alumno.apellido }}, {{ alumno.nombre }}</span>
           </div>
-          <button class="icon-button" type="button" aria-label="Cerrar" @click="$emit('close')">×</button>
+          <button class="icon-button" type="button" aria-label="Cerrar formulario" @click="requestClose">
+            <XMarkIcon aria-hidden="true" />
+          </button>
         </header>
 
         <section class="modal-section">
@@ -37,9 +48,9 @@
         </section>
 
         <footer class="modal-actions">
-          <button class="secondary-button" type="button" @click="$emit('close')">Cancelar</button>
+          <button class="secondary-button" type="button" :disabled="saving" @click="requestClose">Cancelar</button>
           <button class="primary-button modal-submit" :disabled="saving" type="submit">
-            {{ saving ? 'Guardando...' : 'Guardar pago' }}
+            <AppButtonContent :loading="saving" label="Guardar pago" loading-label="Guardando…" />
           </button>
         </footer>
       </form>
@@ -49,8 +60,11 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { usePagos } from '@/composables/usePagos'
 import { useToast } from '@/composables/useToast'
+import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -71,6 +85,10 @@ const form = reactive({
 })
 
 const saving = ref(false)
+
+function requestClose() {
+  if (!saving.value) emit('close')
+}
 
 const availableConceptos = computed(() => {
   if (!props.alumno) return []

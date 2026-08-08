@@ -50,9 +50,22 @@ describe('directorio de usuarios', () => {
     await rows[0].get('button[aria-label="Editar usuario"]').trigger('click')
     expect(wrapper.emitted('edit')[0][0]).toEqual(usuarios[1])
 
-    const deactivateButtons = wrapper.findAll('button[aria-label="Desactivar usuario"]')
+    const deactivateButtons = wrapper.findAll('.users-table button[aria-label="Desactivar usuario"]')
     expect(deactivateButtons).toHaveLength(1)
     await deactivateButtons[0].trigger('click')
     expect(wrapper.emitted('deactivate')[0][0]).toEqual(usuarios[1])
+  })
+
+  it('mantiene los datos y acciones prioritarias en tarjetas móviles', async () => {
+    const wrapper = mount(UsuarioList, { props: { usuarios } })
+    const cards = wrapper.findAll('.users-mobile-list .mobile-record-card')
+
+    expect(cards).toHaveLength(2)
+    expect(cards[0].text()).toContain('admin')
+    expect(cards[0].text()).toContain('Todas las sedes')
+
+    await cards[0].get('.mobile-action-trigger').trigger('click')
+    await cards[0].get('.mobile-action-popover button').trigger('click')
+    expect(wrapper.emitted('edit').at(-1)[0]).toEqual(usuarios[1])
   })
 })

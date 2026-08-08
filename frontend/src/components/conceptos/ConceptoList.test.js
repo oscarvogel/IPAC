@@ -37,10 +37,22 @@ describe('catálogo de conceptos', () => {
 
   it('ofrece desactivar solamente los conceptos activos', async () => {
     const wrapper = mount(ConceptoList, { props: { conceptos } })
-    const deactivateButtons = wrapper.findAll('button[aria-label="Desactivar concepto"]')
+    const deactivateButtons = wrapper.findAll('.concepts-table button[aria-label="Desactivar concepto"]')
 
     expect(deactivateButtons).toHaveLength(1)
     await deactivateButtons[0].trigger('click')
     expect(wrapper.emitted('deactivate')[0][0]).toEqual(conceptos[0])
+  })
+
+  it('ofrece tarjetas móviles con acciones contextuales equivalentes', async () => {
+    const wrapper = mount(ConceptoList, { props: { conceptos } })
+    const cards = wrapper.findAll('.concepts-mobile-list .mobile-record-card')
+
+    expect(cards).toHaveLength(2)
+    expect(cards[0].text()).toContain('Cuota mensual')
+
+    await cards[1].get('.mobile-action-trigger').trigger('click')
+    await cards[1].get('.mobile-action-popover .danger').trigger('click')
+    expect(wrapper.emitted('deactivate').at(-1)[0]).toEqual(conceptos[0])
   })
 })

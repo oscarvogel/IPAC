@@ -1,62 +1,48 @@
-# Design QA — IPAC Login
+# Design QA — menú de sesión de IPAC
 
-- Source visual truth path: conversation attachment, “IPAC CRM login” reference supplied on 2026-07-30.
-- Generated supporting asset: `frontend/public/login-ipac-background.png`.
-- Implementation screenshot path: unavailable.
-- Source viewport: 1776 × 886 px, assumed 1× density from the supplied reference.
-- Intended desktop comparison viewport: 1776 × 886 CSS px at device scale factor 1.
-- Intended mobile validation viewport: 390 × 844 CSS px at device scale factor 1; no mobile source mock was supplied.
-- State: unauthenticated login, password hidden, “Recordarme” unchecked.
+- Source visual truth path: captura adjunta por el usuario en la conversación actual.
+- Implementation screenshot path: no disponible; el navegador integrado no está conectado en esta sesión.
+- Source crop: sidebar móvil/estrecha, aproximadamente 273 × 323 px.
+- Intended comparison viewport: misma anchura visible de sidebar y estado expandido.
+- State: usuario administrador autenticado, menú de sesión abierto.
 
 ## Full-view comparison evidence
 
-Blocked. The source reference is visible in the conversation, but no supported browser-rendered screenshot of the current implementation could be captured. The in-app browser is unavailable in this session and the connected Chrome control is not installed.
+La captura de origen muestra tres problemas visibles: el botón de opciones desborda su columna, el panel blanco aparece separado de la tarjeta de usuario y la acción “Gestionar usuarios” pierde contraste. El código fue corregido, pero falta una captura renderizada posterior para hacer una comparación visual válida.
 
 ## Focused-region comparison evidence
 
-Not performed because browser-rendered evidence is missing. The form, feature cards, help strip, desktop composition, and separate mobile experience still require visual inspection at their target viewports.
+El análisis se concentró en la tarjeta inferior de usuario. No se evaluaron otras regiones porque el cambio está limitado a este componente.
 
 ## Required fidelity surfaces
 
-- Fonts and typography: Inter Variable is bundled and the target hierarchy is implemented, but visual weight, wrapping, and optical alignment are not browser-verified.
-- Spacing and layout rhythm: desktop uses a full-viewport 53/47 split and mobile mounts a separate full-screen composition; visual spacing and overflow remain unverified.
-- Colors and visual tokens: the navy, blue, white, and gold palette follows the reference; browser rendering and contrast remain unverified.
-- Image quality and asset fidelity: the generated navy background is present as a real raster asset and Heroicons are used for UI icons; crop and sharpness remain unverified in the browser.
-- Copy and content: institutional copy, Argentine support email, and Argentine phone number are implemented.
+- Fonts and typography: se mantiene Inter y la jerarquía existente; sin cambios de fuente.
+- Spacing and layout rhythm: la columna de acciones ahora reserva 34 px para un control de 32 px y el detalle se integra dentro de la tarjeta.
+- Colors and visual tokens: el detalle usa la paleta azul de la sidebar y contraste blanco; se eliminaron los estilos heredados que apagaban la acción.
+- Image quality and asset fidelity: no hay recursos raster nuevos; todos los iconos continúan siendo Heroicons.
+- Copy and content: se eliminó la identidad duplicada y se conservan rol, sucursal, alcance y acceso a usuarios.
 
 ## Findings
 
-- [P0] Browser-rendered evidence is unavailable.
-  - Location: desktop and mobile login views.
-  - Evidence: build and component tests pass, but there is no implementation screenshot or browser console capture.
-  - Impact: layout, visual fidelity, overflow, and interaction polish cannot receive a valid design-QA pass.
-  - Fix: capture the unauthenticated login at 1776 × 886 and 390 × 844, compare both with the supplied reference and intended mobile direction, then resolve any P1/P2 differences.
-
-## Primary interactions tested
-
-- Desktop form submission payload.
-- Mobile form submission payload.
-- Independent desktop and mobile component structures.
-- Persistent versus session-only authentication token behavior.
-- Production build and automated unit/component tests.
-
-Browser-level keyboard flow, password visibility control, help links, responsive component switching, network requests, and console errors were not captured.
+- [P2] Verificación visual posterior bloqueada.
+  - Location: `AppSidebar`, menú de sesión expandido.
+  - Evidence: las pruebas y el build pasan, pero no existe una captura renderizada posterior en esta sesión.
+  - Impact: no puede confirmarse visualmente el resultado final en el mismo viewport de la referencia.
+  - Fix: recargar la aplicación, abrir el menú y capturar la misma región para una comparación final.
 
 ## Comparison history
 
-- Pass 1: blocked before visual comparison because implementation capture is unavailable.
+- Pass 1: se identificaron desborde del botón, panel desconectado, contenido duplicado y contraste insuficiente.
+- Fixes: columna ampliada, selectores CSS con especificidad correcta, panel integrado y paleta oscura coherente.
+- Pass 2: bloqueado por falta de navegador para capturar la implementación corregida.
 
 ## Implementation checklist
 
-- Capture the desktop login at 1776 × 886.
-- Capture the mobile login at 390 × 844.
-- Test password visibility, “Recordarme”, help links, loading, invalid credentials, and successful login.
-- Inspect browser console errors.
-- Compare reference and implementation together and fix all P0/P1/P2 differences.
-
-## Follow-up polish
-
-- Evaluate the generated background crop at ultrawide desktop sizes.
-- Confirm the mobile help block remains above the fold on shorter devices.
+- [x] Corregir ancho de la columna del botón.
+- [x] Evitar que estilos heredados anulen controles del footer.
+- [x] Integrar los detalles en la tarjeta de usuario.
+- [x] Eliminar contenido duplicado.
+- [x] Mantener navegación y cierre con Escape.
+- [ ] Capturar y comparar el estado expandido corregido.
 
 final result: blocked

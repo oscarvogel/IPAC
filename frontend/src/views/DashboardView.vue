@@ -1,5 +1,13 @@
 <template>
   <section class="dashboard-screen text-text-primary">
+    <AppPageState
+      v-if="!pageReady"
+      :loading="!pageError"
+      :error="pageError"
+      label="el dashboard"
+      @retry="loadPage"
+    />
+    <template v-else>
     <div class="stats-grid">
       <article
         v-for="(stat, index) in stats"
@@ -102,12 +110,15 @@
               </tr>
             </tbody>
           </table>
-          <p v-if="!ultimosPagos.length" class="dashboard-empty-state">
-            Todavía no hay pagos en el mes.
-          </p>
+          <div v-if="!ultimosPagos.length" class="dashboard-empty-state">
+            <span><DocumentMagnifyingGlassIcon aria-hidden="true" /></span>
+            <strong>Todavía no hay pagos este mes</strong>
+            <p>Las próximas cobranzas aparecerán acá automáticamente.</p>
+          </div>
         </div>
       </article>
     </div>
+    </template>
   </section>
 </template>
 
@@ -118,6 +129,7 @@ import {
   BuildingStorefrontIcon,
   ChevronRightIcon,
   CreditCardIcon,
+  DocumentMagnifyingGlassIcon,
   EllipsisVerticalIcon,
   ReceiptPercentIcon,
   UserGroupIcon,
@@ -129,20 +141,25 @@ import { useCatalogos } from '@/composables/useCatalogos'
 import { useDashboardFilters } from '@/composables/useDashboardFilters'
 import { apiRequest } from '@/lib/api'
 import { formatDate, formatMoney } from '@/lib/formatters'
+import { useToast } from '@/composables/useToast'
+import AppPageState from '@/components/ui/AppPageState.vue'
 
 const auth = useAuth()
 const caja = useCaja()
+const toast = useToast()
 const { sucursales, loadCatalogos } = useCatalogos()
 const { selectedSucursalId } = useDashboardFilters()
 
 const alumnosCount = ref(0)
 const pagosMes = ref([])
+const pageReady = ref(false)
+const pageError = ref('')
 const ultimosPagos = computed(() => pagosMes.value.slice(0, 5))
 const totalCobradoMes = computed(() =>
   pagosMes.value.reduce((sum, pago) => sum + Number(pago.importe || 0), 0),
 )
 
-const { cajaHoy, cajaMovimientos, loadCajaHoy } = caja
+const { cajaHoy, cajaMovimientos, error: cajaError, loadCajaHoy } = caja
 const cajaTotalEsperado = computed(() =>
   cajaMovimientos.value.reduce((total, movimiento) => {
     const amount = Number(movimiento.importe || 0)
@@ -164,21 +181,40 @@ const cajaStatus = computed(() => (
   cajaHoy.value?.estado === 'abierta' ? 'abierta' : cajaHoy.value?.estado || ''
 ))
 
-onMounted(async () => {
-  await loadCatalogos()
-  if (!selectedSucursalId.value && sucursales.value.length) {
-    const preferred = auth.user.value?.perfil?.sucursal?.id
-    selectedSucursalId.value = String(
-      sucursales.value.find((sucursal) => sucursal.id === preferred)?.id
-      || sucursales.value[0].id,
-    )
-  }
-  await cargarDashboard()
-})
+onMounted(loadPage)
 
 watch(selectedSucursalId, () => {
-  cargarDashboard()
+  if (pageReady.value) refreshDashboard()
 })
+
+async function loadPage() {
+  pageReady.value = false
+  pageError.value = ''
+  try {
+    await loadCatalogos()
+    if (!selectedSucursalId.value && sucursales.value.length) {
+      const preferred = auth.user.value?.perfil?.sucursal?.id
+      selectedSucursalId.value = String(
+        sucursales.value.find((sucursal) => sucursal.id === preferred)?.id
+        || sucursales.value[0].id,
+      )
+    }
+    await cargarDashboard()
+    if (cajaError.value) throw new Error(cajaError.value)
+    pageReady.value = true
+  } catch (err) {
+    pageError.value = err.message || 'No se pudo cargar el resumen del dashboard.'
+  }
+}
+
+async function refreshDashboard() {
+  try {
+    await cargarDashboard()
+    if (cajaError.value) throw new Error(cajaError.value)
+  } catch (err) {
+    toast.error(err.message || 'No se pudo actualizar el dashboard.')
+  }
+}
 
 async function cargarDashboard() {
   const sucursalId = selectedSucursalId.value || null

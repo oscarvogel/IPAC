@@ -1,5 +1,13 @@
 <template>
   <section class="concepts-workspace text-text-primary">
+    <AppPageState
+      v-if="!pageReady"
+      :loading="!pageError"
+      :error="pageError"
+      label="los conceptos"
+      @retry="loadPage"
+    />
+    <template v-else>
     <div class="concepts-metrics-grid">
       <article
         v-for="(stat, index) in stats"
@@ -68,8 +76,9 @@
 
     <ConceptoList
       :conceptos="filteredConceptos"
+      :filtered="hasActiveFilters"
       @edit="openEditForm"
-      @deactivate="confirmDeactivate"
+      @deactivate="requestDeactivate"
     />
 
     <ConceptoForm
@@ -78,6 +87,18 @@
       @close="closeConceptoForm"
       @saved="onConceptoSaved"
     />
+
+    <ConfirmDialog
+      :open="Boolean(pendingDeactivateConcepto)"
+      title="Desactivar concepto"
+      description="El concepto dejará de estar disponible para nuevas cuotas y pagos. Los registros existentes no se modificarán."
+      :subject="pendingDeactivateConcepto?.nombre || ''"
+      confirm-label="Desactivar"
+      :loading="deactivatingConcepto"
+      @cancel="pendingDeactivateConcepto = null"
+      @confirm="confirmDeactivate"
+    />
+    </template>
   </section>
 </template>
 
@@ -100,9 +121,11 @@ import { useToast } from '@/composables/useToast'
 import { formatMoney } from '@/lib/formatters'
 import ConceptoList from '@/components/conceptos/ConceptoList.vue'
 import ConceptoForm from '@/components/conceptos/ConceptoForm.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import AppPageState from '@/components/ui/AppPageState.vue'
 
 const { sucursales, loadCatalogos } = useCatalogos()
-const { conceptos, loadConceptos, deactivateConcepto } = useConceptos()
+const { conceptos, error: conceptosError, loadConceptos, deactivateConcepto } = useConceptos()
 const toast = useToast()
 
 const searchQuery = ref('')
@@ -111,10 +134,24 @@ const onlyActive = ref(false)
 
 const showConceptoForm = ref(false)
 const editingConcepto = ref(null)
+const pendingDeactivateConcepto = ref(null)
+const deactivatingConcepto = ref(false)
+const pageReady = ref(false)
+const pageError = ref('')
 
-onMounted(async () => {
-  await Promise.all([loadCatalogos(), loadConceptos()])
-})
+onMounted(loadPage)
+
+async function loadPage() {
+  pageReady.value = false
+  pageError.value = ''
+  try {
+    await Promise.all([loadCatalogos(), loadConceptos()])
+    if (conceptosError.value) throw new Error(conceptosError.value)
+    pageReady.value = true
+  } catch (err) {
+    pageError.value = err.message || 'No se pudo cargar el catálogo de conceptos.'
+  }
+}
 
 const branchConceptos = computed(() => {
   if (sucursalFilter.value === 'todas') return conceptos.value
@@ -140,6 +177,12 @@ const filteredConceptos = computed(() => {
     return matchesActive && matchesQuery
   })
 })
+
+const hasActiveFilters = computed(() => Boolean(
+  searchQuery.value.trim()
+  || sucursalFilter.value !== 'todas'
+  || onlyActive.value,
+))
 
 const totalActivos = computed(() => branchConceptos.value.filter((c) => c.activo).length)
 
@@ -212,12 +255,21 @@ function onConceptoSaved() {
   closeConceptoForm()
 }
 
-async function confirmDeactivate(concepto) {
+function requestDeactivate(concepto) {
+  pendingDeactivateConcepto.value = concepto
+}
+
+async function confirmDeactivate() {
+  if (!pendingDeactivateConcepto.value) return
+  deactivatingConcepto.value = true
   try {
-    await deactivateConcepto(concepto.id)
+    await deactivateConcepto(pendingDeactivateConcepto.value.id)
     toast.success('Concepto desactivado')
+    pendingDeactivateConcepto.value = null
   } catch (err) {
     toast.error(err.message || 'No se pudo desactivar el concepto.')
+  } finally {
+    deactivatingConcepto.value = false
   }
 }
 </script>
