@@ -100,6 +100,60 @@ button:disabled {
   opacity: 0.65;
 }
 
+.ipac-swal-popup {
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.ipac-swal-title {
+  color: var(--text-primary);
+}
+
+.ipac-swal-content {
+  color: var(--text-secondary);
+}
+
+.ipac-swal-confirm,
+.ipac-swal-cancel {
+  border: 0;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.65rem 1rem;
+}
+
+.ipac-swal-confirm {
+  background: var(--primary);
+  color: var(--surface);
+}
+
+.ipac-swal-cancel {
+  background: var(--secondary-soft);
+  color: var(--secondary-hover);
+  margin-right: 0.5rem;
+}
+
+.ipac-swal-details {
+  display: grid;
+  gap: 0.35rem 1rem;
+  grid-template-columns: 1fr auto;
+  margin: 1rem 0 0;
+  text-align: left;
+}
+
+.ipac-swal-details dd {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin: 0;
+  text-align: right;
+}
+
+.ipac-swal-details dt {
+  margin: 0;
+}
+
 h1,
 h2,
 h3,

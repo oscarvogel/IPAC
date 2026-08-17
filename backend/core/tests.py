@@ -5,9 +5,11 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
+from unittest.mock import patch
 
 from .contexts.importacion.application.import_ipac_workbook import IPACWorkbookImporter, parse_date_value, split_full_name
-from .models import Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
+from .contexts.cobranzas.application.registrar_pago import RegistrarPago
+from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
 
 
 class SucursalSeedTests(TestCase):
@@ -402,6 +404,115 @@ class ApiInicialTests(APITestCase):
         detalle_pago = self.client.get(f"/api/pagos/{pago.data['id']}/")
         self.assertEqual(detalle_pago.data["importe_aplicado"], "10000.00")
         self.assertEqual(detalle_pago.data["saldo_a_favor"], "20000.00")
+
+    def _create_fee(self, period, amount="25000.00"):
+        alumno = Alumno.objects.get(legajo="P-001")
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        hoy = timezone.localdate()
+        return Cuota.objects.create(
+            alumno=alumno,
+            concepto=concepto,
+            sucursal=self.posadas,
+            periodo=period,
+            fecha_emision=hoy,
+            fecha_vencimiento=hoy,
+            importe=amount,
+        )
+
+    def test_registering_total_payment_applies_fee_and_marks_it_paid(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        cuota = self._create_fee("2026-09")
+
+        response = self.client.post(
+            "/api/pagos/",
+            {"alumno": alumno.id, "cuota": cuota.id, "importe": "25000.00", "medio": Pago.Medio.EFECTIVO},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        cuota.refresh_from_db()
+        aplicacion = cuota.aplicaciones.get()
+        self.assertEqual(aplicacion.importe, 25000)
+        self.assertEqual(cuota.estado, Cuota.Estado.PAGADA)
+        self.assertEqual(cuota.saldo, 0)
+        self.assertTrue(MovimientoCaja.objects.filter(pago_id=response.data["id"]).exists())
+
+    def test_registering_partial_payment_updates_fee_and_account_statement(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        cuota = self._create_fee("2026-10")
+
+        response = self.client.post(
+            "/api/pagos/",
+            {"alumno": alumno.id, "cuota": cuota.id, "importe": "10000.00", "medio": Pago.Medio.TRANSFERENCIA},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        cuota.refresh_from_db()
+        self.assertEqual(cuota.estado, Cuota.Estado.PARCIAL)
+        self.assertEqual(cuota.saldo, 15000)
+        estado = self.client.get(f"/api/alumnos/{alumno.id}/estado-cuenta/")
+        self.assertEqual(estado.data["cuotas"][0]["saldo"], "15000.00")
+        self.assertEqual(estado.data["cuotas"][0]["estado"], Cuota.Estado.PARCIAL)
+
+    def test_payment_above_fee_balance_keeps_excess_as_credit(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        cuota = self._create_fee("2026-11")
+
+        response = self.client.post(
+            "/api/pagos/",
+            {"alumno": alumno.id, "cuota": cuota.id, "importe": "30000.00", "medio": Pago.Medio.EFECTIVO},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        cuota.refresh_from_db()
+        pago = Pago.objects.get(pk=response.data["id"])
+        self.assertEqual(cuota.estado, Cuota.Estado.PAGADA)
+        self.assertEqual(cuota.aplicaciones.get().importe, 25000)
+        self.assertEqual(pago.saldo_a_favor, 5000)
+        self.assertEqual(response.data["saldo_a_favor"], "5000.00")
+
+    def test_payment_on_account_does_not_apply_to_a_fee(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+
+        response = self.client.post(
+            "/api/pagos/",
+            {"alumno": alumno.id, "importe": "12000.00", "medio": Pago.Medio.TRANSFERENCIA},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        pago = Pago.objects.get(pk=response.data["id"])
+        self.assertFalse(pago.aplicaciones.exists())
+        self.assertEqual(pago.saldo_a_favor, 12000)
+        self.assertTrue(MovimientoCaja.objects.filter(pago=pago).exists())
+
+    def test_registering_payment_rolls_back_if_cash_movement_fails(self):
+        alumno = Alumno.objects.get(legajo="P-001")
+        cuota = self._create_fee("2026-12")
+        before = (Pago.objects.count(), MovimientoCaja.objects.count(), AplicacionPago.objects.count())
+
+        with patch(
+            "core.contexts.cobranzas.application.registrar_pago.MovimientoCaja.objects.create",
+            side_effect=RuntimeError("fallo de caja"),
+        ):
+            with self.assertRaises(RuntimeError):
+                RegistrarPago().execute(
+                    user=self.admin,
+                    alumno=alumno,
+                    importe="10000.00",
+                    medio=Pago.Medio.EFECTIVO,
+                    cuota=cuota,
+                )
+
+        self.assertEqual((Pago.objects.count(), MovimientoCaja.objects.count(), AplicacionPago.objects.count()), before)
+        cuota.refresh_from_db()
+        self.assertEqual(cuota.estado, Cuota.Estado.PENDIENTE)
 
     def test_payment_receipt_has_stable_number_and_details(self):
         self.client.force_authenticate(user=self.admin)

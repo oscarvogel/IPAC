@@ -254,6 +254,9 @@ class PagoSerializer(serializers.ModelSerializer):
     concepto_nombre = serializers.CharField(source="concepto.nombre", read_only=True)
     sucursal_nombre = serializers.CharField(source="sucursal.nombre", read_only=True)
     sucursal = serializers.PrimaryKeyRelatedField(read_only=True)
+    cuota = serializers.PrimaryKeyRelatedField(
+        queryset=Cuota.objects.all(), write_only=True, required=False, allow_null=True
+    )
     importe_aplicado = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     saldo_a_favor = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
@@ -265,6 +268,7 @@ class PagoSerializer(serializers.ModelSerializer):
             "alumno_nombre",
             "alumno_legajo",
             "concepto",
+            "cuota",
             "concepto_nombre",
             "sucursal",
             "sucursal_nombre",
@@ -281,15 +285,26 @@ class PagoSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         alumno = attrs.get("alumno") or getattr(self.instance, "alumno", None)
         concepto = attrs.get("concepto") or getattr(self.instance, "concepto", None)
+        cuota = attrs.get("cuota")
         request = self.context.get("request")
         perfil = getattr(getattr(request, "user", None), "perfil", None)
         if alumno and perfil and not perfil.puede_ver_todas_las_sucursales and alumno.sucursal_id != perfil.sucursal_id:
             raise serializers.ValidationError("No puede registrar pagos de otra sucursal.")
         if alumno and concepto and alumno.sucursal_id != concepto.sucursal_id:
             raise serializers.ValidationError("El concepto debe pertenecer a la misma sucursal del alumno.")
+        if cuota:
+            if cuota.alumno_id != alumno.id:
+                raise serializers.ValidationError("La cuota no pertenece al alumno seleccionado.")
+            if cuota.sucursal_id != alumno.sucursal_id:
+                raise serializers.ValidationError("La cuota debe pertenecer a la misma sucursal del alumno.")
+            if cuota.estado == Cuota.Estado.ANULADA or cuota.saldo <= 0:
+                raise serializers.ValidationError("La cuota seleccionada no tiene saldo pendiente.")
+            if concepto and concepto.id != cuota.concepto_id:
+                raise serializers.ValidationError("El concepto debe coincidir con el de la cuota.")
         return attrs
 
     def create(self, validated_data):
+        validated_data.pop("cuota", None)
         validated_data["sucursal"] = validated_data["alumno"].sucursal
         return super().create(validated_data)
 

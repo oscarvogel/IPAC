@@ -12,12 +12,14 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 
 from django.contrib.auth.models import User
 
 from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
 from .contexts.importacion.application.import_ipac_workbook import IPACWorkbookImporter
+from .contexts.cobranzas.application.registrar_pago import RegistrarPago
 from .serializers import (
     AlumnoSerializer,
     AplicacionPagoSerializer,
@@ -298,17 +300,16 @@ class PagoViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(fecha__lte=hasta)
         return queryset
 
-    def perform_create(self, serializer):
-        pago = serializer.save()
-        caja = get_or_create_cashbox(self.request.user, pago.sucursal)
-        MovimientoCaja.objects.create(
-            caja=caja,
-            tipo=MovimientoCaja.Tipo.PAGO,
-            medio=pago.medio,
-            importe=pago.importe,
-            descripcion=f"Pago {pago.alumno}",
-            pago=pago,
-        )
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            pago = RegistrarPago().execute(user=request.user, **serializer.validated_data)
+        except ValueError as exc:
+            raise ValidationError({"detail": str(exc)}) from exc
+        response_serializer = self.get_serializer(pago)
+        headers = self.get_success_headers(response_serializer.data)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=True, methods=["get"], url_path="recibo")
     def recibo(self, request, pk=None):

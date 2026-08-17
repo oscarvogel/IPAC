@@ -25,11 +25,11 @@
         <section class="modal-section">
           <div class="modal-grid">
             <label>
-              Concepto
-              <select v-model="form.concepto">
+              Aplicar a
+              <select v-model="form.cuota" :disabled="loadingCuotas">
                 <option value="">Pago a cuenta</option>
-                <option v-for="c in availableConceptos" :key="c.id" :value="c.id">
-                  {{ c.nombre }} · $ {{ c.importe }}
+                <option v-for="cuota in pendingCuotas" :key="cuota.id" :value="cuota.id">
+                  {{ cuota.concepto_nombre }} · {{ cuota.periodo }} · saldo $ {{ cuota.saldo }}
                 </option>
               </select>
             </label>
@@ -63,6 +63,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { usePagos } from '@/composables/usePagos'
 import { useToast } from '@/composables/useToast'
+import { confirmSaldoAFavor } from '@/lib/swal'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
@@ -74,48 +75,77 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'saved'])
 
-const { createPago, loadPagos } = usePagos()
+const { createPago, loadPagos, getEstadoCuenta } = usePagos()
 const toast = useToast()
 
 const form = reactive({
-  concepto: '',
+  cuota: '',
   importe: '',
   medio: 'efectivo',
   observacion: '',
 })
 
 const saving = ref(false)
+const loadingCuotas = ref(false)
+const cuotas = ref([])
 
 function requestClose() {
   if (!saving.value) emit('close')
 }
 
-const availableConceptos = computed(() => {
-  if (!props.alumno) return []
-  return props.conceptos
-    .filter((c) => c.activo && c.sucursal === props.alumno.sucursal)
-})
+const pendingCuotas = computed(() => cuotas.value.filter((cuota) => cuota.estado !== 'anulada' && Number(cuota.saldo) > 0))
+const selectedCuota = computed(() => pendingCuotas.value.find((cuota) => String(cuota.id) === String(form.cuota)) || null)
 
 watch(
-  () => [props.open, availableConceptos.value],
-  ([isOpen, conceptos]) => {
+  () => [props.open, props.alumno?.id],
+  async ([isOpen]) => {
     if (!isOpen) return
-    const first = conceptos[0]
-    form.concepto = first?.id || ''
-    form.importe = first?.importe || ''
+    form.cuota = ''
+    form.importe = ''
     form.medio = 'efectivo'
     form.observacion = ''
+    cuotas.value = []
+    if (!props.alumno) return
+    loadingCuotas.value = true
+    try {
+      const estadoCuenta = await getEstadoCuenta(props.alumno.id)
+      cuotas.value = estadoCuenta.cuotas || []
+    } catch (err) {
+      toast.error(err.message || 'No se pudieron cargar las cuotas pendientes.')
+    } finally {
+      loadingCuotas.value = false
+    }
   },
   { immediate: true },
 )
 
+watch(
+  () => form.cuota,
+  (cuotaId) => {
+    if (!cuotaId) return
+    const cuota = pendingCuotas.value.find((item) => String(item.id) === String(cuotaId))
+    if (cuota) form.importe = cuota.saldo
+  },
+)
+
 async function handleSubmit() {
   if (!props.alumno) return
+  const importe = Number(form.importe)
+  const cuota = selectedCuota.value
+  if (cuota && importe > Number(cuota.saldo)) {
+    const confirmation = await confirmSaldoAFavor({
+      importe,
+      saldo: Number(cuota.saldo),
+      importeAplicado: Number(cuota.saldo),
+      saldoFavor: importe - Number(cuota.saldo),
+    })
+    if (!confirmation.isConfirmed) return
+  }
   saving.value = true
   try {
     await createPago({
       alumno: props.alumno.id,
-      concepto: form.concepto || null,
+      cuota: form.cuota || null,
       importe: form.importe,
       medio: form.medio,
       observacion: form.observacion,
