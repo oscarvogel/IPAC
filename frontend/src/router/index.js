@@ -10,6 +10,7 @@ import ReportesView from '@/views/ReportesView.vue'
 import SucursalesView from '@/views/SucursalesView.vue'
 import UsuariosView from '@/views/UsuariosView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
+import ImportacionesView from '@/views/ImportacionesView.vue'
 
 // Las rutas autenticadas viven como children de la ruta padre "/",
 // cuyo component es AppShell. Asi el shell envuelve automaticamente
@@ -59,6 +60,11 @@ const routes = [
         path: 'usuarios',
         name: 'usuarios',
         component: UsuariosView,
+      },
+      {
+        path: 'importaciones',
+        name: 'importaciones',
+        component: ImportacionesView,
       },
     ],
   },

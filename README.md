@@ -75,6 +75,19 @@ El frontend usa `VITE_API_BASE_URL`; ver `frontend/.env.example`.
 npm --prefix frontend run build
 ```
 
+### Importación de alumnos, carreras y cursos
+
+Desde la pantalla `Administración → Cargar datos`, un usuario de Administración puede descargar las plantillas CSV y cargar archivos `.csv` o `.xlsx`. La carga es idempotente, deduplica alumnos por DNI o legajo y devuelve advertencias para datos incompletos o inconsistentes.
+
+También se puede ejecutar desde consola:
+
+```powershell
+.\.venv\Scripts\python.exe backend\manage.py import_ipac_excel ".\CARRERAS Y CURSOS 2026.xlsx" --sucursal POS
+.\.venv\Scripts\python.exe backend\manage.py import_ipac_excel ".\Alumnos IPAC- Posadas.xlsx" --sucursal POS
+```
+
+Las columnas esperadas están documentadas en [docs/plantillas/README.md](docs/plantillas/README.md).
+
 ## Docker Compose
 
 Docker no esta disponible actualmente en esta maquina, pero el repo queda preparado para:

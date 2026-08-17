@@ -47,9 +47,22 @@ class PerfilUsuario(TimeStampedModel):
 
 
 class CarreraCurso(TimeStampedModel):
+    class Tipo(models.TextChoices):
+        CARRERA = "carrera", "Carrera"
+        CURSO = "curso", "Curso"
+
     nombre = models.CharField(max_length=160)
     descripcion = models.TextField(blank=True)
     sucursal = models.ForeignKey(Sucursal, on_delete=models.PROTECT, related_name="carreras")
+    tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.CARRERA)
+    duracion = models.CharField(max_length=80, blank=True)
+    plan_cuotas = models.PositiveIntegerField(blank=True, null=True)
+    importe_matricula = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    cuota_programatica = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    cuota_extraprogramatica = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    cuota_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    cuota_convenio_20 = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    cuota_convenio_15 = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     activa = models.BooleanField(default=True)
 
     class Meta:
@@ -71,9 +84,12 @@ class Alumno(TimeStampedModel):
     legajo = models.CharField(max_length=40, unique=True)
     nombre = models.CharField(max_length=100)
     apellido = models.CharField(max_length=100)
-    dni = models.CharField(max_length=20, unique=True)
+    dni = models.CharField(max_length=20, unique=True, blank=True, null=True)
+    cuil = models.CharField(max_length=20, blank=True)
+    fecha_nacimiento = models.DateField(blank=True, null=True)
     email = models.EmailField(blank=True)
     telefono = models.CharField(max_length=50, blank=True)
+    domicilio = models.TextField(blank=True)
     estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.ACTIVO)
     sucursal = models.ForeignKey(Sucursal, on_delete=models.PROTECT, related_name="alumnos")
     carrera = models.ForeignKey(

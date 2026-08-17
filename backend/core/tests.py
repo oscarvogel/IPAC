@@ -1,10 +1,12 @@
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
+from .contexts.importacion.application.import_ipac_workbook import IPACWorkbookImporter, parse_date_value, split_full_name
 from .models import Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
 
 
@@ -63,6 +65,41 @@ class ModeloBaseTests(TestCase):
         self.assertEqual(concepto.carrera, carrera)
 
 
+class ImportacionDatosTests(TestCase):
+    def setUp(self):
+        self.posadas = Sucursal.objects.create(codigo="POS", nombre="Posadas")
+
+    def test_helpers_normalize_names_and_mixed_dates(self):
+        self.assertEqual(split_full_name("RUIZ DIAZ Aldana Micaela"), ("RUIZ DIAZ", "Aldana Micaela"))
+        self.assertEqual(parse_date_value("17 de enero de 1990").isoformat(), "1990-01-17")
+        self.assertEqual(parse_date_value("9/15/2001").isoformat(), "2001-09-15")
+
+    def test_imports_canonical_templates_idempotently(self):
+        class FakeReader:
+            def read(self, source, filename):
+                return {
+                    "Carreras": [
+                        ["sucursal_codigo", "nombre", "tipo", "duracion", "plan_cuotas", "importe_matricula", "cuota_total"],
+                        ["POS", "Tecnicatura de prueba", "carrera", "3 años", "10", "41400", "82000"],
+                    ],
+                    "Alumnos": [
+                        ["sucursal_codigo", "legajo", "apellido", "nombre", "dni", "cuil", "fecha_nacimiento", "email", "telefono", "domicilio", "carrera"],
+                        ["POS", "POS-TEST-001", "PEREZ", "Ana", "30111222", "27301112220", "1990-01-17", "ana@example.com", "3764000000", "Centro", "Tecnicatura de prueba"],
+                    ],
+                }
+
+        service = IPACWorkbookImporter(reader=FakeReader())
+        first = service.import_file(b"", "plantilla.xlsx", default_branch_code="POS")
+        second = service.import_file(b"", "plantilla.xlsx", default_branch_code="POS")
+
+        self.assertEqual(first.careers.created, 1)
+        self.assertEqual(first.students.created, 1)
+        self.assertEqual(second.careers.updated, 1)
+        self.assertEqual(second.students.updated, 1)
+        self.assertEqual(Alumno.objects.get(dni="30111222").fecha_nacimiento.isoformat(), "1990-01-17")
+        self.assertEqual(ConceptoCobrable.objects.get(nombre="Cuota mensual 2026").importe, 82000)
+
+
 class ApiInicialTests(APITestCase):
     def setUp(self):
         self.posadas = Sucursal.objects.create(codigo="POS", nombre="Posadas")
@@ -115,6 +152,38 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(me.status_code, status.HTTP_200_OK)
         self.assertEqual(me.data["username"], "admin")
         self.assertEqual(me.data["perfil"]["rol"], PerfilUsuario.Rol.ADMINISTRACION)
+
+    def test_admin_can_download_import_template(self):
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.get("/api/importaciones/plantillas/alumnos/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("sucursal_codigo;legajo;apellido", response.content.decode("utf-8-sig"))
+
+    def test_admin_can_import_csv_template(self):
+        self.client.force_authenticate(self.admin)
+        content = (
+            "sucursal_codigo;legajo;apellido;nombre;dni;cuil;fecha_nacimiento;email;telefono;domicilio;carrera\n"
+            "POS;P-CSV-001;Lopez;Ana;30999888;;1990-01-17;ana.csv@example.com;3764000011;Centro;\n"
+        ).encode("utf-8")
+
+        response = self.client.post(
+            "/api/importaciones/workbook/",
+            {"archivo": SimpleUploadedFile("alumnos.csv", content, content_type="text/csv"), "sucursal": "POS"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["alumnos"]["created"], 1)
+        self.assertTrue(Alumno.objects.filter(legajo="P-CSV-001", dni="30999888").exists())
+
+    def test_non_admin_cannot_import_data(self):
+        self.client.force_authenticate(self.cajero)
+
+        response = self.client.post("/api/importaciones/workbook/", {}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_unauthenticated_api_requests_are_rejected(self):
         response = self.client.get("/api/alumnos/")

@@ -124,7 +124,11 @@ class CarreraCursoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CarreraCurso
-        fields = ["id", "nombre", "descripcion", "sucursal", "sucursal_nombre", "activa"]
+        fields = [
+            "id", "nombre", "descripcion", "sucursal", "sucursal_nombre", "tipo", "duracion",
+            "plan_cuotas", "importe_matricula", "cuota_programatica", "cuota_extraprogramatica",
+            "cuota_total", "cuota_convenio_20", "cuota_convenio_15", "activa",
+        ]
 
 
 class AlumnoSerializer(serializers.ModelSerializer):
@@ -139,8 +143,11 @@ class AlumnoSerializer(serializers.ModelSerializer):
             "nombre",
             "apellido",
             "dni",
+            "cuil",
+            "fecha_nacimiento",
             "email",
             "telefono",
+            "domicilio",
             "estado",
             "sucursal",
             "sucursal_nombre",

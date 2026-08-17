@@ -104,6 +104,7 @@ import {
   BuildingStorefrontIcon,
   ChartBarSquareIcon,
   Cog6ToothIcon,
+  DocumentArrowUpIcon,
   EllipsisVerticalIcon,
   GlobeAltIcon,
   HomeIcon,
@@ -151,6 +152,7 @@ const modules = computed(() => {
   ]
   if (canManageUsers.value) {
     base.push({ to: '/usuarios', label: 'Usuarios', meta: 'Permisos', icon: UserIcon })
+    base.push({ to: '/importaciones', label: 'Cargar datos', meta: 'Plantillas', icon: DocumentArrowUpIcon })
   }
   return base
 })

@@ -17,6 +17,7 @@ from .views import (
     SucursalViewSet,
     UserViewSet,
 )
+from .views import ImportacionPlantillaCsvView, ImportacionPlantillasView, ImportacionWorkbookView
 
 router = DefaultRouter()
 router.register("sucursales", SucursalViewSet, basename="sucursal")
@@ -35,5 +36,8 @@ urlpatterns = [
     path("auth/login/", LoginView.as_view(), name="api-login"),
     path("auth/me/", CurrentUserView.as_view(), name="api-current-user"),
     path("reportes/resumen/", ReporteResumenView.as_view(), name="api-reporte-resumen"),
+    path("importaciones/plantillas/", ImportacionPlantillasView.as_view(), name="api-importacion-plantillas"),
+    path("importaciones/plantillas/<str:kind>/", ImportacionPlantillaCsvView.as_view(), name="api-importacion-plantilla"),
+    path("importaciones/workbook/", ImportacionWorkbookView.as_view(), name="api-importacion-workbook"),
     path("", include(router.urls)),
 ]

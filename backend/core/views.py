@@ -5,8 +5,10 @@ from django.utils import timezone
 from decimal import Decimal, InvalidOperation
 from datetime import date
 import csv
+import io
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -15,6 +17,7 @@ from rest_framework.views import APIView
 from django.contrib.auth.models import User
 
 from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
+from .contexts.importacion.application.import_ipac_workbook import IPACWorkbookImporter
 from .serializers import (
     AlumnoSerializer,
     AplicacionPagoSerializer,
@@ -413,3 +416,85 @@ class MovimientoCajaViewSet(viewsets.ModelViewSet):
         if caja_id:
             queryset = queryset.filter(caja_id=caja_id)
         return queryset
+
+
+IMPORT_ROLES = {PerfilUsuario.Rol.SUPERADMIN, PerfilUsuario.Rol.ADMINISTRACION}
+TEMPLATE_COLUMNS = {
+    "alumnos": [
+        "sucursal_codigo", "legajo", "apellido", "nombre", "dni", "cuil",
+        "fecha_nacimiento", "email", "telefono", "domicilio", "carrera",
+    ],
+    "carreras": [
+        "sucursal_codigo", "nombre", "tipo", "duracion", "plan_cuotas",
+        "importe_matricula", "cuota_programatica", "cuota_extraprogramatica",
+        "cuota_total", "cuota_convenio_20", "cuota_convenio_15", "descripcion",
+    ],
+}
+
+
+def _can_import(user):
+    perfil = getattr(user, "perfil", None)
+    return bool(perfil and perfil.rol in IMPORT_ROLES)
+
+
+class ImportacionPlantillasView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(
+            {
+                "formato": "CSV UTF-8 separado por punto y coma; también se aceptan XLSX.",
+                "plantillas": {
+                    key: {
+                        "columnas": columns,
+                        "descarga": f"/api/importaciones/plantillas/{key}/",
+                    }
+                    for key, columns in TEMPLATE_COLUMNS.items()
+                },
+            }
+        )
+
+
+class ImportacionPlantillaCsvView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, kind):
+        columns = TEMPLATE_COLUMNS.get(kind)
+        if not columns:
+            return Response({"detail": "Plantilla desconocida."}, status=status.HTTP_404_NOT_FOUND)
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="plantilla_ipac_{kind}.csv"'
+        response.write("\ufeff")
+        writer = csv.writer(response, delimiter=";")
+        writer.writerow(columns)
+        return response
+
+
+class ImportacionWorkbookView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not _can_import(request.user):
+            return Response({"detail": "Solo Administración puede importar datos."}, status=status.HTTP_403_FORBIDDEN)
+        source = request.FILES.get("archivo")
+        if not source:
+            return Response({"detail": "Debe seleccionar un archivo XLSX o CSV."}, status=status.HTTP_400_BAD_REQUEST)
+        filename = source.name or "archivo.xlsx"
+        if not filename.lower().endswith((".xlsx", ".csv")):
+            return Response({"detail": "El archivo debe tener extensión .xlsx o .csv."}, status=status.HTTP_400_BAD_REQUEST)
+        perfil = request.user.perfil
+        default_branch = request.data.get("sucursal") or perfil.sucursal.codigo
+        default_career = request.data.get("carrera", "")
+        allowed_branches = None if perfil.puede_ver_todas_las_sucursales else {perfil.sucursal.codigo}
+        try:
+            result = IPACWorkbookImporter().import_file(
+                source,
+                filename,
+                default_branch_code=default_branch,
+                default_career_name=default_career,
+                allowed_branch_codes=allowed_branches,
+            )
+        except (ValueError, KeyError, OSError, ImportError) as exc:
+            return Response({"detail": f"No se pudo leer el archivo: {exc}"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result.as_dict(), status=status.HTTP_200_OK)
