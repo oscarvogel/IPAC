@@ -460,6 +460,31 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], target.id)
 
+    def test_student_statistics_count_all_matching_records_not_current_page(self):
+        self.client.force_authenticate(user=self.admin)
+        for index in range(55):
+            Alumno.objects.create(
+                legajo=f"STAT-{index:03d}",
+                nombre=f"Activo {index}",
+                apellido="Estadistica",
+                dni=f"470{index:05d}",
+                sucursal=self.posadas,
+            )
+        for index in range(3):
+            Alumno.objects.create(
+                legajo=f"STAT-I-{index:03d}",
+                nombre=f"Inactivo {index}",
+                apellido="Estadistica",
+                dni=f"480{index:05d}",
+                estado=Alumno.Estado.BAJA,
+                sucursal=self.posadas,
+            )
+
+        response = self.client.get(f"/api/alumnos/estadisticas/?sucursal={self.posadas.id}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {"total": 59, "activos": 56, "inactivos": 3})
+
     def test_get_today_cashbox_creates_open_cashbox(self):
         self.client.force_authenticate(user=self.admin)
 
@@ -943,6 +968,39 @@ class ApiInicialTests(APITestCase):
         repetida = self.client.post("/api/cuotas/generar/", payload, format="json")
         self.assertEqual(repetida.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Cuota.objects.filter(periodo="2026-09").count(), 2)
+
+    def test_can_evaluate_mass_fee_generation_without_loading_all_pages(self):
+        self.client.force_authenticate(user=self.admin)
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        pedro = Alumno.objects.get(legajo="P-001")
+        ana = Alumno.objects.create(
+            legajo="P-003",
+            nombre="Ana",
+            apellido="Lopez",
+            dni="24111222",
+            sucursal=self.posadas,
+        )
+        hoy = timezone.localdate()
+        Cuota.objects.create(
+            alumno=pedro,
+            concepto=concepto,
+            sucursal=self.posadas,
+            periodo="2026-10",
+            fecha_emision=hoy,
+            fecha_vencimiento=hoy,
+            importe="26000.00",
+        )
+
+        response = self.client.post(
+            "/api/cuotas/evaluar-generacion/",
+            {"sucursal": self.posadas.id, "concepto": concepto.id, "periodo": "2026-10"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["alumnos_encontrados"], 2)
+        self.assertEqual(response.data["omitidas"], 1)
+        self.assertEqual(response.data["alumnos_elegibles"], [ana.id])
 
     def test_operational_report_respects_branch_and_date_range(self):
         self.client.force_authenticate(user=self.admin)

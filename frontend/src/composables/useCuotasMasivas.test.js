@@ -10,21 +10,11 @@ describe('useCuotasMasivas', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('calcula alumnos activos elegibles y omite duplicados del mismo concepto y periodo', async () => {
-    apiRequest
-      .mockResolvedValueOnce({
-        count: 2,
-        results: [
-          { id: 1, estado: 'activo' },
-          { id: 2, estado: 'activo' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        count: 2,
-        results: [
-          { alumno: 1, concepto: 10, periodo: '2026-08' },
-          { alumno: 2, concepto: 10, periodo: '2026-07' },
-        ],
-      })
+    apiRequest.mockResolvedValueOnce({
+      alumnos_encontrados: 2,
+      omitidas: 1,
+      alumnos_elegibles: [2],
+    })
 
     const { evaluar, alumnosElegibles, alumnosEncontrados, omitidas } = useCuotasMasivas()
     await evaluar({ sucursal: 3, carrera: '', concepto: 10, periodo: '2026-08' })
@@ -32,8 +22,9 @@ describe('useCuotasMasivas', () => {
     expect(alumnosEncontrados.value).toBe(2)
     expect(omitidas.value).toBe(1)
     expect(alumnosElegibles.value.map((alumno) => alumno.id)).toEqual([2])
-    expect(apiRequest).toHaveBeenNthCalledWith(1, '/alumnos/', {
-      query: { sucursal: 3, carrera: '', estado: 'activo', page: 1, page_size: 25 },
+    expect(apiRequest).toHaveBeenCalledWith('/cuotas/evaluar-generacion/', {
+      method: 'POST',
+      body: { sucursal: 3, carrera: null, concepto: 10, periodo: '2026-08' },
     })
   })
 

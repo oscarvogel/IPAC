@@ -196,6 +196,15 @@ class AlumnoViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(carrera_id=carrera)
         return queryset
 
+    @action(detail=False, methods=["get"], url_path="estadisticas")
+    def estadisticas(self, request):
+        queryset = self.get_queryset()
+        return Response(queryset.aggregate(
+            total=Count("id"),
+            activos=Count("id", filter=Q(estado=Alumno.Estado.ACTIVO)),
+            inactivos=Count("id", filter=~Q(estado=Alumno.Estado.ACTIVO)),
+        ))
+
     @action(detail=True, methods=["get"], url_path="estado-cuenta")
     def estado_cuenta(self, request, pk=None):
         alumno = self.get_object()
@@ -350,6 +359,49 @@ class CuotaViewSet(viewsets.ModelViewSet):
         if alumno_id:
             queryset = queryset.filter(alumno_id=alumno_id)
         return queryset.filter(estado=estado) if estado else queryset
+
+    @action(detail=False, methods=["post"], url_path="evaluar-generacion")
+    def evaluar_generacion(self, request):
+        sucursal_id = request.data.get("sucursal")
+        carrera_id = request.data.get("carrera")
+        concepto_id = request.data.get("concepto")
+        periodo = request.data.get("periodo")
+        if not all([sucursal_id, concepto_id, periodo]):
+            return Response(
+                {"detail": "Sucursal, concepto y periodo son obligatorios."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        conceptos = scoped_queryset_for_user(ConceptoCobrable.objects.filter(activo=True), request.user)
+        concepto = conceptos.filter(pk=concepto_id, sucursal_id=sucursal_id).first()
+        if not concepto:
+            return Response({"detail": "Concepto invalido o sin acceso."}, status=status.HTTP_400_BAD_REQUEST)
+
+        alumnos = scoped_queryset_for_user(
+            Alumno.objects.filter(estado=Alumno.Estado.ACTIVO, sucursal_id=sucursal_id),
+            request.user,
+        )
+        if carrera_id:
+            carrera = scoped_queryset_for_user(CarreraCurso.objects.all(), request.user).filter(
+                pk=carrera_id,
+                sucursal_id=sucursal_id,
+            ).first()
+            if not carrera:
+                return Response({"detail": "Carrera invalida o sin acceso."}, status=status.HTTP_400_BAD_REQUEST)
+            alumnos = alumnos.filter(carrera_id=carrera.id)
+
+        existing_alumnos = Cuota.objects.filter(
+            alumno_id__in=alumnos.values("id"),
+            concepto_id=concepto.id,
+            periodo=periodo,
+        ).values("alumno_id")
+        eligible_ids = list(alumnos.exclude(id__in=existing_alumnos).values_list("id", flat=True))
+        found_count = alumnos.count()
+        return Response({
+            "alumnos_encontrados": found_count,
+            "omitidas": found_count - len(eligible_ids),
+            "alumnos_elegibles": eligible_ids,
+        })
 
     @action(detail=False, methods=["post"], url_path="generar")
     def generar(self, request):

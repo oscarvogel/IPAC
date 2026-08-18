@@ -231,10 +231,12 @@ const {
   alumnos,
   selectedAlumno,
   pagination,
+  alumnoStats,
   loading: alumnosLoading,
   error: alumnosError,
   setSelected,
   loadAlumnos,
+  loadAlumnoStats,
   deactivateAlumno,
   reactivateAlumno,
 } = useAlumnos()
@@ -290,7 +292,8 @@ function studentQuery() {
 }
 
 async function loadStudentsPage() {
-  await loadAlumnos(studentQuery())
+  const query = studentQuery()
+  await Promise.all([loadAlumnos(query), loadAlumnoStats(query)])
   if (alumnosError.value) toast.error(alumnosError.value)
 }
 
@@ -304,7 +307,8 @@ async function loadPage() {
   pageReady.value = false
   pageError.value = ''
   try {
-    await Promise.all([loadCatalogos(), loadAlumnos(studentQuery()), loadPagos()])
+    const query = studentQuery()
+    await Promise.all([loadCatalogos(), loadAlumnos(query), loadAlumnoStats(query), loadPagos()])
     if (alumnosError.value) throw new Error(alumnosError.value)
     pageReady.value = true
   } catch (err) {
@@ -412,14 +416,6 @@ const hasActiveFilters = computed(() => Boolean(
   || onlyActive.value,
 ))
 
-const activeCount = computed(
-  () => alumnos.value.filter((alumno) => alumno.estado === 'activo').length,
-)
-
-const inactiveCount = computed(
-  () => alumnos.value.filter((alumno) => alumno.estado !== 'activo').length,
-)
-
 const selectedBranchName = computed(() => {
   if (sucursalFilter.value === 'todas') return 'en toda la institución'
   const branch = sucursales.value.find(
@@ -438,14 +434,14 @@ const stats = computed(() => [
   },
   {
     label: 'Alumnos activos',
-    value: activeCount.value,
+    value: alumnoStats.value.activos,
     detail: 'con matrícula vigente',
     tone: 'success',
     icon: CheckCircleIcon,
   },
   {
     label: 'Inactivos',
-    value: inactiveCount.value,
+    value: alumnoStats.value.inactivos,
     detail: 'legajos en pausa o baja',
     tone: 'warning',
     icon: PauseCircleIcon,

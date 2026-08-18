@@ -36,4 +36,16 @@ describe('useAlumnos', () => {
     })
     expect(alumnos.value).toEqual([{ id: 101, nombre: 'Lucia' }])
   })
+
+  it('carga métricas globales independientes de la página actual', async () => {
+    apiRequest.mockResolvedValue({ total: 300, activos: 287, inactivos: 13 })
+    const { loadAlumnoStats, alumnoStats } = useAlumnos()
+
+    await loadAlumnoStats({ sucursal: 1, estado: '' })
+
+    expect(apiRequest).toHaveBeenCalledWith('/alumnos/estadisticas/', {
+      query: { sucursal: 1, estado: '' },
+    })
+    expect(alumnoStats.value).toEqual({ total: 300, activos: 287, inactivos: 13 })
+  })
 })
