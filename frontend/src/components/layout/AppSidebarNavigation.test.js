@@ -9,6 +9,7 @@ describe('navegación lateral', () => {
     const routes = [
       '/dashboard',
       '/alumnos',
+      '/deudores',
       '/caja',
       '/conceptos',
       '/reportes',
@@ -24,7 +25,7 @@ describe('navegación lateral', () => {
     const wrapper = mount(AppSidebar, { global: { plugins: [router] } })
 
     expect(wrapper.find('.nav-chevron').exists()).toBe(false)
-    expect(wrapper.findAll('.main-nav a')).toHaveLength(6)
+    expect(wrapper.findAll('.main-nav a')).toHaveLength(7)
 
     await wrapper.get('a[href="/alumnos"]').trigger('click')
     await flushPromises()

@@ -3,6 +3,9 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
+from .permissions import can_manage_user
+from .contexts.caja.application.validar_caja import CajaCerradaError, asegurar_caja_abierta
+from .contexts.alumnos.application.gestionar_matricula import GestionarMatricula, MatriculaError
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -38,6 +41,33 @@ class UserSerializer(serializers.ModelSerializer):
         if qs.exists():
             raise serializers.ValidationError("El nombre de usuario ya existe.")
         return value
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        actor = getattr(request, "user", None)
+        actor_profile = getattr(actor, "perfil", None)
+        proposed_role = attrs.get("rol")
+        global_access = attrs.get("puede_ver_todas_las_sucursales")
+        allowed, message = can_manage_user(
+            actor,
+            target=self.instance,
+            proposed_role=proposed_role,
+            global_access=global_access,
+        )
+        if not allowed:
+            raise serializers.ValidationError(message)
+        if (
+            actor_profile
+            and actor_profile.rol == PerfilUsuario.Rol.ADMINISTRACION
+            and not actor_profile.puede_ver_todas_las_sucursales
+        ):
+            target_profile = getattr(self.instance, "perfil", None)
+            target_branch = attrs.get("sucursal") or getattr(target_profile, "sucursal", None)
+            if target_branch and target_branch.id != actor_profile.sucursal_id:
+                raise serializers.ValidationError("Sólo puede administrar usuarios de su sucursal.")
+        if self.instance and self.instance.pk == getattr(actor, "pk", None) and attrs.get("is_active") is False:
+            raise serializers.ValidationError("No puede desactivar su propio usuario.")
+        return attrs
 
     def create(self, validated_data):
         rol = validated_data.pop("rol")
@@ -178,22 +208,38 @@ class ConceptoCobrableSerializer(serializers.ModelSerializer):
 class MatriculaSerializer(serializers.ModelSerializer):
     alumno_nombre = serializers.CharField(source="alumno.__str__", read_only=True)
     carrera_nombre = serializers.CharField(source="carrera.nombre", read_only=True)
+    sucursal_nombre = serializers.CharField(source="sucursal.nombre", read_only=True)
     sucursal = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = Matricula
-        fields = ["id", "alumno", "alumno_nombre", "carrera", "carrera_nombre", "sucursal", "fecha_inicio", "fecha_fin", "estado", "observacion"]
+        fields = ["id", "alumno", "alumno_nombre", "carrera", "carrera_nombre", "sucursal", "sucursal_nombre", "fecha_inicio", "fecha_fin", "estado", "observacion"]
 
     def validate(self, attrs):
         alumno = attrs.get("alumno") or getattr(self.instance, "alumno", None)
         carrera = attrs.get("carrera") or getattr(self.instance, "carrera", None)
         if alumno and carrera and alumno.sucursal_id != carrera.sucursal_id:
             raise serializers.ValidationError("El alumno y la carrera deben pertenecer a la misma sucursal.")
+        estado = attrs.get("estado", getattr(self.instance, "estado", Matricula.Estado.ACTIVA))
+        if estado == Matricula.Estado.ACTIVA and alumno and carrera:
+            active = Matricula.objects.filter(alumno=alumno, carrera=carrera, estado=Matricula.Estado.ACTIVA)
+            if self.instance:
+                active = active.exclude(pk=self.instance.pk)
+            if active.exists():
+                raise serializers.ValidationError("El alumno ya tiene una matrícula activa para esta carrera.")
         return attrs
 
     def create(self, validated_data):
-        validated_data["sucursal"] = validated_data["alumno"].sucursal
-        return super().create(validated_data)
+        try:
+            return GestionarMatricula().crear(**validated_data)
+        except MatriculaError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+
+    def update(self, instance, validated_data):
+        try:
+            return GestionarMatricula().actualizar(instance, **validated_data)
+        except MatriculaError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
 
 
 class CuotaSerializer(serializers.ModelSerializer):
@@ -303,6 +349,34 @@ class PagoSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("El concepto debe coincidir con el de la cuota.")
         return attrs
 
+
+class DeudorSerializer(serializers.ModelSerializer):
+    alumno = serializers.SerializerMethodField()
+    sucursal_nombre = serializers.CharField(source="sucursal.nombre", read_only=True)
+    carrera_nombre = serializers.CharField(source="carrera.nombre", read_only=True, allow_null=True)
+    deuda_total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    cuotas_pendientes = serializers.IntegerField(read_only=True)
+    cuotas_vencidas = serializers.IntegerField(read_only=True)
+    cuota_vencida_mas_antigua = serializers.DateField(read_only=True, allow_null=True)
+    fecha_ultimo_pago = serializers.DateField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = Alumno
+        fields = [
+            "id", "alumno", "nombre", "apellido", "dni", "legajo", "telefono", "email",
+            "sucursal", "sucursal_nombre", "carrera", "carrera_nombre", "deuda_total",
+            "cuotas_pendientes", "cuotas_vencidas", "cuota_vencida_mas_antigua", "fecha_ultimo_pago",
+        ]
+
+    def get_alumno(self, obj):
+        return {
+            "id": obj.id,
+            "nombre": obj.nombre,
+            "apellido": obj.apellido,
+            "dni": obj.dni,
+            "legajo": obj.legajo,
+        }
+
     def create(self, validated_data):
         validated_data.pop("cuota", None)
         validated_data["sucursal"] = validated_data["alumno"].sucursal
@@ -331,8 +405,11 @@ class MovimientoCajaSerializer(serializers.ModelSerializer):
         caja = attrs.get("caja") or getattr(self.instance, "caja", None)
         request = self.context.get("request")
         user = getattr(request, "user", None)
-        if caja and caja.estado == CajaDiaria.Estado.CERRADA:
-            raise serializers.ValidationError("No se pueden registrar movimientos en una caja cerrada.")
+        if caja:
+            try:
+                asegurar_caja_abierta(caja)
+            except CajaCerradaError as exc:
+                raise serializers.ValidationError({"caja": str(exc)}) from exc
         if caja and user and caja.usuario_id != user.id:
             raise serializers.ValidationError("No puede registrar movimientos en una caja de otro usuario.")
         return attrs

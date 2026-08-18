@@ -4,11 +4,11 @@
       <div>
         <p class="eyebrow">Base académica</p>
         <h2>Alumnos</h2>
-        <p>{{ sortedAlumnos.length }} {{ studentCountLabel }}</p>
+        <p>{{ displayedCount }} {{ studentCountLabel }}</p>
       </div>
       <span class="students-list-count" aria-hidden="true">
         <UserGroupIcon />
-        {{ sortedAlumnos.length }}
+        {{ displayedCount }}
       </span>
     </header>
 
@@ -72,6 +72,7 @@ const props = defineProps({
   alumnos: { type: Array, required: true },
   selectedAlumno: { type: Object, default: null },
   filtered: { type: Boolean, default: false },
+  totalCount: { type: Number, default: null },
 })
 
 defineEmits(['select'])
@@ -86,8 +87,10 @@ const sortedAlumnos = computed(() =>
   ),
 )
 
+const displayedCount = computed(() => props.totalCount ?? sortedAlumnos.value.length)
+
 const studentCountLabel = computed(() =>
-  sortedAlumnos.value.length === 1 ? 'alumno visible' : 'alumnos visibles',
+  displayedCount.value === 1 ? 'alumno encontrado' : 'alumnos encontrados',
 )
 
 function statusIcon(status) {

@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from ....models import AplicacionPago, CajaDiaria, Cuota, MovimientoCaja, Pago
+from ...caja.application.validar_caja import asegurar_caja_abierta
 
 
 class RegistrarPago:
@@ -11,6 +12,14 @@ class RegistrarPago:
 
     @transaction.atomic
     def execute(self, *, user, alumno, importe, medio, observacion="", concepto=None, cuota=None):
+        caja, _ = CajaDiaria.objects.select_for_update().get_or_create(
+            fecha=timezone.localdate(),
+            sucursal=alumno.sucursal,
+            usuario=user,
+            defaults={"estado": CajaDiaria.Estado.ABIERTA},
+        )
+        asegurar_caja_abierta(caja)
+
         if cuota is not None:
             cuota = (
                 Cuota.objects.select_for_update()
@@ -41,12 +50,6 @@ class RegistrarPago:
             )
             cuota.actualizar_estado()
 
-        caja, _ = CajaDiaria.objects.get_or_create(
-            fecha=timezone.localdate(),
-            sucursal=pago.sucursal,
-            usuario=user,
-            defaults={"estado": CajaDiaria.Estado.ABIERTA},
-        )
         MovimientoCaja.objects.create(
             caja=caja,
             tipo=MovimientoCaja.Tipo.PAGO,

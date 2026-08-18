@@ -76,6 +76,7 @@
             <td>
               <div class="users-row-actions">
                 <button
+                  v-if="canEdit && (canManageSuperadmins || usuario.perfil?.rol !== 'superadmin')"
                   type="button"
                   title="Editar usuario"
                   aria-label="Editar usuario"
@@ -84,7 +85,7 @@
                   <PencilSquareIcon aria-hidden="true" />
                 </button>
                 <button
-                  v-if="usuario.is_active"
+                  v-if="canDeactivate && (canManageSuperadmins || usuario.perfil?.rol !== 'superadmin') && usuario.is_active"
                   type="button"
                   class="deactivate"
                   title="Desactivar usuario"
@@ -113,12 +114,12 @@
               <small>{{ fullName(usuario) }}</small>
             </span>
             <MobileActionMenu :label="`Acciones para ${usuario.username}`">
-              <button type="button" role="menuitem" @click="$emit('edit', usuario)">
+              <button v-if="canEdit && (canManageSuperadmins || usuario.perfil?.rol !== 'superadmin')" type="button" role="menuitem" @click="$emit('edit', usuario)">
                 <PencilSquareIcon aria-hidden="true" />
                 <span>Editar usuario</span>
               </button>
               <button
-                v-if="usuario.is_active"
+                v-if="canDeactivate && (canManageSuperadmins || usuario.perfil?.rol !== 'superadmin') && usuario.is_active"
                 type="button"
                 class="danger"
                 role="menuitem"
@@ -205,6 +206,9 @@ import MobileActionMenu from '@/components/ui/MobileActionMenu.vue'
 const props = defineProps({
   usuarios: { type: Array, required: true },
   filtered: { type: Boolean, default: false },
+  canEdit: { type: Boolean, default: true },
+  canDeactivate: { type: Boolean, default: true },
+  canManageSuperadmins: { type: Boolean, default: true },
 })
 
 defineEmits(['edit', 'deactivate'])

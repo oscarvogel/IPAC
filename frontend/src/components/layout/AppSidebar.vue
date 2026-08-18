@@ -100,6 +100,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowRightIcon,
   ArrowRightOnRectangleIcon,
+  BanknotesIcon,
   BuildingOffice2Icon,
   BuildingStorefrontIcon,
   ChartBarSquareIcon,
@@ -121,14 +122,12 @@ defineEmits(['close'])
 
 const router = useRouter()
 const route = useRoute()
-const { user, logout } = useAuth()
+const auth = useAuth()
+const { user, logout } = auth
 const userArea = ref(null)
 const userMenuOpen = ref(false)
 
-const canManageUsers = computed(() => {
-  const rol = user.value?.perfil?.rol
-  return rol === 'superadmin' || rol === 'administracion'
-})
+const canManageUsers = computed(() => auth.can('manage-users'))
 
 const currentRoleLabel = computed(() => {
   const labels = {
@@ -145,6 +144,7 @@ const modules = computed(() => {
   const base = [
     { to: '/dashboard', label: 'Dashboard', meta: 'Resumen', icon: HomeIcon },
     { to: '/alumnos', label: 'Alumnos', meta: 'CRM', icon: UserGroupIcon },
+    { to: '/deudores', label: 'Deudores', meta: 'Cobranzas', icon: BanknotesIcon },
     { to: '/caja', label: 'Caja', meta: 'Tesorería', icon: WalletIcon },
     { to: '/conceptos', label: 'Conceptos', meta: 'Aranceles', icon: TagIcon },
     { to: '/reportes', label: 'Reportes', meta: 'Listados', icon: ChartBarSquareIcon },

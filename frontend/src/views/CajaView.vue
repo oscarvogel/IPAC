@@ -56,6 +56,7 @@
 
     <CerrarCajaModal
       v-if="showCerrar"
+      :caja-hoy="cajaHoy"
       :total-esperado="cajaTotales.total"
       :loading="loading"
       @close="showCerrar = false"
@@ -96,7 +97,9 @@ const movimientoTipoInicial = ref('egreso')
 const pageReady = ref(false)
 const pageError = ref('')
 
-const puedeMover = computed(() => cajaHoy.value && cajaHoy.value.estado !== 'cerrada')
+const puedeMover = computed(() => auth.can('operate-cash')
+  && cajaHoy.value
+  && cajaHoy.value.estado !== 'cerrada')
 
 const stats = computed(() => [
   {

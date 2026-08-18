@@ -12,6 +12,7 @@
         </div>
 
         <button
+          v-if="canEdit"
           type="button"
           class="students-icon-action"
           title="Editar alumno"
@@ -31,11 +32,11 @@
       </div>
 
       <div class="students-detail-actions">
-        <button type="button" class="primary" @click="$emit('register-pago')">
+        <button v-if="canRegisterPago" type="button" class="primary" @click="$emit('register-pago')">
           <BanknotesIcon aria-hidden="true" />
           <span>Registrar pago</span>
         </button>
-        <button type="button" @click="$emit('generar-cuota')">
+        <button v-if="canGenerateFee" type="button" @click="$emit('generar-cuota')">
           <DocumentPlusIcon aria-hidden="true" />
           <span>Generar cuota</span>
         </button>
@@ -68,6 +69,12 @@
           </div>
         </dl>
       </section>
+
+      <MatriculasPanel
+        :alumno="alumno"
+        :can-manage="canManageMatriculas"
+        @changed="$emit('matricula-changed')"
+      />
 
       <section class="students-concepts" aria-labelledby="student-concepts-title">
         <div class="students-section-heading">
@@ -106,6 +113,7 @@
       </section>
 
       <button
+        v-if="canToggleState"
         type="button"
         :class="['students-state-action', alumno.estado === 'inactivo' ? 'activate' : 'deactivate']"
         @click="$emit('toggle-estado', alumno)"
@@ -142,14 +150,20 @@ import {
   PhoneIcon,
 } from '@heroicons/vue/24/outline'
 import { formatMoney } from '@/lib/formatters'
+import MatriculasPanel from '@/components/alumnos/MatriculasPanel.vue'
 
 const props = defineProps({
   alumno: { type: Object, default: null },
   conceptos: { type: Array, default: () => [] },
   pagos: { type: Array, default: () => [] },
+  canEdit: { type: Boolean, default: true },
+  canRegisterPago: { type: Boolean, default: true },
+  canGenerateFee: { type: Boolean, default: true },
+  canToggleState: { type: Boolean, default: true },
+  canManageMatriculas: { type: Boolean, default: false },
 })
 
-defineEmits(['register-pago', 'edit', 'view-estado', 'generar-cuota', 'toggle-estado'])
+defineEmits(['register-pago', 'edit', 'view-estado', 'generar-cuota', 'toggle-estado', 'matricula-changed'])
 
 const statusIcon = computed(() =>
   props.alumno?.estado === 'activo' ? CheckCircleIcon : PauseCircleIcon,

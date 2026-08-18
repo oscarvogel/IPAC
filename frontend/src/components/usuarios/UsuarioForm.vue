@@ -53,7 +53,7 @@
             <label>
               Rol
               <select v-model="form.rol" required>
-                <option value="superadmin">Superadmin</option>
+                <option v-if="canManageSuperadmins" value="superadmin">Superadmin</option>
                 <option value="administracion">Administración</option>
                 <option value="tesoreria">Tesorería</option>
                 <option value="caja">Caja</option>
@@ -69,7 +69,7 @@
               </select>
             </label>
             <label class="checkbox-inline">
-              <input v-model="form.puede_ver_todas_las_sucursales" type="checkbox" />
+              <input v-model="form.puede_ver_todas_las_sucursales" type="checkbox" :disabled="!canManageSuperadmins" />
               Acceso a todas las sucursales
             </label>
             <label v-if="editingId" class="checkbox-inline">
@@ -95,12 +95,14 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { useUsuarios } from '@/composables/useUsuarios'
 import { useToast } from '@/composables/useToast'
+import { useAuth } from '@/composables/useAuth'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
+import { confirmSensitiveUserChange } from '@/lib/swal'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -112,6 +114,8 @@ const emit = defineEmits(['close', 'saved'])
 
 const { createUsuario, updateUsuario } = useUsuarios()
 const toast = useToast()
+const auth = useAuth()
+const canManageSuperadmins = computed(() => auth.role.value === 'superadmin')
 
 const form = reactive({
   username: '',
@@ -173,6 +177,36 @@ watch(
 )
 
 async function handleSubmit() {
+  const previousRole = props.usuario?.perfil?.rol || ''
+  const previousGlobalAccess = Boolean(props.usuario?.perfil?.puede_ver_todas_las_sucursales)
+  const roleLabels = {
+    superadmin: 'Superadmin', administracion: 'Administración', tesoreria: 'Tesorería',
+    caja: 'Caja', consulta: 'Consulta',
+  }
+  const roleRank = { consulta: 0, caja: 1, tesoreria: 2, administracion: 3, superadmin: 4 }
+  const isRoleUpgrade = editingId.value && roleRank[form.rol] > roleRank[previousRole]
+  const grantsGlobalAccess = form.puede_ver_todas_las_sucursales && !previousGlobalAccess
+  const removesAdminPrivilege = editingId.value && (
+    (roleRank[form.rol] < roleRank[previousRole] && roleRank[previousRole] >= roleRank.administracion)
+    || (previousGlobalAccess && !form.puede_ver_todas_las_sucursales)
+  )
+  const deactivatesUser = editingId.value && props.usuario?.is_active && !form.is_active
+  if (isRoleUpgrade || grantsGlobalAccess || removesAdminPrivilege || deactivatesUser) {
+    const confirmation = await confirmSensitiveUserChange({
+      title: deactivatesUser ? 'Desactivar usuario' : 'Confirmar cambio sensible',
+      userName: form.username,
+      description: deactivatesUser
+        ? 'El usuario perderá el acceso al sistema hasta que vuelva a ser activado.'
+        : grantsGlobalAccess
+          ? 'Se concederá acceso a todas las sucursales y ampliará el alcance de este usuario.'
+          : removesAdminPrivilege
+            ? 'Se quitarán privilegios administrativos importantes de este usuario.'
+            : 'El usuario recibirá un rol con mayores privilegios.',
+      beforeRole: previousRole ? roleLabels[previousRole] : undefined,
+      afterRole: editingId.value || form.rol !== 'consulta' ? roleLabels[form.rol] : undefined,
+    })
+    if (!confirmation.isConfirmed) return
+  }
   saving.value = true
   try {
     const payload = {

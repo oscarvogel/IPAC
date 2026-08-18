@@ -8,13 +8,27 @@ const alumnos = ref([])
 const selectedAlumnoId = ref(null)
 const loading = ref(false)
 const error = ref('')
+const pagination = ref({
+  count: 0,
+  page: 1,
+  pageSize: 10,
+  next: null,
+  previous: null,
+})
 
-async function loadAlumnos() {
+async function loadAlumnos(query = {}) {
   loading.value = true
   error.value = ''
   try {
-    const data = await apiRequest('/alumnos/')
+    const data = await apiRequest('/alumnos/', { query })
     alumnos.value = data.results || []
+    pagination.value = {
+      count: Number(data.count || 0),
+      page: Number(data.page || query.page || 1),
+      pageSize: Number(data.page_size || 10),
+      next: data.next || null,
+      previous: data.previous || null,
+    }
     if (!selectedAlumnoId.value && alumnos.value.length) {
       selectedAlumnoId.value = alumnos.value[0].id
     }
@@ -61,6 +75,7 @@ export function useAlumnos() {
   return {
     alumnos: readonly(alumnos),
     selectedAlumnoId,
+    pagination: readonly(pagination),
     selectedAlumno: computed(
       () => alumnos.value.find((a) => a.id === selectedAlumnoId.value) || null,
     ),

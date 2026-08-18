@@ -154,6 +154,17 @@ button:disabled {
   margin: 0;
 }
 
+.ipac-swal-difference-warning {
+  color: #b42318;
+  font-weight: 700;
+}
+
+.ipac-swal-warning-copy {
+  color: #b42318;
+  font-weight: 600;
+  margin-top: 0.75rem;
+}
+
 h1,
 h2,
 h3,
@@ -3569,6 +3580,54 @@ body {
   grid-template-columns: minmax(480px, 1fr) minmax(340px, 390px);
   gap: 18px;
   align-items: start;
+}
+
+.students-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.students-page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.students-page-size select {
+  min-height: 36px;
+  padding: 0 24px 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text-primary);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.students-pagination button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text-primary);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.students-pagination button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.students-inline-error {
+  margin: -8px 0 0;
+  color: var(--danger);
+  font-size: 12px;
 }
 
 .students-list-panel,

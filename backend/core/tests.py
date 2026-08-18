@@ -3,6 +3,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
+from decimal import Decimal
+from datetime import timedelta
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 from unittest.mock import patch
@@ -113,10 +115,29 @@ class ApiInicialTests(APITestCase):
             sucursal=self.posadas,
             puede_ver_todas_las_sucursales=True,
         )
+        self.superadmin = User.objects.create_user("superadmin", password="superadmin123")
+        PerfilUsuario.objects.create(
+            user=self.superadmin,
+            rol=PerfilUsuario.Rol.SUPERADMIN,
+            sucursal=self.posadas,
+            puede_ver_todas_las_sucursales=True,
+        )
         self.cajero = User.objects.create_user("cajero", password="cajero123")
         PerfilUsuario.objects.create(
             user=self.cajero,
             rol=PerfilUsuario.Rol.CAJA,
+            sucursal=self.posadas,
+        )
+        self.tesoreria = User.objects.create_user("tesoreria", password="tesoreria123")
+        PerfilUsuario.objects.create(
+            user=self.tesoreria,
+            rol=PerfilUsuario.Rol.TESORERIA,
+            sucursal=self.posadas,
+        )
+        self.consulta = User.objects.create_user("consulta", password="consulta123")
+        PerfilUsuario.objects.create(
+            user=self.consulta,
+            rol=PerfilUsuario.Rol.CONSULTA,
             sucursal=self.posadas,
         )
         Alumno.objects.create(
@@ -191,6 +212,117 @@ class ApiInicialTests(APITestCase):
         response = self.client.get("/api/alumnos/")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_consulta_can_read_but_cannot_mutate_core_resources(self):
+        self.client.force_authenticate(user=self.consulta)
+        today = timezone.localdate().isoformat()
+
+        self.assertEqual(self.client.get("/api/alumnos/").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get("/api/conceptos/").status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self.client.get(f"/api/reportes/resumen/?desde={today}&hasta={today}").status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/api/alumnos/",
+                {"legajo": "CONSULTA-001", "nombre": "No", "apellido": "Debe", "dni": "40000001", "sucursal": self.posadas.id},
+                format="json",
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/api/pagos/",
+                {"alumno": Alumno.objects.get(legajo="P-001").id, "importe": "1000.00", "medio": Pago.Medio.EFECTIVO},
+                format="json",
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(self.client.post("/api/movimientos-caja/", {}, format="json").status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_tesoreria_can_collect_manage_fees_cash_and_reports_but_not_users(self):
+        self.client.force_authenticate(user=self.tesoreria)
+        alumno = Alumno.objects.get(legajo="P-001")
+        carrera = CarreraCurso.objects.get(nombre="Secretariado")
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        today = timezone.localdate()
+        matricula = Matricula.objects.create(alumno=alumno, carrera=carrera, sucursal=self.posadas, fecha_inicio=today)
+
+        pago = self.client.post(
+            "/api/pagos/",
+            {"alumno": alumno.id, "importe": "1000.00", "medio": Pago.Medio.EFECTIVO},
+            format="json",
+        )
+        cuota = self.client.post(
+            "/api/cuotas/",
+            {"alumno": alumno.id, "matricula": matricula.id, "concepto": concepto.id, "periodo": "2026-08", "fecha_emision": today, "fecha_vencimiento": today, "importe": "25000.00"},
+            format="json",
+        )
+
+        self.assertEqual(pago.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(cuota.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.client.get(f"/api/cajas/hoy/?sucursal={self.posadas.id}").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get(f"/api/reportes/resumen/?desde={today}&hasta={today}").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get("/api/usuarios/").status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_caja_can_collect_and_operate_own_cash_but_not_configure(self):
+        self.client.force_authenticate(user=self.cajero)
+        alumno = Alumno.objects.get(legajo="P-001")
+        pago = self.client.post(
+            "/api/pagos/",
+            {"alumno": alumno.id, "importe": "1000.00", "medio": Pago.Medio.EFECTIVO},
+            format="json",
+        )
+        caja = self.client.get(f"/api/cajas/hoy/?sucursal={self.posadas.id}")
+        movimiento = self.client.post(
+            "/api/movimientos-caja/",
+            {"caja": caja.data["id"], "tipo": MovimientoCaja.Tipo.EGRESO, "medio": Pago.Medio.EFECTIVO, "importe": "100.00", "descripcion": "Insumos"},
+            format="json",
+        )
+
+        self.assertEqual(pago.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(caja.status_code, status.HTTP_200_OK)
+        self.assertEqual(movimiento.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.client.post("/api/cajas/", {"sucursal": self.posadas.id}, format="json").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.post("/api/conceptos/", {}, format="json").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.post("/api/usuarios/", {}, format="json").status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_administracion_cannot_escalate_or_expand_user_scope(self):
+        self.client.force_authenticate(user=self.admin)
+        superadmin = self.client.post(
+            "/api/usuarios/",
+            {"username": "new-superadmin", "password": "secret123", "rol": PerfilUsuario.Rol.SUPERADMIN, "sucursal": self.posadas.id},
+            format="json",
+        )
+        self.assertEqual(superadmin.status_code, status.HTTP_400_BAD_REQUEST)
+
+        target = User.objects.create_user("target", password="target123")
+        PerfilUsuario.objects.create(user=target, rol=PerfilUsuario.Rol.CONSULTA, sucursal=self.posadas)
+        expand_scope = self.client.patch(
+            f"/api/usuarios/{target.id}/",
+            {"puede_ver_todas_las_sucursales": True},
+            format="json",
+        )
+        self.assertEqual(expand_scope.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self_update = self.client.patch(
+            f"/api/usuarios/{self.admin.id}/",
+            {"rol": PerfilUsuario.Rol.CONSULTA},
+            format="json",
+        )
+        self.assertEqual(self_update.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_superadmin_can_manage_privileged_users(self):
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(
+            "/api/usuarios/",
+            {"username": "new-superadmin", "password": "secret123", "rol": PerfilUsuario.Rol.SUPERADMIN, "sucursal": self.posadas.id, "puede_ver_todas_las_sucursales": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["perfil"]["rol"], PerfilUsuario.Rol.SUPERADMIN)
 
     def test_user_without_global_access_only_sees_own_sucursal_students(self):
         self.client.force_authenticate(user=self.cajero)
@@ -275,6 +407,59 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["alumno"], pedro.id)
 
+    def test_student_search_finds_records_after_first_page_by_all_identifiers(self):
+        self.client.force_authenticate(user=self.admin)
+        for index in range(55):
+            Alumno.objects.create(
+                legajo=f"Z-{index:03d}",
+                nombre=f"Nombre {index}",
+                apellido=f"Zeta {index:03d}",
+                dni=f"40{index:06d}",
+                sucursal=self.posadas,
+            )
+        target = Alumno.objects.create(
+            legajo="TARGET-999",
+            nombre="Lucia",
+            apellido="Zzz",
+            dni="49999999",
+            sucursal=self.posadas,
+        )
+
+        second_page = self.client.get("/api/alumnos/?page=3&page_size=25")
+        self.assertEqual(second_page.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_page.data["count"], 58)
+        self.assertEqual(second_page.data["page"], 3)
+        self.assertEqual(second_page.data["page_size"], 25)
+        self.assertIn(target.id, [item["id"] for item in second_page.data["results"]])
+
+        for term in (target.nombre, target.apellido, target.dni, target.legajo):
+            response = self.client.get("/api/alumnos/", {"search": term})
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(response.data["count"], 1)
+            self.assertEqual(response.data["results"][0]["id"], target.id)
+
+    def test_student_filters_apply_server_side_by_branch_state_and_career(self):
+        self.client.force_authenticate(user=self.admin)
+        carrera = CarreraCurso.objects.create(nombre="Curso filtrable", sucursal=self.eldorado)
+        target = Alumno.objects.create(
+            legajo="FILTER-001",
+            nombre="Alumno",
+            apellido="Filtrado",
+            dni="48888888",
+            estado=Alumno.Estado.BAJA,
+            sucursal=self.eldorado,
+            carrera=carrera,
+        )
+
+        response = self.client.get(
+            "/api/alumnos/",
+            {"sucursal": self.eldorado.id, "estado": Alumno.Estado.BAJA, "carrera": carrera.id},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["id"], target.id)
+
     def test_get_today_cashbox_creates_open_cashbox(self):
         self.client.force_authenticate(user=self.admin)
 
@@ -306,6 +491,98 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(movimiento.tipo, MovimientoCaja.Tipo.PAGO)
         self.assertEqual(movimiento.importe, Pago.objects.get(id=response.data["id"]).importe)
         self.assertEqual(movimiento.caja.sucursal, self.posadas)
+
+    def test_payment_creates_open_cashbox_when_daily_cashbox_does_not_exist(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+
+        response = self.client.post(
+            "/api/pagos/",
+            {"alumno": alumno.id, "importe": "1500.00", "medio": Pago.Medio.EFECTIVO},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        caja = CajaDiaria.objects.get(fecha=timezone.localdate(), sucursal=self.posadas, usuario=self.admin)
+        self.assertEqual(caja.estado, CajaDiaria.Estado.ABIERTA)
+        self.assertEqual(str(caja.total_esperado), "1500.00")
+
+    def test_payment_updates_an_existing_open_cashbox(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        caja = CajaDiaria.objects.create(
+            fecha=timezone.localdate(),
+            sucursal=self.posadas,
+            usuario=self.admin,
+            estado=CajaDiaria.Estado.ABIERTA,
+        )
+
+        response = self.client.post(
+            "/api/pagos/",
+            {"alumno": alumno.id, "importe": "2200.00", "medio": Pago.Medio.TRANSFERENCIA},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        caja.refresh_from_db()
+        self.assertEqual(str(caja.total_esperado), "2200.00")
+        self.assertEqual(str(caja.diferencia), "-2200.00")
+
+    def test_payment_is_rejected_without_side_effects_when_cashbox_is_closed(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        caja = CajaDiaria.objects.create(
+            fecha=timezone.localdate(),
+            sucursal=self.posadas,
+            usuario=self.admin,
+            estado=CajaDiaria.Estado.CERRADA,
+            total_contado=Decimal("3500.00"),
+            cerrada_en=timezone.now(),
+        )
+        expected_before = caja.total_esperado
+        difference_before = caja.diferencia
+        payments_before = Pago.objects.count()
+        movements_before = MovimientoCaja.objects.count()
+
+        response = self.client.post(
+            "/api/pagos/",
+            {"alumno": alumno.id, "importe": "2200.00", "medio": Pago.Medio.EFECTIVO},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("La caja del día está cerrada. No se pueden registrar nuevas cobranzas.", str(response.data))
+        self.assertEqual(Pago.objects.count(), payments_before)
+        self.assertEqual(MovimientoCaja.objects.count(), movements_before)
+        caja.refresh_from_db()
+        self.assertEqual(caja.total_esperado, expected_before)
+        self.assertEqual(caja.diferencia, difference_before)
+
+    def test_manual_movement_keeps_closed_cashbox_immutable(self):
+        self.client.force_authenticate(user=self.admin)
+        caja = CajaDiaria.objects.create(
+            fecha=timezone.localdate(),
+            sucursal=self.posadas,
+            usuario=self.admin,
+            estado=CajaDiaria.Estado.CERRADA,
+            total_contado=Decimal("3500.00"),
+            cerrada_en=timezone.now(),
+        )
+        expected_before = caja.total_esperado
+        difference_before = caja.diferencia
+
+        response = self.client.post(
+            "/api/movimientos-caja/",
+            {"caja": caja.id, "tipo": MovimientoCaja.Tipo.INGRESO, "medio": Pago.Medio.EFECTIVO, "importe": "900.00", "descripcion": "Intento posterior al cierre"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("La caja del día está cerrada. No se pueden registrar nuevas cobranzas.", str(response.data))
+        self.assertEqual(MovimientoCaja.objects.filter(caja=caja).count(), 0)
+        caja.refresh_from_db()
+        self.assertEqual(caja.total_esperado, expected_before)
+        self.assertEqual(caja.diferencia, difference_before)
 
     def test_can_register_manual_cashbox_movement_and_close_cashbox(self):
         self.client.force_authenticate(user=self.admin)
@@ -387,6 +664,79 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(cuota.status_code, status.HTTP_201_CREATED)
         self.assertEqual(cuota.data["total"], "23500.00")
         self.assertEqual(cuota.data["saldo"], "23500.00")
+
+    def test_matricula_creation_updates_legacy_student_career_and_history(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        carrera = CarreraCurso.objects.get(nombre="Secretariado")
+        hoy = timezone.localdate()
+
+        response = self.client.post(
+            "/api/matriculas/",
+            {
+                "alumno": alumno.id,
+                "carrera": carrera.id,
+                "fecha_inicio": hoy,
+                "observacion": "Ingreso al ciclo 2026",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        alumno.refresh_from_db()
+        self.assertEqual(alumno.carrera_id, carrera.id)
+        history = self.client.get(f"/api/matriculas/?alumno={alumno.id}")
+        self.assertEqual(history.status_code, status.HTTP_200_OK)
+        self.assertEqual(history.data["count"], 1)
+        self.assertEqual(history.data["results"][0]["estado"], Matricula.Estado.ACTIVA)
+
+    def test_finalizar_matricula_preserves_history_and_clears_legacy_active_career(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        carrera = CarreraCurso.objects.get(nombre="Secretariado")
+        hoy = timezone.localdate()
+        created = self.client.post(
+            "/api/matriculas/",
+            {"alumno": alumno.id, "carrera": carrera.id, "fecha_inicio": hoy},
+            format="json",
+        )
+
+        response = self.client.post(f"/api/matriculas/{created.data['id']}/finalizar/", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["estado"], Matricula.Estado.FINALIZADA)
+        self.assertEqual(response.data["fecha_fin"], hoy.isoformat())
+        self.assertEqual(Matricula.objects.count(), 1)
+        alumno.refresh_from_db()
+        self.assertIsNone(alumno.carrera_id)
+
+    def test_matricula_rejects_cross_branch_and_duplicate_active_career(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        carrera_posadas = CarreraCurso.objects.get(nombre="Secretariado")
+        carrera_eldorado = CarreraCurso.objects.create(nombre="Tecnicatura Eldorado", sucursal=self.eldorado)
+        hoy = timezone.localdate()
+
+        cross_branch = self.client.post(
+            "/api/matriculas/",
+            {"alumno": alumno.id, "carrera": carrera_eldorado.id, "fecha_inicio": hoy},
+            format="json",
+        )
+        first = self.client.post(
+            "/api/matriculas/",
+            {"alumno": alumno.id, "carrera": carrera_posadas.id, "fecha_inicio": hoy},
+            format="json",
+        )
+        duplicate = self.client.post(
+            "/api/matriculas/",
+            {"alumno": alumno.id, "carrera": carrera_posadas.id, "fecha_inicio": hoy},
+            format="json",
+        )
+
+        self.assertEqual(cross_branch.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Matricula.objects.count(), 1)
 
     def test_partial_payment_updates_fee_and_keeps_credit_balance(self):
         self.client.force_authenticate(user=self.admin)
@@ -622,5 +972,107 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(exportacion["Content-Type"], "text/csv; charset=utf-8")
         self.assertIn("Perez, Pedro", exportacion.content.decode("utf-8-sig"))
         self.assertNotIn("Silva, Elena", exportacion.content.decode("utf-8-sig"))
+
+    def test_debtors_calculate_debt_oldest_overdue_fee_and_last_payment(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        carrera = CarreraCurso.objects.get(nombre="Secretariado")
+        alumno.carrera = carrera
+        alumno.telefono = "3764001234"
+        alumno.email = "pedro@example.com"
+        alumno.save(update_fields=["carrera", "telefono", "email"])
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        hoy = timezone.localdate()
+        vencida = Cuota.objects.create(
+            alumno=alumno,
+            concepto=concepto,
+            sucursal=self.posadas,
+            periodo="2026-05",
+            fecha_emision=hoy - timedelta(days=60),
+            fecha_vencimiento=hoy - timedelta(days=30),
+            importe="30000.00",
+            descuento="1000.00",
+        )
+        Cuota.objects.create(
+            alumno=alumno,
+            concepto=concepto,
+            sucursal=self.posadas,
+            periodo="2026-06",
+            fecha_emision=hoy - timedelta(days=20),
+            fecha_vencimiento=hoy + timedelta(days=5),
+            importe="20000.00",
+        )
+        pago = Pago.objects.create(
+            alumno=alumno,
+            concepto=concepto,
+            sucursal=self.posadas,
+            importe="5000.00",
+            medio=Pago.Medio.TRANSFERENCIA,
+            fecha=hoy,
+        )
+        AplicacionPago.objects.create(pago=pago, cuota=vencida, importe="5000.00")
+
+        response = self.client.get("/api/deudores/?sucursal=%s&deuda_min=40000" % self.posadas.id)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        debtor = response.data["results"][0]
+        self.assertEqual(debtor["alumno"]["legajo"], "P-001")
+        self.assertEqual(debtor["sucursal"], self.posadas.id)
+        self.assertEqual(debtor["carrera"], carrera.id)
+        self.assertEqual(debtor["deuda_total"], "44000.00")
+        self.assertEqual(debtor["cuotas_pendientes"], 2)
+        self.assertEqual(debtor["cuotas_vencidas"], 1)
+        self.assertEqual(debtor["cuota_vencida_mas_antigua"], (hoy - timedelta(days=30)).isoformat())
+        self.assertEqual(debtor["fecha_ultimo_pago"], hoy.isoformat())
+        self.assertEqual(debtor["telefono"], "3764001234")
+
+    def test_debtors_support_search_career_overdue_filter_and_branch_scope(self):
+        self.client.force_authenticate(user=self.admin)
+        pedro = Alumno.objects.get(legajo="P-001")
+        concepto_posadas = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        carrera = CarreraCurso.objects.get(nombre="Secretariado")
+        pedro.carrera = carrera
+        pedro.save(update_fields=["carrera"])
+        Cuota.objects.create(
+            alumno=pedro,
+            concepto=concepto_posadas,
+            sucursal=self.posadas,
+            periodo="2026-07",
+            fecha_emision=timezone.localdate() - timedelta(days=20),
+            fecha_vencimiento=timezone.localdate() - timedelta(days=1),
+            importe="18000.00",
+        )
+        concepto_eldorado = ConceptoCobrable.objects.create(
+            nombre="Cuota Eldorado",
+            tipo=ConceptoCobrable.Tipo.CUOTA,
+            importe="12000.00",
+            sucursal=self.eldorado,
+        )
+        elena = Alumno.objects.get(legajo="E-001")
+        Cuota.objects.create(
+            alumno=elena,
+            concepto=concepto_eldorado,
+            sucursal=self.eldorado,
+            periodo="2026-07",
+            fecha_emision=timezone.localdate(),
+            fecha_vencimiento=timezone.localdate(),
+            importe="12000.00",
+        )
+
+        filtered = self.client.get(
+            "/api/deudores/",
+            {"search": "P-001", "carrera": carrera.id, "vencidas": "1", "orden": "antiguedad", "page_size": 5},
+        )
+        self.assertEqual(filtered.status_code, status.HTTP_200_OK)
+        self.assertEqual(filtered.data["count"], 1)
+        self.assertEqual(filtered.data["results"][0]["legajo"], "P-001")
+        self.assertEqual(filtered.data["page_size"], 5)
+
+        self.client.force_authenticate(user=self.cajero)
+        scoped = self.client.get("/api/deudores/")
+        self.assertEqual(scoped.status_code, status.HTTP_200_OK)
+        self.assertTrue(all(item["sucursal"] == self.posadas.id for item in scoped.data["results"]))
+        self.assertNotIn(elena.id, [item["id"] for item in scoped.data["results"]])
 
 # Create your tests here.

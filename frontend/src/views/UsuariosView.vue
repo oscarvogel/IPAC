@@ -78,6 +78,7 @@
         </label>
 
         <button
+          v-if="canManageUsers"
           type="button"
           class="users-primary-action bg-primary hover:bg-primary-hover"
           @click="openNewUsuarioForm"
@@ -91,6 +92,9 @@
     <UsuarioList
       :usuarios="filteredUsuarios"
       :filtered="hasActiveFilters"
+      :can-edit="canManageUsers"
+      :can-deactivate="canManageUsers"
+      :can-manage-superadmins="auth.role.value === 'superadmin'"
       @edit="openEditForm"
       @deactivate="requestDeactivate"
     />
@@ -103,16 +107,6 @@
       @saved="onUsuarioSaved"
     />
 
-    <ConfirmDialog
-      :open="Boolean(pendingDeactivateUsuario)"
-      title="Desactivar usuario"
-      description="El usuario perderá el acceso al CRM hasta que vuelva a ser activado. Su historial permanecerá sin cambios."
-      :subject="pendingDeactivateUsuario?.username || ''"
-      confirm-label="Desactivar usuario"
-      :loading="deactivatingUsuario"
-      @cancel="pendingDeactivateUsuario = null"
-      @confirm="confirmDeactivate"
-    />
     </template>
   </section>
 </template>
@@ -134,14 +128,17 @@ import {
 import { useUsuarios } from '@/composables/useUsuarios'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useToast } from '@/composables/useToast'
+import { useAuth } from '@/composables/useAuth'
+import { confirmSensitiveUserChange } from '@/lib/swal'
 import UsuarioForm from '@/components/usuarios/UsuarioForm.vue'
 import UsuarioList from '@/components/usuarios/UsuarioList.vue'
-import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import AppPageState from '@/components/ui/AppPageState.vue'
 
 const { sucursales, loadCatalogos } = useCatalogos()
 const { usuarios, error: usuariosError, loadUsuarios, deactivateUsuario } = useUsuarios()
 const toast = useToast()
+const auth = useAuth()
+const canManageUsers = computed(() => auth.can('manage-users'))
 
 const searchQuery = ref('')
 const sucursalFilter = ref('todas')
@@ -150,8 +147,6 @@ const onlyActive = ref(false)
 
 const showUsuarioForm = ref(false)
 const editingUsuario = ref(null)
-const pendingDeactivateUsuario = ref(null)
-const deactivatingUsuario = ref(false)
 const pageReady = ref(false)
 const pageError = ref('')
 
@@ -256,11 +251,13 @@ const stats = computed(() => [
 ])
 
 function openNewUsuarioForm() {
+  if (!canManageUsers.value) return
   editingUsuario.value = null
   showUsuarioForm.value = true
 }
 
 function openEditForm(usuario) {
+  if (!canManageUsers.value) return
   editingUsuario.value = usuario
   showUsuarioForm.value = true
 }
@@ -274,21 +271,20 @@ function onUsuarioSaved() {
   closeUsuarioForm()
 }
 
-function requestDeactivate(usuario) {
-  pendingDeactivateUsuario.value = usuario
-}
-
-async function confirmDeactivate() {
-  if (!pendingDeactivateUsuario.value) return
-  deactivatingUsuario.value = true
+async function requestDeactivate(usuario) {
+  if (!canManageUsers.value) return
+  const confirmation = await confirmSensitiveUserChange({
+    title: 'Desactivar usuario',
+    userName: usuario.username,
+    description: 'Perderá el acceso al sistema hasta que vuelva a ser activado. Su historial permanecerá sin cambios.',
+    beforeRole: usuario.perfil?.rol,
+  })
+  if (!confirmation.isConfirmed) return
   try {
-    await deactivateUsuario(pendingDeactivateUsuario.value.id)
+    await deactivateUsuario(usuario.id)
     toast.success('Usuario desactivado')
-    pendingDeactivateUsuario.value = null
   } catch (err) {
     toast.error(err.message || 'No se pudo desactivar el usuario.')
-  } finally {
-    deactivatingUsuario.value = false
   }
 }
 </script>

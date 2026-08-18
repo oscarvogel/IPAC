@@ -29,7 +29,7 @@
         <footer class="modal-actions">
           <button class="secondary-button" type="button" :disabled="loading" @click="requestClose">Cancelar</button>
           <button class="primary-button modal-submit" :disabled="loading" type="submit">
-            <AppButtonContent :loading="loading" label="Confirmar cierre" loading-label="Cerrando…" />
+            <AppButtonContent :loading="loading" label="Cerrar caja" loading-label="Cerrando" />
           </button>
         </footer>
       </form>
@@ -40,25 +40,24 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
-import { formatMoney } from '@/lib/formatters'
+import { formatDate, formatMoney } from '@/lib/formatters'
+import { confirmCierreCaja } from '@/lib/swal'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
   totalEsperado: { type: Number, default: 0 },
+  cajaHoy: { type: Object, default: null },
   loading: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close', 'submit'])
-
 const totalContado = ref(Number(props.totalEsperado || 0).toFixed(2))
 
 function requestClose() {
   if (!props.loading) emit('close')
 }
 
-// Si cambia el total esperado (por un reload de caja), mantenemos el
-// valor cargado solo la primera vez; despues el usuario lo edita a mano.
 watch(
   () => props.totalEsperado,
   (next) => {
@@ -68,7 +67,16 @@ watch(
   },
 )
 
-function submit() {
-  emit('submit', totalContado.value)
+async function submit() {
+  const contado = Number(totalContado.value || 0)
+  const diferencia = contado - Number(props.totalEsperado || 0)
+  const confirmation = await confirmCierreCaja({
+    sucursal: props.cajaHoy?.sucursal_nombre || 'Sin sucursal',
+    fecha: props.cajaHoy?.fecha ? formatDate(props.cajaHoy.fecha) : 'Sin fecha',
+    totalEsperado: props.totalEsperado,
+    totalContado: contado,
+    diferencia,
+  })
+  if (confirmation.isConfirmed) emit('submit', totalContado.value)
 }
 </script>

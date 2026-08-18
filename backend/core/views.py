@@ -1,5 +1,6 @@
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum, Count, Min, Value, F, OuterRef, Subquery, DecimalField, IntegerField, ExpressionWrapper
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
@@ -20,6 +21,22 @@ from django.contrib.auth.models import User
 from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
 from .contexts.importacion.application.import_ipac_workbook import IPACWorkbookImporter
 from .contexts.cobranzas.application.registrar_pago import RegistrarPago
+from .contexts.caja.application.validar_caja import CajaCerradaError, asegurar_caja_abierta
+from .contexts.alumnos.application.gestionar_matricula import GestionarMatricula, MatriculaError
+from .pagination import AlumnoPagination
+from .permissions import (
+    AcademicManagementPermission,
+    AplicacionPagoPermission,
+    CASH_ROLES,
+    CajaPermission,
+    CuotaPermission,
+    ImportacionPermission,
+    MovimientoCajaPermission,
+    PagoPermission,
+    ReadOnlyPermission,
+    SucursalPermission,
+    UserManagementPermission,
+)
 from .serializers import (
     AlumnoSerializer,
     AplicacionPagoSerializer,
@@ -28,6 +45,7 @@ from .serializers import (
     ConceptoCobrableSerializer,
     CurrentUserSerializer,
     CuotaSerializer,
+    DeudorSerializer,
     LoginSerializer,
     MatriculaSerializer,
     MovimientoCajaSerializer,
@@ -43,6 +61,8 @@ def scoped_queryset_for_user(queryset, user):
         return queryset.none()
     if perfil.puede_ver_todas_las_sucursales:
         return queryset
+    if queryset.model is Sucursal:
+        return queryset.filter(pk=perfil.sucursal_id)
     return queryset.filter(sucursal=perfil.sucursal)
 
 
@@ -79,7 +99,7 @@ class CurrentUserView(APIView):
 
 
 class ReporteResumenView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [ReadOnlyPermission]
 
     def get(self, request):
         hoy = timezone.localdate()
@@ -128,6 +148,7 @@ class ReporteResumenView(APIView):
 
 class SucursalViewSet(viewsets.ModelViewSet):
     serializer_class = SucursalSerializer
+    permission_classes = [SucursalPermission]
 
     def get_queryset(self):
         queryset = Sucursal.objects.all()
@@ -139,6 +160,7 @@ class SucursalViewSet(viewsets.ModelViewSet):
 
 class CarreraCursoViewSet(viewsets.ModelViewSet):
     serializer_class = CarreraCursoSerializer
+    permission_classes = [AcademicManagementPermission]
 
     def get_queryset(self):
         return scoped_queryset_for_user(CarreraCurso.objects.select_related("sucursal"), self.request.user)
@@ -146,12 +168,33 @@ class CarreraCursoViewSet(viewsets.ModelViewSet):
 
 class AlumnoViewSet(viewsets.ModelViewSet):
     serializer_class = AlumnoSerializer
+    pagination_class = AlumnoPagination
+    permission_classes = [AcademicManagementPermission]
 
     def get_queryset(self):
-        return scoped_queryset_for_user(
+        queryset = scoped_queryset_for_user(
             Alumno.objects.select_related("sucursal", "carrera"),
             self.request.user,
         )
+
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(nombre__icontains=search)
+                | Q(apellido__icontains=search)
+                | Q(dni__icontains=search)
+                | Q(legajo__icontains=search)
+            )
+        sucursal = self.request.query_params.get("sucursal")
+        estado = self.request.query_params.get("estado")
+        carrera = self.request.query_params.get("carrera")
+        if sucursal:
+            queryset = queryset.filter(sucursal_id=sucursal)
+        if estado:
+            queryset = queryset.filter(estado=estado)
+        if carrera:
+            queryset = queryset.filter(carrera_id=carrera)
+        return queryset
 
     @action(detail=True, methods=["get"], url_path="estado-cuenta")
     def estado_cuenta(self, request, pk=None):
@@ -176,8 +219,93 @@ class AlumnoViewSet(viewsets.ModelViewSet):
         )
 
 
+class DeudoresView(APIView):
+    permission_classes = [ReadOnlyPermission]
+
+    def get(self, request):
+        today = timezone.localdate()
+        cuotas = scoped_queryset_for_user(Cuota.objects.all(), request.user).exclude(
+            estado=Cuota.Estado.ANULADA,
+        )
+        paid_for_cuota = AplicacionPago.objects.filter(cuota_id=OuterRef("pk")).values("cuota_id").annotate(
+            total=Sum("importe"),
+        ).values("total")[:1]
+        cuotas = cuotas.annotate(
+            saldo_calculado=ExpressionWrapper(
+                F("importe") - F("descuento") + F("recargo") - Coalesce(
+                    Subquery(paid_for_cuota, output_field=DecimalField(max_digits=12, decimal_places=2)),
+                    Value(Decimal("0")),
+                ),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            ),
+        ).filter(saldo_calculado__gt=0)
+
+        deuda_total = cuotas.filter(alumno_id=OuterRef("pk")).values("alumno_id").annotate(
+            total=Sum("saldo_calculado"),
+        ).values("total")[:1]
+        cuotas_pendientes = cuotas.filter(alumno_id=OuterRef("pk")).values("alumno_id").annotate(
+            total=Count("id"),
+        ).values("total")[:1]
+        cuotas_vencidas = cuotas.filter(
+            alumno_id=OuterRef("pk"),
+            fecha_vencimiento__lt=today,
+        ).values("alumno_id").annotate(total=Count("id")).values("total")[:1]
+        cuota_vencida_mas_antigua = cuotas.filter(
+            alumno_id=OuterRef("pk"),
+            fecha_vencimiento__lt=today,
+        ).values("alumno_id").annotate(first=Min("fecha_vencimiento")).values("first")[:1]
+
+        queryset = Alumno.objects.select_related("sucursal", "carrera").filter(
+            pk__in=Subquery(cuotas.values("alumno_id").distinct()),
+        ).annotate(
+            deuda_total=Subquery(deuda_total, output_field=DecimalField(max_digits=12, decimal_places=2)),
+            cuotas_pendientes=Subquery(cuotas_pendientes, output_field=IntegerField()),
+            cuotas_vencidas=Subquery(cuotas_vencidas, output_field=IntegerField()),
+            cuota_vencida_mas_antigua=Subquery(cuota_vencida_mas_antigua),
+            fecha_ultimo_pago=Subquery(
+                Pago.objects.filter(alumno_id=OuterRef("pk"))
+                .order_by("-fecha", "-id")
+                .values("fecha")[:1],
+            ),
+        )
+
+        search = request.query_params.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(nombre__icontains=search)
+                | Q(apellido__icontains=search)
+                | Q(dni__icontains=search)
+                | Q(legajo__icontains=search),
+            )
+        sucursal = request.query_params.get("sucursal")
+        carrera = request.query_params.get("carrera")
+        if sucursal:
+            queryset = queryset.filter(sucursal_id=sucursal)
+        if carrera:
+            queryset = queryset.filter(carrera_id=carrera)
+        if request.query_params.get("vencidas", "").lower() in {"1", "true", "si", "sí"}:
+            queryset = queryset.filter(cuotas_vencidas__gt=0)
+
+        for parameter, lookup in (("deuda_min", "deuda_total__gte"), ("deuda_max", "deuda_total__lte")):
+            value = request.query_params.get(parameter)
+            if value:
+                try:
+                    queryset = queryset.filter(**{lookup: Decimal(value)})
+                except (InvalidOperation, TypeError):
+                    return Response({"detail": f"{parameter} debe ser numérico."}, status=status.HTTP_400_BAD_REQUEST)
+
+        ordering = request.query_params.get("orden", "deuda")
+        if ordering == "antiguedad":
+            queryset = queryset.order_by(F("cuota_vencida_mas_antigua").asc(nulls_last=True), "-deuda_total", "apellido", "nombre")
+        else:
+            queryset = queryset.order_by("-deuda_total", F("cuota_vencida_mas_antigua").asc(nulls_last=True), "apellido", "nombre")
+
+        paginator = AlumnoPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response(DeudorSerializer(page, many=True).data)
 class ConceptoCobrableViewSet(viewsets.ModelViewSet):
     serializer_class = ConceptoCobrableSerializer
+    permission_classes = [AcademicManagementPermission]
 
     def get_queryset(self):
         return scoped_queryset_for_user(
@@ -194,15 +322,26 @@ class ConceptoCobrableViewSet(viewsets.ModelViewSet):
 
 class MatriculaViewSet(viewsets.ModelViewSet):
     serializer_class = MatriculaSerializer
+    permission_classes = [AcademicManagementPermission]
 
     def get_queryset(self):
         queryset = scoped_queryset_for_user(Matricula.objects.select_related("alumno", "carrera", "sucursal"), self.request.user)
         alumno_id = self.request.query_params.get("alumno")
         return queryset.filter(alumno_id=alumno_id) if alumno_id else queryset
 
+    @action(detail=True, methods=["post"], url_path="finalizar")
+    def finalizar(self, request, pk=None):
+        matricula = self.get_object()
+        try:
+            finalized = GestionarMatricula().finalizar(matricula, fecha_fin=request.data.get("fecha_fin") or timezone.localdate())
+        except MatriculaError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(finalized).data)
+
 
 class CuotaViewSet(viewsets.ModelViewSet):
     serializer_class = CuotaSerializer
+    permission_classes = [CuotaPermission]
 
     def get_queryset(self):
         queryset = scoped_queryset_for_user(Cuota.objects.select_related("alumno", "matricula", "concepto", "sucursal").prefetch_related("aplicaciones"), self.request.user)
@@ -269,6 +408,7 @@ class CuotaViewSet(viewsets.ModelViewSet):
 
 class AplicacionPagoViewSet(viewsets.ModelViewSet):
     serializer_class = AplicacionPagoSerializer
+    permission_classes = [AplicacionPagoPermission]
 
     def get_queryset(self):
         cuotas = scoped_queryset_for_user(Cuota.objects.all(), self.request.user)
@@ -277,6 +417,7 @@ class AplicacionPagoViewSet(viewsets.ModelViewSet):
 
 class PagoViewSet(viewsets.ModelViewSet):
     serializer_class = PagoSerializer
+    permission_classes = [PagoPermission]
 
     def get_queryset(self):
         queryset = scoped_queryset_for_user(
@@ -355,6 +496,7 @@ class PagoViewSet(viewsets.ModelViewSet):
 
 class CajaDiariaViewSet(viewsets.ModelViewSet):
     serializer_class = CajaDiariaSerializer
+    permission_classes = [CajaPermission]
 
     def get_queryset(self):
         return scoped_queryset_for_user(
@@ -373,12 +515,23 @@ class CajaDiariaViewSet(viewsets.ModelViewSet):
             sucursal = allowed.first()
         if not sucursal:
             return Response({"detail": "Sucursal invalida."}, status=status.HTTP_400_BAD_REQUEST)
-        caja = get_or_create_cashbox(request.user, sucursal)
+        if request.user.perfil.rol in CASH_ROLES:
+            caja = get_or_create_cashbox(request.user, sucursal)
+        else:
+            caja = CajaDiaria.objects.filter(
+                fecha=timezone.localdate(),
+                sucursal=sucursal,
+                usuario=request.user,
+            ).first()
+            if not caja:
+                return Response({"detail": "No hay una caja disponible para consultar."}, status=status.HTTP_404_NOT_FOUND)
         return Response(self.get_serializer(caja).data)
 
     @action(detail=True, methods=["post"], url_path="cerrar")
+    @transaction.atomic
     def cerrar(self, request, pk=None):
-        caja = self.get_object()
+        caja_ref = self.get_object()
+        caja = CajaDiaria.objects.select_for_update().get(pk=caja_ref.pk)
         if caja.estado == CajaDiaria.Estado.CERRADA:
             return Response({"detail": "La caja ya esta cerrada."}, status=status.HTTP_400_BAD_REQUEST)
         serializer = self.get_serializer(caja, data={"total_contado": request.data.get("total_contado", 0)}, partial=True)
@@ -392,6 +545,7 @@ class CajaDiariaViewSet(viewsets.ModelViewSet):
 
 class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
+    permission_classes = [UserManagementPermission]
 
     def get_queryset(self):
         perfil = getattr(self.request.user, "perfil", None)
@@ -409,6 +563,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class MovimientoCajaViewSet(viewsets.ModelViewSet):
     serializer_class = MovimientoCajaSerializer
+    permission_classes = [MovimientoCajaPermission]
 
     def get_queryset(self):
         queryset = MovimientoCaja.objects.select_related("caja", "pago")
@@ -417,6 +572,18 @@ class MovimientoCajaViewSet(viewsets.ModelViewSet):
         if caja_id:
             queryset = queryset.filter(caja_id=caja_id)
         return queryset
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        caja_id = request.data.get("caja")
+        if caja_id:
+            caja = CajaDiaria.objects.select_for_update().filter(pk=caja_id).first()
+            if caja:
+                try:
+                    asegurar_caja_abierta(caja)
+                except CajaCerradaError as exc:
+                    raise ValidationError({"caja": str(exc)}) from exc
+        return super().create(request, *args, **kwargs)
 
 
 IMPORT_ROLES = {PerfilUsuario.Rol.SUPERADMIN, PerfilUsuario.Rol.ADMINISTRACION}
@@ -439,7 +606,7 @@ def _can_import(user):
 
 
 class ImportacionPlantillasView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [ImportacionPermission]
 
     def get(self, request):
         return Response(
@@ -457,7 +624,7 @@ class ImportacionPlantillasView(APIView):
 
 
 class ImportacionPlantillaCsvView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [ImportacionPermission]
 
     def get(self, request, kind):
         columns = TEMPLATE_COLUMNS.get(kind)
@@ -473,7 +640,7 @@ class ImportacionPlantillaCsvView(APIView):
 
 class ImportacionWorkbookView(APIView):
     parser_classes = [MultiPartParser, FormParser]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [ImportacionPermission]
 
     def post(self, request):
         if not _can_import(request.user):

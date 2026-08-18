@@ -152,12 +152,11 @@ const { selectedSucursalId } = useDashboardFilters()
 
 const alumnosCount = ref(0)
 const pagosMes = ref([])
+const pagosMesCount = ref(0)
+const totalCobradoMes = ref(0)
 const pageReady = ref(false)
 const pageError = ref('')
 const ultimosPagos = computed(() => pagosMes.value.slice(0, 5))
-const totalCobradoMes = computed(() =>
-  pagosMes.value.reduce((sum, pago) => sum + Number(pago.importe || 0), 0),
-)
 
 const { cajaHoy, cajaMovimientos, error: cajaError, loadCajaHoy } = caja
 const cajaTotalEsperado = computed(() =>
@@ -225,19 +224,19 @@ async function cargarResumen(sucursalId) {
   const hoy = new Date()
   const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
   const iso = (date) => date.toISOString().slice(0, 10)
-  const [alumnos, pagos] = await Promise.all([
-    apiRequest('/alumnos/'),
+  const [alumnos, pagos, resumen] = await Promise.all([
+    apiRequest('/alumnos/', { query: { sucursal: sucursalId } }),
     apiRequest('/pagos/', {
       query: { desde: iso(primero), hasta: iso(hoy), sucursal: sucursalId },
     }),
+    apiRequest('/reportes/resumen/', {
+      query: { desde: iso(primero), hasta: iso(hoy), sucursal: sucursalId },
+    }),
   ])
-  const alumnosFiltrados = sucursalId
-    ? (alumnos.results || []).filter(
-      (alumno) => String(alumno.sucursal) === String(sucursalId),
-    )
-    : (alumnos.results || [])
-  alumnosCount.value = alumnosFiltrados.length
+  alumnosCount.value = Number(alumnos.count || 0)
   pagosMes.value = pagos.results || []
+  pagosMesCount.value = Number(resumen.cobranzas?.cantidad_pagos || 0)
+  totalCobradoMes.value = Number(resumen.cobranzas?.total || 0)
 }
 
 const stats = computed(() => [
@@ -258,13 +257,13 @@ const stats = computed(() => [
   {
     label: 'Cobrado del mes',
     value: `$ ${formatMoney(totalCobradoMes.value, { fractionDigits: 2 })}`,
-    detail: `${pagosMes.value.length} pagos`,
+    detail: `${pagosMesCount.value} pagos`,
     tone: 'green',
     icon: BanknotesIcon,
   },
   {
     label: 'Pagos del mes',
-    value: pagosMes.value.length,
+    value: pagosMesCount.value,
     detail: 'filtrados por período actual',
     tone: 'violet',
     icon: CreditCardIcon,

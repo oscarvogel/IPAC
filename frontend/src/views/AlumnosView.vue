@@ -45,7 +45,7 @@
           <input
             v-model="searchQuery"
             type="search"
-            placeholder="Buscar por nombre, DNI o legajo"
+            placeholder="Buscar por nombre, apellido, DNI o legajo"
           />
         </label>
 
@@ -68,12 +68,22 @@
         </label>
 
         <button
+          v-if="canManageAlumnos"
           type="button"
           class="students-primary-action bg-primary hover:bg-primary-hover"
           @click="openNewAlumnoForm"
         >
           <UserPlusIcon aria-hidden="true" />
           <span>Nuevo alumno</span>
+        </button>
+        <button
+          v-if="canManageFees"
+          type="button"
+          class="students-primary-action bg-primary hover:bg-primary-hover"
+          @click="openGenerarCuotasMasivas"
+        >
+          <UserPlusIcon aria-hidden="true" />
+          <span>Generar cuotas masivas</span>
         </button>
       </div>
     </section>
@@ -83,19 +93,60 @@
         :alumnos="visibleAlumnos"
         :selected-alumno="selectedAlumno"
         :filtered="hasActiveFilters"
+        :total-count="pagination.count"
         @select="onSelect"
       />
       <AlumnoDetail
         :alumno="selectedAlumno"
         :conceptos="conceptos"
         :pagos="pagos"
+        :can-edit="canManageAlumnos"
+        :can-register-pago="canRegisterPayments"
+        :can-generate-fee="canManageFees"
+        :can-toggle-state="canManageAlumnos"
+        :can-manage-matriculas="canManageAlumnos"
         @register-pago="openPagoForm"
         @edit="openEditForm"
         @view-estado="openEstadoCuenta"
         @generar-cuota="openGenerarCuota"
         @toggle-estado="handleToggleEstado"
+        @matricula-changed="onMatriculaChanged"
       />
     </div>
+
+    <p v-if="alumnosError" class="students-inline-error" role="alert">{{ alumnosError }}</p>
+
+    <nav
+      class="students-pagination"
+      aria-label="Paginación de alumnos"
+    >
+      <label class="students-page-size">
+        <span>Mostrar</span>
+        <select v-model="pageSize" aria-label="Cantidad de alumnos por página">
+          <option v-for="option in pageSizeOptions" :key="option" :value="option">
+            {{ option }}
+          </option>
+        </select>
+        <span>por página</span>
+      </label>
+      <button
+        type="button"
+        :disabled="alumnosLoading || pagination.page <= 1"
+        @click="goToPage(pagination.page - 1)"
+      >
+        Anterior
+      </button>
+      <span aria-live="polite">
+        Página {{ pagination.page }} de {{ totalPages }} · {{ pagination.count }} alumnos
+      </span>
+      <button
+        type="button"
+        :disabled="alumnosLoading || pagination.page >= totalPages"
+        @click="goToPage(pagination.page + 1)"
+      >
+        Siguiente
+      </button>
+    </nav>
 
     <AlumnoForm
       :open="showAlumnoForm"
@@ -126,6 +177,15 @@
       @saved="onCuotaGenerada"
     />
 
+    <GenerarCuotasMasivasModal
+      :open="showGenerarCuotasMasivas"
+      :sucursales="sucursales"
+      :carreras="carreras"
+      :conceptos="conceptos"
+      @close="showGenerarCuotasMasivas = false"
+      @saved="onCuotasMasivasSaved"
+    />
+
     <ConfirmDialog
       :open="Boolean(pendingDeactivateAlumno)"
       title="Dar de baja al alumno"
@@ -141,7 +201,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   BuildingStorefrontIcon,
   CheckCircleIcon,
@@ -156,18 +216,22 @@ import { useAlumnos } from '@/composables/useAlumnos'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { usePagos } from '@/composables/usePagos'
 import { useToast } from '@/composables/useToast'
+import { useAuth } from '@/composables/useAuth'
 import AlumnoList from '@/components/alumnos/AlumnoList.vue'
 import AlumnoDetail from '@/components/alumnos/AlumnoDetail.vue'
 import AlumnoForm from '@/components/alumnos/AlumnoForm.vue'
 import PagoForm from '@/components/alumnos/PagoForm.vue'
 import EstadoCuentaModal from '@/components/alumnos/EstadoCuentaModal.vue'
 import GenerarCuotaModal from '@/components/alumnos/GenerarCuotaModal.vue'
+import GenerarCuotasMasivasModal from '@/components/alumnos/GenerarCuotasMasivasModal.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import AppPageState from '@/components/ui/AppPageState.vue'
 
 const {
   alumnos,
   selectedAlumno,
+  pagination,
+  loading: alumnosLoading,
   error: alumnosError,
   setSelected,
   loadAlumnos,
@@ -175,18 +239,26 @@ const {
   reactivateAlumno,
 } = useAlumnos()
 const toast = useToast()
+const auth = useAuth()
+const canManageAlumnos = computed(() => auth.can('manage-alumnos'))
+const canRegisterPayments = computed(() => auth.can('register-payments'))
+const canManageFees = computed(() => auth.can('manage-fees'))
 const { sucursales, conceptos, loadCatalogos } = useCatalogos()
 const { pagos, loadPagos } = usePagos()
 
 const searchQuery = ref('')
 const sucursalFilter = ref('todas')
 const onlyActive = ref(false)
+const pageSize = ref(10)
+const pageSizeOptions = [5, 10, 25]
+const currentPage = ref(1)
 
 const showAlumnoForm = ref(false)
 const editingAlumno = ref(null)
 const showPagoForm = ref(false)
 const showEstadoCuenta = ref(false)
 const showGenerarCuota = ref(false)
+const showGenerarCuotasMasivas = ref(false)
 const pendingDeactivateAlumno = ref(null)
 const changingAlumnoStatus = ref(false)
 const pageReady = ref(false)
@@ -194,11 +266,45 @@ const pageError = ref('')
 
 onMounted(loadPage)
 
+watch(
+  [searchQuery, sucursalFilter, onlyActive, pageSize],
+  (_, __, onCleanup) => {
+    currentPage.value = 1
+    const timer = setTimeout(() => {
+      loadStudentsPage()
+    }, 250)
+    onCleanup(() => clearTimeout(timer))
+  },
+)
+
+const totalPages = computed(() => Math.max(1, Math.ceil(pagination.value.count / pagination.value.pageSize)))
+
+function studentQuery() {
+  return {
+    page: currentPage.value,
+    page_size: pageSize.value,
+    search: searchQuery.value.trim(),
+    sucursal: sucursalFilter.value === 'todas' ? '' : sucursalFilter.value,
+    estado: onlyActive.value ? 'activo' : '',
+  }
+}
+
+async function loadStudentsPage() {
+  await loadAlumnos(studentQuery())
+  if (alumnosError.value) toast.error(alumnosError.value)
+}
+
+async function goToPage(page) {
+  if (page < 1 || page > totalPages.value || page === pagination.value.page) return
+  currentPage.value = page
+  await loadStudentsPage()
+}
+
 async function loadPage() {
   pageReady.value = false
   pageError.value = ''
   try {
-    await Promise.all([loadCatalogos(), loadAlumnos(), loadPagos()])
+    await Promise.all([loadCatalogos(), loadAlumnos(studentQuery()), loadPagos()])
     if (alumnosError.value) throw new Error(alumnosError.value)
     pageReady.value = true
   } catch (err) {
@@ -227,6 +333,7 @@ function closeAlumnoForm() {
 
 function onAlumnoSaved(saved) {
   setSelected(saved.id)
+  loadStudentsPage()
 }
 
 function openPagoForm() {
@@ -251,8 +358,20 @@ function closeEstadoCuenta() {
   showEstadoCuenta.value = false
 }
 
+async function onMatriculaChanged() {
+  await loadStudentsPage()
+}
+
 function onCuotaGenerada() {
   showGenerarCuota.value = false
+}
+
+function openGenerarCuotasMasivas() {
+  if (canManageFees.value) showGenerarCuotasMasivas.value = true
+}
+
+function onCuotasMasivasSaved() {
+  showGenerarCuotasMasivas.value = false
 }
 
 async function handleToggleEstado(alumno) {
@@ -263,6 +382,7 @@ async function handleToggleEstado(alumno) {
 
   try {
     await reactivateAlumno(alumno.id)
+    await loadStudentsPage()
     toast.success('Alumno reactivado')
   } catch (err) {
     toast.error(err.message || 'Error al cambiar estado del alumno')
@@ -274,6 +394,7 @@ async function confirmDeactivateAlumno() {
   changingAlumnoStatus.value = true
   try {
     await deactivateAlumno(pendingDeactivateAlumno.value.id)
+    await loadStudentsPage()
     toast.success('Alumno dado de baja')
     pendingDeactivateAlumno.value = null
   } catch (err) {
@@ -283,32 +404,7 @@ async function confirmDeactivateAlumno() {
   }
 }
 
-const branchAlumnos = computed(() => {
-  if (sucursalFilter.value === 'todas') return alumnos.value
-  return alumnos.value.filter(
-    (alumno) => String(alumno.sucursal) === String(sucursalFilter.value),
-  )
-})
-
-const visibleAlumnos = computed(() => {
-  const query = searchQuery.value.trim().toLocaleLowerCase('es')
-  return branchAlumnos.value.filter((alumno) => {
-    if (onlyActive.value && alumno.estado !== 'activo') return false
-    if (!query) return true
-    const searchable = [
-      alumno.legajo,
-      alumno.nombre,
-      alumno.apellido,
-      alumno.dni,
-      alumno.email,
-      alumno.sucursal_nombre,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLocaleLowerCase('es')
-    return searchable.includes(query)
-  })
-})
+const visibleAlumnos = computed(() => alumnos.value)
 
 const hasActiveFilters = computed(() => Boolean(
   searchQuery.value.trim()
@@ -317,11 +413,11 @@ const hasActiveFilters = computed(() => Boolean(
 ))
 
 const activeCount = computed(
-  () => branchAlumnos.value.filter((alumno) => alumno.estado === 'activo').length,
+  () => alumnos.value.filter((alumno) => alumno.estado === 'activo').length,
 )
 
 const inactiveCount = computed(
-  () => branchAlumnos.value.filter((alumno) => alumno.estado !== 'activo').length,
+  () => alumnos.value.filter((alumno) => alumno.estado !== 'activo').length,
 )
 
 const selectedBranchName = computed(() => {
@@ -335,7 +431,7 @@ const selectedBranchName = computed(() => {
 const stats = computed(() => [
   {
     label: 'Total de alumnos',
-    value: branchAlumnos.value.length,
+    value: pagination.value.count,
     detail: selectedBranchName.value,
     tone: 'primary',
     icon: UserGroupIcon,
