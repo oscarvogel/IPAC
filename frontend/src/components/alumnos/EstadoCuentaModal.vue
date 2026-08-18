@@ -13,7 +13,7 @@
           <div>
             <p class="eyebrow">Estado de cuenta</p>
             <h2 id="estado-cuenta-title">{{ alumno?.nombre }} {{ alumno?.apellido }}</h2>
-            <span>Resumen de cuotas, pagos y saldo a favor.</span>
+            <span>Cuenta corriente real con cuotas, pagos, aplicaciones y saldos.</span>
           </div>
           <button class="icon-button" type="button" aria-label="Cerrar estado de cuenta" @click="requestClose">
             <XMarkIcon aria-hidden="true" />
@@ -27,7 +27,7 @@
         <template v-else-if="data">
           <section class="account-totals">
             <article>
-              <span>Cuotas</span>
+              <span>Total cuotas</span>
               <strong>$ {{ formatMoney(data.resumen.total_cuotas) }}</strong>
             </article>
             <article>
@@ -42,21 +42,36 @@
               <span>Saldo a favor</span>
               <strong>$ {{ formatMoney(data.resumen.saldo_a_favor) }}</strong>
             </article>
+            <article class="account-net-total">
+              <span>Saldo neto</span>
+              <strong :class="netBalanceClass">$ {{ formatMoney(Math.abs(Number(data.resumen.saldo_neto || 0))) }}</strong>
+              <small>{{ netBalanceLabel }}</small>
+            </article>
           </section>
 
           <section class="modal-section">
             <h3>Cuotas</h3>
             <div class="account-list">
-              <div v-for="cuota in data.cuotas" :key="cuota.id" class="account-row">
-                <div>
+              <div v-for="cuota in data.cuotas" :key="cuota.id" class="account-row account-row-detailed">
+                <div class="account-main">
                   <strong>{{ cuota.concepto_nombre }}</strong>
                   <span>
                     {{ cuota.periodo }} ·
                     vto {{ formatDate(cuota.fecha_vencimiento) }} ·
-                    <em :class="`estado-${cuota.estado}`">{{ cuota.estado }}</em>
+                    <em :class="`estado-${cuota.estado}`">{{ estadoLabel(cuota.estado) }}</em>
                   </span>
+                  <div class="account-breakdown">
+                    <span>Importe: $ {{ formatMoney(cuota.importe) }}</span>
+                    <span v-if="Number(cuota.descuento || 0) > 0">Descuento: -$ {{ formatMoney(cuota.descuento) }}</span>
+                    <span v-if="Number(cuota.recargo || 0) > 0">Recargo: +$ {{ formatMoney(cuota.recargo) }}</span>
+                    <span>Total: $ {{ formatMoney(cuota.total) }}</span>
+                    <span>Pagado: $ {{ formatMoney(cuota.total_pagado) }}</span>
+                  </div>
                 </div>
-                <strong>$ {{ formatMoney(cuota.saldo) }}</strong>
+                <div class="account-balance">
+                  <span>Saldo</span>
+                  <strong>$ {{ formatMoney(cuota.saldo) }}</strong>
+                </div>
               </div>
               <p v-if="!data.cuotas.length" class="empty-state flat">
                 Sin cuotas registradas.
@@ -67,17 +82,34 @@
           <section class="modal-section">
             <h3>Pagos</h3>
             <div class="account-list">
-              <div v-for="pago in data.pagos" :key="pago.id" class="account-row">
-                <div>
+              <div v-for="pago in data.pagos" :key="pago.id" class="account-row account-row-detailed payment-row">
+                <div class="account-main">
                   <strong>{{ pago.concepto_nombre || 'Pago a cuenta' }}</strong>
                   <span>
                     {{ formatDate(pago.fecha) }} ·
-                    {{ pago.medio }} ·
+                    {{ medioLabel(pago.medio) }} ·
                     <em v-if="pago.numero_recibo">{{ pago.numero_recibo }}</em>
                   </span>
+
+                  <div class="account-breakdown">
+                    <span>Importe: $ {{ formatMoney(pago.importe) }}</span>
+                    <span>Aplicado: $ {{ formatMoney(pago.importe_aplicado) }}</span>
+                    <span v-if="Number(pago.saldo_a_favor || 0) > 0">Saldo a favor: $ {{ formatMoney(pago.saldo_a_favor) }}</span>
+                  </div>
+
+                  <div v-if="pago.aplicaciones?.length" class="payment-applications">
+                    <span class="payment-applications-title">Aplicaciones</span>
+                    <div v-for="aplicacion in pago.aplicaciones" :key="aplicacion.id" class="payment-application-row">
+                      <span>{{ cuotaAplicacionLabel(aplicacion.cuota) }}</span>
+                      <strong>$ {{ formatMoney(aplicacion.importe) }}</strong>
+                    </div>
+                  </div>
+                  <p v-else-if="Number(pago.saldo_a_favor || 0) > 0" class="payment-unapplied-note">
+                    Este pago todavía no fue aplicado a cuotas.
+                  </p>
                 </div>
+
                 <div class="account-row-end">
-                  <strong>$ {{ formatMoney(pago.importe) }}</strong>
                   <button
                     v-if="pago.id"
                     class="print-recibo-btn"
@@ -153,8 +185,53 @@ async function printRecibo(pago) {
 
 const paidTotal = computed(() => {
   if (!data.value?.pagos) return 0
-  return data.value.pagos.reduce((sum, p) => sum + Number(p.importe || 0), 0)
+  return data.value.pagos.reduce((sum, pago) => sum + Number(pago.importe || 0), 0)
 })
+
+const cuotasById = computed(() => {
+  const entries = (data.value?.cuotas || []).map((cuota) => [Number(cuota.id), cuota])
+  return new Map(entries)
+})
+
+const netBalanceClass = computed(() => {
+  const value = Number(data.value?.resumen?.saldo_neto || 0)
+  if (value > 0) return 'balance-debt'
+  if (value < 0) return 'balance-credit'
+  return 'balance-zero'
+})
+
+const netBalanceLabel = computed(() => {
+  const value = Number(data.value?.resumen?.saldo_neto || 0)
+  if (value > 0) return 'Deuda neta del alumno'
+  if (value < 0) return 'Crédito neto a favor del alumno'
+  return 'Cuenta al día'
+})
+
+function estadoLabel(estado) {
+  const labels = {
+    pendiente: 'Pendiente',
+    parcial: 'Parcial',
+    pagada: 'Pagada',
+    anulada: 'Anulada',
+  }
+  return labels[estado] || estado
+}
+
+function medioLabel(medio) {
+  const labels = {
+    efectivo: 'Efectivo',
+    transferencia: 'Transferencia',
+    tarjeta: 'Tarjeta',
+    otro: 'Otro',
+  }
+  return labels[medio] || medio
+}
+
+function cuotaAplicacionLabel(cuotaId) {
+  const cuota = cuotasById.value.get(Number(cuotaId))
+  if (!cuota) return `Cuota #${cuotaId}`
+  return `${cuota.concepto_nombre} · ${cuota.periodo}`
+}
 
 watch(
   () => [props.open, props.alumno?.id],
@@ -183,6 +260,82 @@ watch(
 .estado-pagada { color: #047857; }
 .estado-anulada { color: #6b7280; text-decoration: line-through; }
 
+.account-net-total {
+  min-width: 190px;
+}
+
+.account-net-total small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.balance-debt { color: #b91c1c; }
+.balance-credit { color: #047857; }
+.balance-zero { color: var(--text); }
+
+.account-row-detailed {
+  align-items: flex-start;
+}
+
+.account-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.account-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 7px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.account-balance {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  min-width: 110px;
+}
+
+.account-balance span {
+  color: var(--muted-text);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.payment-applications {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.payment-applications-title {
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.payment-application-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+}
+
+.payment-unapplied-note {
+  margin: 8px 0 0;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
 .account-row-end {
   display: flex;
   align-items: center;
@@ -208,5 +361,20 @@ watch(
 
 .print-recibo-btn:disabled {
   opacity: 0.5;
+}
+
+@media (max-width: 700px) {
+  .account-row-detailed {
+    display: grid;
+    gap: 10px;
+  }
+
+  .account-balance {
+    justify-items: start;
+  }
+
+  .payment-row .account-row-end {
+    justify-content: flex-end;
+  }
 }
 </style>
