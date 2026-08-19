@@ -5557,6 +5557,13 @@ body {
   white-space: nowrap;
 }
 
+.concepts-career-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .concepts-status svg {
   width: 14px;
   height: 14px;

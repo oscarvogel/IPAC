@@ -46,6 +46,11 @@
               <textarea v-model="form.observacion" rows="3" placeholder="Detalle opcional" />
             </label>
           </div>
+          <p class="matricula-form-help">
+            {{ editing
+              ? 'La matrícula permanece activa. Para cerrarla, usá la acción «Finalizar» desde el historial.'
+              : 'Se creará como matrícula activa. Para cerrarla, usá la acción «Finalizar» desde el historial.' }}
+          </p>
         </section>
 
         <footer class="modal-actions">
@@ -141,5 +146,12 @@ async function handleSubmit() {
 .matricula-observation-field textarea {
   width: 100%;
   resize: vertical;
+}
+
+.matricula-form-help {
+  margin: .9rem 0 0;
+  color: var(--text-secondary, #64748b);
+  font-size: .82rem;
+  line-height: 1.4;
 }
 </style>

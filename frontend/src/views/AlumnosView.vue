@@ -435,7 +435,7 @@ const stats = computed(() => [
   {
     label: 'Alumnos activos',
     value: alumnoStats.value.activos,
-    detail: 'con matrícula vigente',
+    detail: 'legajos activos',
     tone: 'success',
     icon: CheckCircleIcon,
   },

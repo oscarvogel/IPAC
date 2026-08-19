@@ -75,6 +75,7 @@ const { actions: providedActions } = useTopbarActions()
 const titles = {
   '/dashboard': 'Dashboard',
   '/alumnos': 'Alumnos',
+  '/deudores': 'Deudores',
   '/caja': 'Caja',
   '/conceptos': 'Conceptos',
   '/reportes': 'Reportes',

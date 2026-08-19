@@ -56,7 +56,14 @@
                 {{ concepto.sucursal_nombre || 'Sin sucursal' }}
               </span>
             </td>
-            <td class="concepts-career">{{ concepto.carrera_nombre || 'Todas las carreras' }}</td>
+            <td class="concepts-career">
+              <span
+                class="concepts-career-text"
+                :title="concepto.carrera_nombre || 'Todas las carreras'"
+              >
+                {{ concepto.carrera_nombre || 'Todas las carreras' }}
+              </span>
+            </td>
             <td>
               <span :class="['concepts-status', concepto.activo ? 'active' : 'inactive']">
                 <component :is="concepto.activo ? CheckCircleIcon : PauseCircleIcon" aria-hidden="true" />

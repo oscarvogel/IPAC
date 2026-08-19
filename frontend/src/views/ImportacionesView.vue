@@ -32,11 +32,19 @@
         </label>
       </div>
 
-      <label class="imports-file-field">
-        <span>Archivo a cargar</span>
-        <input type="file" accept=".xlsx,.csv" @change="onFileChange" />
-        <small>{{ selectedFileName || 'Todavía no seleccionaste un archivo.' }}</small>
-      </label>
+      <div class="imports-file-field">
+        <span>Archivo a revisar</span>
+        <div class="imports-file-picker">
+          <label class="imports-file-button">
+            <span>Elegir archivo</span>
+            <input type="file" accept=".xlsx,.csv" @change="onFileChange" />
+          </label>
+          <span class="imports-file-name" aria-live="polite">
+            {{ selectedFileName || 'Ningún archivo seleccionado' }}
+          </span>
+        </div>
+        <small>Formatos aceptados: Excel (.xlsx) o CSV (.csv).</small>
+      </div>
 
       <div class="imports-actions">
         <button type="button" class="secondary-button" :disabled="loading" @click="downloadTemplate('alumnos')">
@@ -234,9 +242,14 @@ async function downloadTemplate(kind) {
 .imports-fields label, .imports-file-field { display: grid; gap: .45rem; font-weight: 600; }
 .imports-fields span, .imports-file-field span { color: var(--color-text-primary, #1f2937); }
 .imports-fields small { font-weight: 400; color: var(--color-text-secondary, #64748b); }
-.imports-fields input, .imports-fields select, .imports-file-field input { border: 1px solid var(--color-border, #cbd5e1); border-radius: .65rem; padding: .7rem .8rem; background: var(--color-surface, #fff); }
+.imports-fields input, .imports-fields select { border: 1px solid var(--color-border, #cbd5e1); border-radius: .65rem; padding: .7rem .8rem; background: var(--color-surface, #fff); }
 .imports-file-field { margin-top: 1rem; }
 .imports-file-field small, .imports-hint { color: var(--color-text-secondary, #64748b); font-weight: 400; }
+.imports-file-picker { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.imports-file-button { display: inline-flex !important; align-items: center; justify-content: center; flex: 0 0 auto; border: 1px solid var(--color-primary, #1261a0); border-radius: .65rem; padding: .7rem .9rem; color: var(--color-primary, #1261a0) !important; background: var(--color-surface, #fff); cursor: pointer; }
+.imports-file-button input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.imports-file-button:focus-within { outline: 3px solid color-mix(in srgb, var(--color-primary, #1261a0) 25%, transparent); outline-offset: 2px; }
+.imports-file-name { min-width: 0; overflow: hidden; color: var(--color-text-secondary, #64748b) !important; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .imports-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .65rem; margin-top: 1.25rem; }
 .imports-actions button { border: 0; border-radius: .65rem; padding: .7rem 1rem; cursor: pointer; font-weight: 700; }
 .primary-button { background: var(--color-primary, #1261a0); color: white; }
@@ -263,5 +276,7 @@ async function downloadTemplate(kind) {
   .imports-fields, .imports-summary-grid { grid-template-columns: 1fr; }
   .imports-actions { justify-content: stretch; }
   .imports-actions button { width: 100%; }
+  .imports-file-picker { align-items: stretch; flex-direction: column; }
+  .imports-file-button { width: 100%; }
 }
 </style>
