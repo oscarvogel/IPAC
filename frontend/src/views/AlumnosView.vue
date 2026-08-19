@@ -10,10 +10,9 @@
     <template v-else>
     <div class="students-stats">
       <article
-        v-for="(stat, index) in stats"
+        v-for="stat in stats"
         :key="stat.label"
         class="students-stat-card border-border bg-surface"
-        :class="{ 'students-stat-card-featured': index === 0 }"
       >
         <span class="students-stat-icon" :class="`students-stat-icon-${stat.tone}`">
           <component :is="stat.icon" aria-hidden="true" />
@@ -360,6 +359,11 @@ function openEstadoCuenta() {
 
 function closeEstadoCuenta() {
   showEstadoCuenta.value = false
+}
+
+function openGenerarCuota() {
+  if (!canManageFees.value || !selectedAlumno.value) return
+  showGenerarCuota.value = true
 }
 
 async function onMatriculaChanged() {

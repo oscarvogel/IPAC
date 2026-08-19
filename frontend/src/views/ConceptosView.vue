@@ -10,10 +10,9 @@
     <template v-else>
     <div class="concepts-metrics-grid">
       <article
-        v-for="(stat, index) in stats"
+        v-for="stat in stats"
         :key="stat.label"
         class="concepts-metric-card border-border bg-surface"
-        :class="{ 'concepts-metric-card-featured': index === 0 }"
       >
         <span class="concepts-metric-icon" :class="`concepts-metric-icon-${stat.tone}`">
           <component :is="stat.icon" aria-hidden="true" />

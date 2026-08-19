@@ -520,11 +520,6 @@ h3 {
   align-content: space-between;
 }
 
-.stat-card:first-child {
-  background: var(--accent-soft);
-  border-color: var(--primary-soft);
-}
-
 .stat-card span {
   color: var(--muted);
   font-size: 11px;
@@ -1033,11 +1028,6 @@ select:focus {
 
 .cash-actions button:disabled {
   opacity: 0.55;
-}
-
-.cash-stats .stat-card:first-child {
-  background: color-mix(in srgb, var(--success) 10%, var(--surface));
-  border-color: var(--success);
 }
 
 .cash-print-summary {
@@ -1914,19 +1904,6 @@ body {
   border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow);
-}
-
-.dashboard-screen .stat-card-featured {
-  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
-  background: var(--accent-soft);
-}
-
-.dashboard-screen .stat-card-featured::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  content: "";
-  background: var(--primary);
 }
 
 .stat-icon {
@@ -3280,19 +3257,6 @@ body {
   box-shadow: var(--shadow);
 }
 
-.students-stat-card-featured {
-  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
-  background: var(--primary-soft);
-}
-
-.students-stat-card-featured::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  content: "";
-  background: var(--primary);
-}
-
 .students-stat-icon {
   width: 52px;
   height: 52px;
@@ -3310,10 +3274,6 @@ body {
 .students-stat-icon-primary {
   color: var(--primary);
   background: color-mix(in srgb, var(--primary) 10%, var(--surface));
-}
-
-.students-stat-card-featured .students-stat-icon-primary {
-  background: var(--surface);
 }
 
 .students-stat-icon-success {
@@ -4597,19 +4557,6 @@ body {
   box-shadow: var(--shadow);
 }
 
-.cash-metric-card-featured {
-  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
-  background: var(--primary-soft);
-}
-
-.cash-metric-card-featured::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  content: "";
-  background: var(--primary);
-}
-
 .cash-metric-icon {
   width: 52px;
   height: 52px;
@@ -4627,10 +4574,6 @@ body {
 .cash-metric-icon-primary {
   color: var(--primary);
   background: color-mix(in srgb, var(--primary) 10%, var(--surface));
-}
-
-.cash-metric-card-featured .cash-metric-icon-primary {
-  background: var(--surface);
 }
 
 .cash-metric-icon-success {
@@ -5034,19 +4977,6 @@ body {
   box-shadow: var(--shadow);
 }
 
-.concepts-metric-card-featured {
-  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
-  background: var(--primary-soft);
-}
-
-.concepts-metric-card-featured::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  content: "";
-  background: var(--primary);
-}
-
 .concepts-metric-icon {
   width: 52px;
   height: 52px;
@@ -5064,10 +4994,6 @@ body {
 .concepts-metric-icon-primary {
   color: var(--primary);
   background: color-mix(in srgb, var(--primary) 10%, var(--surface));
-}
-
-.concepts-metric-card-featured .concepts-metric-icon-primary {
-  background: var(--surface);
 }
 
 .concepts-metric-icon-success {

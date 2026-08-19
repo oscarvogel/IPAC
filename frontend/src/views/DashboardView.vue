@@ -10,10 +10,9 @@
     <template v-else>
     <div class="stats-grid">
       <article
-        v-for="(stat, index) in stats"
+        v-for="stat in stats"
         :key="stat.label"
         class="stat-card border-border bg-surface"
-        :class="{ 'stat-card-featured': index === 0 }"
       >
         <span class="stat-icon" :class="`stat-icon-${stat.tone}`">
           <component :is="stat.icon" aria-hidden="true" />

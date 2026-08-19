@@ -13,6 +13,7 @@ ALL_ROLES = frozenset({SUPERADMIN, ADMINISTRACION, TESORERIA, CAJA, CONSULTA})
 ADMIN_ROLES = frozenset({SUPERADMIN, ADMINISTRACION})
 OPERATIONAL_ROLES = frozenset({SUPERADMIN, ADMINISTRACION, TESORERIA, CAJA})
 CASH_ROLES = frozenset({SUPERADMIN, ADMINISTRACION, TESORERIA, CAJA})
+FEE_MANAGEMENT_ROLES = frozenset({SUPERADMIN, ADMINISTRACION, TESORERIA})
 
 
 class RolePermission(BasePermission):
@@ -59,9 +60,9 @@ class SucursalPermission(RolePermission):
 
 
 class CuotaPermission(RolePermission):
-    write_roles = OPERATIONAL_ROLES
+    write_roles = FEE_MANAGEMENT_ROLES
     action_roles = {
-        "generar": OPERATIONAL_ROLES,
+        "generar": FEE_MANAGEMENT_ROLES,
     }
 
 

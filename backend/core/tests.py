@@ -407,6 +407,36 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(movimiento.status_code, status.HTTP_201_CREATED)
         self.assertEqual(self.client.post("/api/cajas/", {"sucursal": self.posadas.id}, format="json").status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self.client.post("/api/conceptos/", {}, format="json").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            self.client.post(
+                "/api/cuotas/",
+                {
+                    "alumno": alumno.id,
+                    "concepto": ConceptoCobrable.objects.get(nombre="Cuota mensual").id,
+                    "periodo": "2026-12",
+                    "fecha_emision": timezone.localdate(),
+                    "fecha_vencimiento": timezone.localdate(),
+                    "importe": "25000.00",
+                },
+                format="json",
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/api/cuotas/generar/",
+                {
+                    "alumnos": [alumno.id],
+                    "concepto": ConceptoCobrable.objects.get(nombre="Cuota mensual").id,
+                    "periodo": "2026-12",
+                    "fecha_emision": timezone.localdate(),
+                    "fecha_vencimiento": timezone.localdate(),
+                    "importe": "25000.00",
+                },
+                format="json",
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
         self.assertEqual(self.client.post("/api/usuarios/", {}, format="json").status_code, status.HTTP_403_FORBIDDEN)
 
     def test_administracion_cannot_escalate_or_expand_user_scope(self):
