@@ -34,8 +34,16 @@
               </select>
             </label>
             <label>
-              Periodo
-              <input v-model="form.periodo" placeholder="ej. 2026-08" required />
+              Mes correspondiente
+              <input
+                v-model="form.periodo"
+                type="text"
+                inputmode="numeric"
+                placeholder="DD-MM-YYYY"
+                pattern="[0-9]{2}-[0-9]{2}-[0-9]{4}"
+                required
+              />
+              <small class="field-help">Indica a qué mes corresponde esta cuota. Usá el formato DD-MM-YYYY.</small>
             </label>
             <label>
               Fecha de emision
@@ -52,10 +60,12 @@
             <label>
               Descuento
               <input v-model="form.descuento" type="number" min="0" step="0.01" value="0" />
+              <small class="field-help">Importe que se resta del valor de la cuota. Dejar en $0 si no corresponde.</small>
             </label>
             <label>
               Recargo
               <input v-model="form.recargo" type="number" min="0" step="0.01" value="0" />
+              <small class="field-help">Importe adicional que se suma a la cuota. Dejar en $0 si no corresponde.</small>
             </label>
           </div>
         </section>
@@ -70,6 +80,16 @@
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.field-help {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+</style>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
@@ -148,7 +168,8 @@ async function handleSubmit() {
     await generarCuota({
       alumnos: [props.alumno.id],
       concepto: form.concepto,
-      periodo: form.periodo,
+      // La UI usa DD-MM-YYYY; el backend conserva la clave mensual YYYY-MM.
+      periodo: periodoParaBackend(form.periodo),
       fecha_emision: form.fecha_emision,
       fecha_vencimiento: form.fecha_vencimiento,
       importe: form.importe,
@@ -163,5 +184,10 @@ async function handleSubmit() {
   } finally {
     saving.value = false
   }
+}
+
+function periodoParaBackend(value) {
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value || '')
+  return match ? `${match[3]}-${match[2]}` : value
 }
 </script>

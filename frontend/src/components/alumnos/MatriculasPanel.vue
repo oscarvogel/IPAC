@@ -6,13 +6,14 @@
         <h3 id="matriculas-title">Matrículas</h3>
       </div>
       <button v-if="canManage" type="button" class="matriculas-add-button" @click="openCreate">
-        Nueva
+        Nueva matrícula
       </button>
     </div>
 
     <p v-if="loading" class="students-inline-empty">Cargando matrículas...</p>
     <p v-else-if="error" class="students-inline-error" role="alert">{{ error }}</p>
     <template v-else>
+      <p v-if="!activeMatricula" class="matricula-no-active">Sin matrícula activa</p>
       <article v-if="activeMatricula" class="matricula-active-card">
         <div>
           <span class="matricula-status active">Activa</span>
@@ -70,7 +71,7 @@ const props = defineProps({
   canManage: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['changed'])
+const emit = defineEmits(['changed', 'active-changed'])
 const { matriculas, loading, error, loadMatriculas, finalizarMatricula } = useMatriculas()
 const toast = useToast()
 const showForm = ref(false)
@@ -79,12 +80,19 @@ const editingMatricula = ref(null)
 const activeMatricula = computed(() => matriculas.value.find((matricula) => matricula.estado === 'activa') || null)
 const history = computed(() => matriculas.value.filter((matricula) => matricula.estado !== 'activa'))
 
-watch(() => props.alumno?.id, async (alumnoId) => {
+async function refreshMatriculas(alumnoId) {
+  emit('active-changed', null)
   try {
     await loadMatriculas(alumnoId)
+    emit('active-changed', activeMatricula.value)
   } catch {
+    emit('active-changed', null)
     // El estado inline del panel ya expone el error normalizado del composable.
   }
+}
+
+watch(() => props.alumno?.id, async (alumnoId) => {
+  await refreshMatriculas(alumnoId)
 }, { immediate: true })
 
 function openCreate() {
@@ -104,7 +112,7 @@ function closeForm() {
 
 async function onSaved() {
   closeForm()
-  await loadMatriculas(props.alumno?.id)
+  await refreshMatriculas(props.alumno?.id)
   emit('changed')
 }
 
@@ -119,7 +127,7 @@ async function requestFinalize(matricula) {
   try {
     await finalizarMatricula(matricula.id)
     toast.success('Matrícula finalizada')
-    await loadMatriculas(props.alumno?.id)
+    await refreshMatriculas(props.alumno?.id)
     emit('changed')
   } catch (err) {
     toast.error(err.message || 'No se pudo finalizar la matrícula.')
@@ -149,6 +157,13 @@ function stateLabel(state) {
 
 .matriculas-add-button {
   padding: 7px 10px;
+}
+
+.matricula-no-active {
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .matricula-active-card {

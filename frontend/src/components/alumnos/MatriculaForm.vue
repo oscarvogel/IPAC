@@ -41,10 +41,6 @@
               Fecha de inicio
               <input v-model="form.fecha_inicio" type="date" required />
             </label>
-            <label>
-              Fecha de fin
-              <input v-model="form.fecha_fin" type="date" />
-            </label>
             <label class="matricula-observation-field">
               Observación
               <textarea v-model="form.observacion" rows="3" placeholder="Detalle opcional" />
@@ -82,7 +78,7 @@ const { carreras } = useCatalogos()
 const { createMatricula, updateMatricula } = useMatriculas()
 const toast = useToast()
 
-const form = reactive({ carrera: '', fecha_inicio: '', fecha_fin: '', observacion: '' })
+const form = reactive({ carrera: '', fecha_inicio: '', observacion: '' })
 const saving = ref(false)
 const editing = computed(() => Boolean(props.matricula))
 const availableCareers = computed(() => carreras.value.filter((carrera) => (
@@ -97,7 +93,6 @@ function resetForm() {
   Object.assign(form, {
     carrera: props.matricula?.carrera || '',
     fecha_inicio: props.matricula?.fecha_inicio || today(),
-    fecha_fin: props.matricula?.fecha_fin || '',
     observacion: props.matricula?.observacion || '',
   })
 }
@@ -116,13 +111,13 @@ async function handleSubmit() {
   try {
     const payload = {
       fecha_inicio: form.fecha_inicio,
-      fecha_fin: form.fecha_fin || null,
       observacion: form.observacion,
     }
     const saved = editing.value
       ? await updateMatricula(props.matricula.id, payload)
       : await createMatricula({
         ...payload,
+        fecha_fin: null,
         alumno: props.alumno.id,
         carrera: form.carrera,
         estado: 'activa',

@@ -103,6 +103,70 @@ class ImportacionDatosTests(TestCase):
         self.assertEqual(Alumno.objects.get(dni="30111222").fecha_nacimiento.isoformat(), "1990-01-17")
         self.assertEqual(ConceptoCobrable.objects.get(nombre="Cuota mensual 2026").importe, 82000)
 
+    def test_preview_uses_import_rules_without_persisting_new_records(self):
+        class FakeReader:
+            def read(self, source, filename):
+                return {
+                    "Alumnos": [
+                        ["sucursal_codigo", "legajo", "apellido", "nombre", "dni"],
+                        ["POS", "POS-PREVIEW-001", "PEREZ", "Ana", "30999888"],
+                    ]
+                }
+
+        service = IPACWorkbookImporter(reader=FakeReader())
+        before = Alumno.objects.count()
+
+        result = service.preview_file(b"", "alumnos.csv", default_branch_code="POS")
+
+        self.assertEqual(result.students.found, 1)
+        self.assertEqual(result.students.created, 1)
+        self.assertEqual(result.students.updated, 0)
+        self.assertEqual(Alumno.objects.count(), before)
+        self.assertFalse(Alumno.objects.filter(dni="30999888").exists())
+
+    def test_preview_detects_updates_without_persisting_changes(self):
+        Alumno.objects.create(
+            legajo="POS-PREVIEW-002",
+            nombre="Ana",
+            apellido="PEREZ",
+            dni="30999889",
+            email="anterior@example.com",
+            sucursal=self.posadas,
+        )
+
+        class FakeReader:
+            def read(self, source, filename):
+                return {
+                    "Alumnos": [
+                        ["sucursal_codigo", "legajo", "apellido", "nombre", "dni", "email"],
+                        ["POS", "POS-PREVIEW-002", "PEREZ", "Ana", "30999889", "nuevo@example.com"],
+                    ]
+                }
+
+        result = IPACWorkbookImporter(reader=FakeReader()).preview_file(b"", "alumnos.csv", default_branch_code="POS")
+
+        self.assertEqual(result.students.created, 0)
+        self.assertEqual(result.students.updated, 1)
+        self.assertEqual(Alumno.objects.get(dni="30999889").email, "anterior@example.com")
+
+    def test_preview_detects_critical_errors_without_persisting_changes(self):
+        class FakeReader:
+            def read(self, source, filename):
+                return {
+                    "Alumnos": [
+                        ["sucursal_codigo", "legajo", "apellido", "nombre", "dni"],
+                        ["NO_EXISTE", "PREVIEW-ERROR", "PEREZ", "Ana", "30999890"],
+                    ]
+                }
+
+        before = Alumno.objects.count()
+        result = IPACWorkbookImporter(reader=FakeReader()).preview_file(b"", "alumnos.csv", default_branch_code="POS")
+
+        self.assertEqual(result.students.skipped, 1)
+        self.assertGreaterEqual(len(result.errors), 1)
+        self.assertEqual(Alumno.objects.count(), before)
+        self.assertFalse(Alumno.objects.filter(dni="30999890").exists())
+
 
 class ApiInicialTests(APITestCase):
     def setUp(self):
@@ -200,6 +264,63 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["alumnos"]["created"], 1)
         self.assertTrue(Alumno.objects.filter(legajo="P-CSV-001", dni="30999888").exists())
+
+    def test_admin_can_preview_new_student_without_modifying_database(self):
+        self.client.force_authenticate(self.admin)
+        content = (
+            "sucursal_codigo;legajo;apellido;nombre;dni;email\n"
+            "POS;P-PREVIEW-001;Lopez;Ana;30999887;preview@example.com\n"
+        ).encode("utf-8")
+        before = Alumno.objects.count()
+
+        response = self.client.post(
+            "/api/importaciones/workbook/preview/",
+            {"archivo": SimpleUploadedFile("preview.csv", content, content_type="text/csv"), "sucursal": "POS"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["alumnos"]["found"], 1)
+        self.assertEqual(response.data["alumnos"]["created"], 1)
+        self.assertEqual(response.data["total_errores"], 0)
+        self.assertEqual(Alumno.objects.count(), before)
+
+    def test_admin_preview_detects_update_without_persisting_it(self):
+        self.client.force_authenticate(self.admin)
+        existing = Alumno.objects.get(legajo="P-001")
+        content = (
+            "sucursal_codigo;legajo;apellido;nombre;dni;email\n"
+            f"POS;P-001;Perez;Pedro;{existing.dni};nuevo-preview@example.com\n"
+        ).encode("utf-8")
+
+        response = self.client.post(
+            "/api/importaciones/workbook/preview/",
+            {"archivo": SimpleUploadedFile("preview-update.csv", content, content_type="text/csv"), "sucursal": "POS"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["alumnos"]["updated"], 1)
+        self.assertNotEqual(Alumno.objects.get(pk=existing.pk).email, "nuevo-preview@example.com")
+
+    def test_admin_preview_reports_critical_errors_without_persisting_them(self):
+        self.client.force_authenticate(self.admin)
+        content = (
+            "sucursal_codigo;legajo;apellido;nombre;dni\n"
+            "NO_EXISTE;P-ERROR;Lopez;Ana;30999886\n"
+        ).encode("utf-8")
+        before = Alumno.objects.count()
+
+        response = self.client.post(
+            "/api/importaciones/workbook/preview/",
+            {"archivo": SimpleUploadedFile("preview-error.csv", content, content_type="text/csv"), "sucursal": "POS"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(response.data["total_errores"], 1)
+        self.assertEqual(Alumno.objects.count(), before)
+        self.assertFalse(Alumno.objects.filter(dni="30999886").exists())
 
     def test_non_admin_cannot_import_data(self):
         self.client.force_authenticate(self.cajero)

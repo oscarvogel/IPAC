@@ -141,6 +141,28 @@ export function confirmGeneracionCuotasMasivas({
   })
 }
 
+export function confirmImportacion({ archivo, nuevos, actualizados, advertencias, sucursal }) {
+  return swalIpac.fire({
+    icon: 'warning',
+    title: 'Confirmar importación',
+    html: `
+      <p>Se modificarán registros de alumnos y carreras en la base de datos.</p>
+      <dl class="ipac-swal-details">
+        <div><dt>Archivo</dt><dd>${escapeHtml(archivo)}</dd></div>
+        <div><dt>Sucursal</dt><dd>${escapeHtml(sucursal)}</dd></div>
+        <div><dt>Alumnos nuevos</dt><dd>${nuevos}</dd></div>
+        <div><dt>Alumnos actualizados</dt><dd>${actualizados}</dd></div>
+        <div><dt>Advertencias</dt><dd>${advertencias}</dd></div>
+      </dl>
+    `,
+    showCancelButton: true,
+    confirmButtonText: 'Importar datos',
+    cancelButtonText: 'Cancelar',
+    reverseButtons: true,
+    focusCancel: true,
+  })
+}
+
 export function showResultadoCuotasMasivas({ creadas, omitidas, errores, detalle = '' }) {
   return swalIpac.fire({
     icon: errores ? 'error' : 'info',

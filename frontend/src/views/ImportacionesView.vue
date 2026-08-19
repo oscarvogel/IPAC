@@ -45,8 +45,8 @@
         <button type="button" class="secondary-button" :disabled="loading" @click="downloadTemplate('carreras')">
           Descargar plantilla de carreras
         </button>
-        <button type="button" class="primary-button" :disabled="loading || !selectedFile" @click="submitImport">
-          {{ loading ? 'Procesando…' : 'Cargar archivo' }}
+        <button type="button" class="primary-button" :disabled="loading || !selectedFile" @click="reviewImport">
+          {{ loading ? 'Analizando…' : 'Revisar importación' }}
         </button>
       </div>
 
@@ -55,15 +55,57 @@
       </p>
     </section>
 
+    <section v-if="preview" class="imports-card imports-preview" aria-live="polite">
+      <div class="imports-result-heading">
+        <div>
+          <p class="eyebrow">Revisión de importación</p>
+          <h2>{{ preview.archivo }}</h2>
+        </div>
+        <CheckCircleIcon v-if="!hasPreviewErrors" class="imports-success-icon" aria-hidden="true" />
+      </div>
+
+      <div class="imports-summary-grid imports-preview-grid">
+        <article><span>Alumnos encontrados</span><strong>{{ preview.alumnos?.found || 0 }}</strong></article>
+        <article><span>Alumnos nuevos</span><strong>{{ preview.alumnos?.created || 0 }}</strong></article>
+        <article><span>Alumnos a actualizar</span><strong>{{ preview.alumnos?.updated || 0 }}</strong></article>
+        <article :class="{ 'imports-summary-danger': hasPreviewErrors }"><span>Errores críticos</span><strong>{{ preview.total_errores || 0 }}</strong></article>
+        <article><span>Carreras nuevas</span><strong>{{ preview.carreras?.created || 0 }}</strong></article>
+        <article><span>Carreras a actualizar</span><strong>{{ preview.carreras?.updated || 0 }}</strong></article>
+        <article><span>Advertencias</span><strong>{{ preview.total_advertencias || 0 }}</strong></article>
+      </div>
+
+      <div v-if="hasPreviewErrors" class="imports-preview-block imports-preview-error" role="alert">
+        <strong>Corregí los errores críticos antes de confirmar.</strong>
+        <ul>
+          <li v-for="item in preview.errores?.slice(0, 12)" :key="item">{{ item }}</li>
+        </ul>
+      </div>
+
+      <div v-if="preview.advertencias?.length" class="imports-preview-block imports-warnings">
+        <h3>Advertencias ({{ preview.total_advertencias }})</h3>
+        <ul>
+          <li v-for="warning in preview.advertencias.slice(0, 12)" :key="warning">{{ warning }}</li>
+        </ul>
+        <small v-if="preview.total_advertencias > 12">Se muestran las primeras 12 advertencias.</small>
+      </div>
+
+      <div class="imports-preview-actions">
+        <span v-if="hasPreviewErrors" class="imports-preview-status">La importación no se puede confirmar todavía.</span>
+        <button v-else type="button" class="primary-button" :disabled="loading" @click="confirmImport">
+          Confirmar importación
+        </button>
+      </div>
+    </section>
+
     <section v-if="error" class="imports-result imports-result-error" role="alert">
-      <strong>No se pudo completar la carga.</strong>
+      <strong>No se pudo completar la operación.</strong>
       <span>{{ error }}</span>
     </section>
 
     <section v-if="result" class="imports-card imports-result" aria-live="polite">
       <div class="imports-result-heading">
         <div>
-          <p class="eyebrow">Resultado</p>
+        <p class="eyebrow">Importación confirmada</p>
           <h2>{{ result.archivo }}</h2>
         </div>
         <CheckCircleIcon class="imports-success-icon" aria-hidden="true" />
@@ -89,6 +131,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { CheckCircleIcon, DocumentArrowUpIcon } from '@heroicons/vue/24/outline'
 import { apiRequest, downloadFile, uploadFile } from '@/lib/api'
+import { confirmImportacion } from '@/lib/swal'
 
 const branches = ref([])
 const selectedBranch = ref('POS')
@@ -96,9 +139,11 @@ const defaultCareer = ref('')
 const selectedFile = ref(null)
 const loading = ref(false)
 const error = ref('')
+const preview = ref(null)
 const result = ref(null)
 
 const selectedFileName = computed(() => selectedFile.value?.name || '')
+const hasPreviewErrors = computed(() => Number(preview.value?.total_errores || 0) > 0)
 
 onMounted(async () => {
   try {
@@ -115,19 +160,47 @@ onMounted(async () => {
 function onFileChange(event) {
   selectedFile.value = event.target.files?.[0] || null
   error.value = ''
+  preview.value = null
   result.value = null
 }
 
-async function submitImport() {
+async function reviewImport() {
   if (!selectedFile.value) return
   loading.value = true
   error.value = ''
   result.value = null
   try {
+    preview.value = await uploadFile('/importaciones/workbook/preview/', selectedFile.value, {
+      sucursal: selectedBranch.value,
+      carrera: defaultCareer.value,
+    })
+  } catch (err) {
+    error.value = err.message || 'No se pudo revisar el archivo.'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function confirmImport() {
+  if (!selectedFile.value || !preview.value || hasPreviewErrors.value) return
+  const branch = branches.value.find((item) => item.codigo === selectedBranch.value)
+  const confirmation = await confirmImportacion({
+    archivo: preview.value.archivo,
+    nuevos: preview.value.alumnos?.created || 0,
+    actualizados: preview.value.alumnos?.updated || 0,
+    advertencias: preview.value.total_advertencias || 0,
+    sucursal: branch ? `${branch.nombre} (${branch.codigo})` : selectedBranch.value,
+  })
+  if (!confirmation.isConfirmed) return
+
+  loading.value = true
+  error.value = ''
+  try {
     result.value = await uploadFile('/importaciones/workbook/', selectedFile.value, {
       sucursal: selectedBranch.value,
       carrera: defaultCareer.value,
     })
+    preview.value = null
   } catch (err) {
     error.value = err.message || 'No se pudo importar el archivo.'
   } finally {
@@ -176,6 +249,12 @@ async function downloadTemplate(kind) {
 .imports-summary-grid article { display: grid; gap: .35rem; border-radius: .75rem; padding: .9rem; background: var(--color-surface-muted, #f1f5f9); }
 .imports-summary-grid span { color: var(--color-text-secondary, #64748b); font-size: .85rem; }
 .imports-summary-grid strong { font-size: 1.45rem; }
+.imports-summary-danger { color: #9f1239; background: #fff1f2 !important; }
+.imports-preview-block { margin-top: 1.25rem; }
+.imports-preview-error { display: grid; gap: .45rem; border: 1px solid #fecdd3; border-radius: .75rem; padding: 1rem; color: #9f1239; background: #fff1f2; }
+.imports-preview-error ul { margin: 0; padding-left: 1.2rem; }
+.imports-preview-actions { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; margin-top: 1.25rem; }
+.imports-preview-status { color: #9f1239; font-weight: 600; }
 .imports-warnings { margin-top: 1.25rem; border-top: 1px solid var(--color-border, #d8dee8); padding-top: 1rem; }
 .imports-warnings h3 { margin: 0 0 .5rem; }
 .imports-warnings ul { display: grid; gap: .35rem; margin: 0; padding-left: 1.2rem; color: #92400e; }

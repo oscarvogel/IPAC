@@ -28,7 +28,7 @@
           <component :is="statusIcon" aria-hidden="true" />
           {{ alumno.estado || 'sin estado' }}
         </span>
-        <span>{{ alumno.carrera_nombre || 'Sin carrera asignada' }}</span>
+        <span>{{ activeMatricula?.carrera_nombre || 'Sin matrícula activa' }}</span>
       </div>
 
       <div class="students-detail-actions">
@@ -56,8 +56,8 @@
             <dd>{{ alumno.sucursal_nombre || 'Sin asignar' }}</dd>
           </div>
           <div>
-            <dt><AcademicCapIcon aria-hidden="true" /> Carrera</dt>
-            <dd>{{ alumno.carrera_nombre || 'Sin asignar' }}</dd>
+            <dt><AcademicCapIcon aria-hidden="true" /> Trayectoria académica</dt>
+            <dd>{{ activeMatricula?.carrera_nombre || 'Sin matrícula activa' }}</dd>
           </div>
           <div>
             <dt><EnvelopeIcon aria-hidden="true" /> Email</dt>
@@ -73,6 +73,7 @@
       <MatriculasPanel
         :alumno="alumno"
         :can-manage="canManageMatriculas"
+        @active-changed="handleActiveMatricula"
         @changed="$emit('matricula-changed')"
       />
 
@@ -132,7 +133,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   AcademicCapIcon,
   ArrowPathIcon,
@@ -163,7 +164,17 @@ const props = defineProps({
   canManageMatriculas: { type: Boolean, default: false },
 })
 
+const activeMatricula = ref(null)
+
+watch(() => props.alumno?.id, () => {
+  activeMatricula.value = null
+}, { immediate: true })
+
 defineEmits(['register-pago', 'edit', 'view-estado', 'generar-cuota', 'toggle-estado', 'matricula-changed'])
+
+function handleActiveMatricula(matricula) {
+  activeMatricula.value = matricula
+}
 
 const statusIcon = computed(() =>
   props.alumno?.estado === 'activo' ? CheckCircleIcon : PauseCircleIcon,

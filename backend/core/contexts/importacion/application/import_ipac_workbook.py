@@ -121,6 +121,7 @@ class ImportCounters:
     created: int = 0
     updated: int = 0
     skipped: int = 0
+    found: int = 0
 
 
 @dataclass
@@ -129,10 +130,15 @@ class ImportResult:
     careers: ImportCounters = field(default_factory=ImportCounters)
     students: ImportCounters = field(default_factory=ImportCounters)
     warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
     def warn(self, message: str):
         if len(self.warnings) < 200:
             self.warnings.append(message)
+
+    def error(self, message: str):
+        if len(self.errors) < 200:
+            self.errors.append(message)
 
     def as_dict(self):
         return {
@@ -141,6 +147,8 @@ class ImportResult:
             "alumnos": self.students.__dict__,
             "advertencias": self.warnings,
             "total_advertencias": len(self.warnings),
+            "errores": self.errors,
+            "total_errores": len(self.errors),
         }
 
 
@@ -155,19 +163,48 @@ class IPACWorkbookImporter:
         self.reader = reader or SpreadsheetReader()
 
     @transaction.atomic
-    def import_file(self, source, filename: str, default_branch_code="POS", default_career_name="", allowed_branch_codes=None):
+    def import_file(self, source, filename: str, default_branch_code="POS", default_career_name="", allowed_branch_codes=None, persist=True):
         self.allowed_branch_codes = set(allowed_branch_codes or []) or None
         sheets = self.reader.read(source, filename)
         result = ImportResult(filename=filename)
         catalog = self._extract_catalog(sheets)
         if catalog:
-            self._import_catalog(catalog, default_branch_code, result)
+            self._import_catalog(catalog, default_branch_code, result, persist=persist)
         students = self._extract_students(sheets)
         if students:
-            self._import_students(students, default_branch_code, default_career_name, result)
+            self._import_students(students, default_branch_code, default_career_name, result, persist=persist)
         if not catalog and not students:
             result.warn("No se encontraron hojas reconocibles de alumnos o carreras.")
         return result
+
+    def preview_file(self, source, filename: str, default_branch_code="POS", default_career_name="", allowed_branch_codes=None):
+        """Analyze using the exact import use case and roll back every write.
+
+        The importer remains the single source of truth for parsing, matching,
+        validation and idempotent counters. Its explicit non-persistent mode
+        skips all create, save and update operations.
+        """
+        result = self.import_file(
+            source,
+            filename,
+            default_branch_code=default_branch_code,
+            default_career_name=default_career_name,
+            allowed_branch_codes=allowed_branch_codes,
+            persist=False,
+        )
+        self._classify_preview_errors(result)
+        return result
+
+    @staticmethod
+    def _classify_preview_errors(result):
+        critical_fragments = (
+            "no tiene permiso para cargar",
+            "no existe la sucursal",
+            "no se encontraron hojas reconocibles",
+        )
+        for warning in result.warnings:
+            if any(fragment in warning.lower() for fragment in critical_fragments):
+                result.error(warning)
 
     def _extract_catalog(self, sheets):
         rows = []
@@ -279,7 +316,7 @@ class IPACWorkbookImporter:
             result[header.lower()] = row[column].strip() if column < len(row) else ""
         return result
 
-    def _import_catalog(self, rows, default_branch_code, result):
+    def _import_catalog(self, rows, default_branch_code, result, persist=True):
         for item in rows:
             branch_code = self._branch_code(item.get("sucursal_codigo") or default_branch_code)
             if self.allowed_branch_codes and branch_code not in self.allowed_branch_codes:
@@ -307,21 +344,24 @@ class IPACWorkbookImporter:
                 "cuota_convenio_15": item.get("cuota_convenio_15"),
                 "activa": True,
             }
-            career, created = CarreraCurso.objects.update_or_create(
-                nombre=item["nombre"].strip(), sucursal=branch, defaults=defaults
-            )
+            career = CarreraCurso.objects.filter(nombre=item["nombre"].strip(), sucursal=branch).first()
+            created = career is None
+            if persist:
+                career, created = CarreraCurso.objects.update_or_create(
+                    nombre=item["nombre"].strip(), sucursal=branch, defaults=defaults
+                )
             if created:
                 result.careers.created += 1
             else:
                 result.careers.updated += 1
-            if career.importe_matricula is not None:
+            if persist and career.importe_matricula is not None:
                 ConceptoCobrable.objects.update_or_create(
                     nombre="Matrícula 2026",
                     sucursal=branch,
                     carrera=career,
                     defaults={"tipo": ConceptoCobrable.Tipo.MATRICULA, "importe": career.importe_matricula, "activo": True},
                 )
-            if career.cuota_total is not None:
+            if persist and career.cuota_total is not None:
                 ConceptoCobrable.objects.update_or_create(
                     nombre="Cuota mensual 2026",
                     sucursal=branch,
@@ -329,7 +369,7 @@ class IPACWorkbookImporter:
                     defaults={"tipo": ConceptoCobrable.Tipo.CUOTA, "importe": career.cuota_total, "activo": True},
                 )
 
-    def _import_students(self, data, default_branch_code, default_career_name, result):
+    def _import_students(self, data, default_branch_code, default_career_name, result, persist=True):
         headers = data["headers"]
         inferred_career = default_career_name or data.get("default_career", "")
         sequence = 0
@@ -341,6 +381,7 @@ class IPACWorkbookImporter:
             if (not full_name.strip() and not separate_name.strip()) or normalize_text(full_name) in {"APELLIDO Y NOMBRES", "NOMBRE"}:
                 continue
             sequence += 1
+            result.students.found += 1
             branch_code = self._branch_code(item.get("sucursal_codigo", "") or default_branch_code)
             if self.allowed_branch_codes and branch_code not in self.allowed_branch_codes:
                 result.warn(f"Alumno omitido en fila {source_row}: no tiene permiso para la sucursal {branch_code}.")
@@ -394,12 +435,14 @@ class IPACWorkbookImporter:
             if existing and dni and existing.dni == dni and any([existing.email and values["email"] and existing.email != values["email"], existing.cuil and values["cuil"] and existing.cuil != values["cuil"]]):
                 result.warn(f"Fila {source_row}: DNI {dni} ya existía con datos diferentes; se conservaron los datos más recientes no vacíos.")
             if existing:
-                for field_name, value in values.items():
-                    setattr(existing, field_name, value)
-                existing.save()
+                if persist:
+                    for field_name, value in values.items():
+                        setattr(existing, field_name, value)
+                    existing.save()
                 result.students.updated += 1
             else:
-                Alumno.objects.create(**values)
+                if persist:
+                    Alumno.objects.create(**values)
                 result.students.created += 1
 
     @staticmethod

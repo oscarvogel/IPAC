@@ -17,12 +17,8 @@
               {{ editingId ? 'Edición de concepto' : 'Alta de concepto' }}
             </p>
             <h2 id="concepto-form-title">{{ editingId ? 'Editar concepto' : 'Nuevo concepto cobrable' }}</h2>
-            <span>
-              {{
-                editingId
-                  ? 'Actualiza el concepto cobrable seleccionado.'
-                  : 'Carga un nuevo concepto para asociar a pagos y cuotas.'
-              }}
+            <span class="form-intro">
+              Un concepto representa algo que IPAC cobra a un alumno, por ejemplo una cuota mensual, matrícula o material de estudio.
             </span>
           </div>
           <button class="icon-button" type="button" aria-label="Cerrar formulario" @click="requestClose">
@@ -34,8 +30,8 @@
           <h3>Datos del concepto</h3>
           <div class="modal-grid">
             <label>
-              Nombre
-              <input v-model="form.nombre" required maxlength="160" />
+              Nombre del concepto
+              <input v-model="form.nombre" placeholder="Ej. Cuota mensual" required maxlength="160" />
             </label>
             <label>
               Tipo
@@ -45,9 +41,10 @@
                 <option value="material">Material</option>
                 <option value="otro">Otro</option>
               </select>
+              <small class="field-help">Clasifica el tipo de cobro.</small>
             </label>
             <label>
-              Importe
+              Importe base
               <input
                 v-model="form.importe"
                 type="number"
@@ -55,6 +52,7 @@
                 step="0.01"
                 required
               />
+              <small class="field-help">Se utilizará como importe inicial al generar una cuota.</small>
             </label>
             <label>
               Sucursal
@@ -63,6 +61,7 @@
                   {{ s.nombre }}
                 </option>
               </select>
+              <small class="field-help">El concepto estará disponible únicamente en esta sucursal.</small>
             </label>
             <label>
               Carrera
@@ -76,6 +75,7 @@
                   {{ c.nombre }}
                 </option>
               </select>
+              <small class="field-help">Seleccioná una carrera solo si este concepto es exclusivo para ella.</small>
             </label>
             <label v-if="editingId" class="checkbox-inline">
               <input v-model="form.activo" type="checkbox" />
@@ -201,6 +201,18 @@ async function handleSubmit() {
 </script>
 
 <style scoped>
+.form-intro,
+.field-help {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.field-help {
+  margin-top: 5px;
+}
+
 .checkbox-inline {
   display: inline-flex;
   align-items: center;

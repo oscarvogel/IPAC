@@ -690,31 +690,49 @@ class ImportacionPlantillaCsvView(APIView):
         return response
 
 
-class ImportacionWorkbookView(APIView):
+class ImportacionWorkbookBaseView(APIView):
     parser_classes = [MultiPartParser, FormParser]
     permission_classes = [ImportacionPermission]
 
-    def post(self, request):
+    def _import_arguments(self, request):
         if not _can_import(request.user):
-            return Response({"detail": "Solo Administración puede importar datos."}, status=status.HTTP_403_FORBIDDEN)
+            return None, Response({"detail": "Solo Administración puede importar datos."}, status=status.HTTP_403_FORBIDDEN)
         source = request.FILES.get("archivo")
         if not source:
-            return Response({"detail": "Debe seleccionar un archivo XLSX o CSV."}, status=status.HTTP_400_BAD_REQUEST)
+            return None, Response({"detail": "Debe seleccionar un archivo XLSX o CSV."}, status=status.HTTP_400_BAD_REQUEST)
         filename = source.name or "archivo.xlsx"
         if not filename.lower().endswith((".xlsx", ".csv")):
-            return Response({"detail": "El archivo debe tener extensión .xlsx o .csv."}, status=status.HTTP_400_BAD_REQUEST)
+            return None, Response({"detail": "El archivo debe tener extensión .xlsx o .csv."}, status=status.HTTP_400_BAD_REQUEST)
         perfil = request.user.perfil
         default_branch = request.data.get("sucursal") or perfil.sucursal.codigo
         default_career = request.data.get("carrera", "")
         allowed_branches = None if perfil.puede_ver_todas_las_sucursales else {perfil.sucursal.codigo}
+        return {
+            "source": source,
+            "filename": filename,
+            "default_branch_code": default_branch,
+            "default_career_name": default_career,
+            "allowed_branch_codes": allowed_branches,
+        }, None
+
+    def _run_import(self, request, preview=False):
+        arguments, response = self._import_arguments(request)
+        if response:
+            return response
         try:
-            result = IPACWorkbookImporter().import_file(
-                source,
-                filename,
-                default_branch_code=default_branch,
-                default_career_name=default_career,
-                allowed_branch_codes=allowed_branches,
-            )
+            importer = IPACWorkbookImporter()
+            operation = importer.preview_file if preview else importer.import_file
+            result = operation(**arguments)
         except (ValueError, KeyError, OSError, ImportError) as exc:
             return Response({"detail": f"No se pudo leer el archivo: {exc}"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(result.as_dict(), status=status.HTTP_200_OK)
+
+
+class ImportacionWorkbookPreviewView(ImportacionWorkbookBaseView):
+    def post(self, request):
+        return self._run_import(request, preview=True)
+
+
+class ImportacionWorkbookView(ImportacionWorkbookBaseView):
+    def post(self, request):
+        return self._run_import(request)

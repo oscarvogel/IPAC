@@ -27,11 +27,12 @@
             <label>
               Aplicar a
               <select v-model="form.cuota" :disabled="loadingCuotas">
-                <option value="">Pago a cuenta</option>
+                <option value="">Pago a cuenta — queda como saldo a favor</option>
                 <option v-for="cuota in pendingCuotas" :key="cuota.id" :value="cuota.id">
                   {{ cuota.concepto_nombre }} · {{ cuota.periodo }} · saldo $ {{ cuota.saldo }}
                 </option>
               </select>
+              <small class="field-help">Elegí una cuota para imputar el pago o dejalo a cuenta si todavía no querés asociarlo a una cuota.</small>
             </label>
             <label>Importe<input v-model="form.importe" type="number" min="0" step="0.01" required /></label>
             <label>
@@ -57,6 +58,16 @@
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.field-help {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+</style>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
