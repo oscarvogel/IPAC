@@ -44,6 +44,16 @@ async function finalizarMatricula(id, payload = {}) {
   return saved
 }
 
+async function cambiarCarrera(id, payload) {
+  const saved = await apiRequest(`/matriculas/${id}/cambiar-carrera/`, { method: 'POST', body: payload })
+  return saved
+}
+
+async function anularMatricula(id, motivo) {
+  const saved = await apiRequest(`/matriculas/${id}/anular/`, { method: 'POST', body: { motivo } })
+  return saved
+}
+
 export function useMatriculas() {
   return {
     matriculas: readonly(matriculas),
@@ -53,5 +63,7 @@ export function useMatriculas() {
     createMatricula,
     updateMatricula,
     finalizarMatricula,
+    cambiarCarrera,
+    anularMatricula,
   }
 }

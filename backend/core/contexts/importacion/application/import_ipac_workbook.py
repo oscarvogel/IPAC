@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 
-from core.models import Alumno, CarreraCurso, ConceptoCobrable, Sucursal
+from core.models import Alumno, CarreraCurso, ConceptoCobrable, Cuota, Pago, Sucursal
 
 from ..infrastructure.xlsx_reader import SpreadsheetReader
 
@@ -129,6 +129,8 @@ class ImportResult:
     filename: str
     careers: ImportCounters = field(default_factory=ImportCounters)
     students: ImportCounters = field(default_factory=ImportCounters)
+    concepts: ImportCounters = field(default_factory=ImportCounters)
+    opening_balances: ImportCounters = field(default_factory=ImportCounters)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -145,6 +147,8 @@ class ImportResult:
             "archivo": self.filename,
             "carreras": self.careers.__dict__,
             "alumnos": self.students.__dict__,
+            "conceptos": self.concepts.__dict__,
+            "saldos_iniciales": self.opening_balances.__dict__,
             "advertencias": self.warnings,
             "total_advertencias": len(self.warnings),
             "errores": self.errors,
@@ -173,8 +177,14 @@ class IPACWorkbookImporter:
         students = self._extract_students(sheets)
         if students:
             self._import_students(students, default_branch_code, default_career_name, result, persist=persist)
-        if not catalog and not students:
-            result.warn("No se encontraron hojas reconocibles de alumnos o carreras.")
+        concepts = self._extract_concepts(sheets)
+        if concepts:
+            self._import_concepts(concepts, default_branch_code, result, persist=persist)
+        opening_balances = self._extract_opening_balances(sheets)
+        if opening_balances:
+            self._import_opening_balances(opening_balances, default_branch_code, result, persist=persist)
+        if not catalog and not students and not concepts and not opening_balances:
+            result.warn("No se encontraron hojas reconocibles de alumnos, carreras, conceptos o saldos iniciales.")
         return result
 
     def preview_file(self, source, filename: str, default_branch_code="POS", default_career_name="", allowed_branch_codes=None):
@@ -300,6 +310,35 @@ class IPACWorkbookImporter:
                         default_career = match.group(1).strip()
                 return {"headers": headers, "rows": matrix[header_index + 1 :], "default_career": default_career}
         return None
+
+    def _extract_concepts(self, sheets):
+        result = []
+        for name, matrix in sheets.items():
+            if "CONCEPTO" not in normalize_text(name):
+                continue
+            header_index, headers = self._find_header(matrix, {"NOMBRE", "TIPO", "IMPORTE"})
+            if header_index is None:
+                continue
+            for row in matrix[header_index + 1 :]:
+                item = self._row_dict(headers, row)
+                if item.get("nombre", "").strip():
+                    result.append(item)
+        return result
+
+    def _extract_opening_balances(self, sheets):
+        result = []
+        for name, matrix in sheets.items():
+            normalized_name = normalize_text(name)
+            if "SALDO" not in normalized_name:
+                continue
+            header_index, headers = self._find_header(matrix, {"TIPO", "IMPORTE"})
+            if header_index is None or not any(key in headers for key in {"DNI", "LEGAJO"}):
+                continue
+            for row in matrix[header_index + 1 :]:
+                item = self._row_dict(headers, row)
+                if item.get("dni", "").strip() or item.get("legajo", "").strip():
+                    result.append(item)
+        return result
 
     @staticmethod
     def _find_header(matrix, required):
@@ -444,6 +483,102 @@ class IPACWorkbookImporter:
                 if persist:
                     Alumno.objects.create(**values)
                 result.students.created += 1
+
+    def _import_concepts(self, rows, default_branch_code, result, persist=True):
+        type_map = {
+            "MATRICULA": ConceptoCobrable.Tipo.MATRICULA,
+            "CUOTA": ConceptoCobrable.Tipo.CUOTA,
+            "MATERIAL": ConceptoCobrable.Tipo.MATERIAL,
+            "OTRO": ConceptoCobrable.Tipo.OTRO,
+        }
+        for source_row, item in enumerate(rows, start=2):
+            result.concepts.found += 1
+            branch_code = self._branch_code(item.get("sucursal_codigo") or default_branch_code)
+            if self.allowed_branch_codes and branch_code not in self.allowed_branch_codes:
+                result.warn(f"Concepto omitido en fila {source_row}: no tiene permiso para la sucursal {branch_code}.")
+                result.concepts.skipped += 1
+                continue
+            branch = Sucursal.objects.filter(codigo=branch_code).first()
+            amount = parse_decimal(item.get("importe"))
+            concept_type = type_map.get(normalize_text(item.get("tipo")))
+            if not branch or amount is None or amount < 0 or concept_type is None:
+                result.warn(f"Concepto omitido en fila {source_row}: revisá sucursal, tipo e importe.")
+                result.concepts.skipped += 1
+                continue
+            career_name = item.get("carrera", "").strip()
+            career = self._find_career(career_name, branch) if career_name else None
+            if career_name and not career:
+                result.warn(f"Concepto omitido en fila {source_row}: no existe la carrera {career_name!r} en {branch.nombre}.")
+                result.concepts.skipped += 1
+                continue
+            lookup = {"nombre": item["nombre"].strip(), "sucursal": branch, "carrera": career}
+            existing = ConceptoCobrable.objects.filter(**lookup).first()
+            if persist:
+                ConceptoCobrable.objects.update_or_create(
+                    **lookup,
+                    defaults={"tipo": concept_type, "importe": amount, "activo": True},
+                )
+            if existing:
+                result.concepts.updated += 1
+            else:
+                result.concepts.created += 1
+
+    def _import_opening_balances(self, rows, default_branch_code, result, persist=True):
+        for source_row, item in enumerate(rows, start=2):
+            result.opening_balances.found += 1
+            branch_code = self._branch_code(item.get("sucursal_codigo") or default_branch_code)
+            if self.allowed_branch_codes and branch_code not in self.allowed_branch_codes:
+                result.warn(f"Saldo inicial omitido en fila {source_row}: no tiene permiso para la sucursal {branch_code}.")
+                result.opening_balances.skipped += 1
+                continue
+            branch = Sucursal.objects.filter(codigo=branch_code).first()
+            dni = clean_identifier(item.get("dni"))
+            legajo = item.get("legajo", "").strip()
+            alumno_query = Alumno.objects.filter(sucursal=branch) if branch else Alumno.objects.none()
+            alumno = alumno_query.filter(dni=dni).first() if dni else None
+            alumno = alumno or (alumno_query.filter(legajo=legajo).first() if legajo else None)
+            amount = parse_decimal(item.get("importe"))
+            balance_type = normalize_text(item.get("tipo")).replace(" ", "_")
+            balance_date = parse_date_value(item.get("fecha")) or date.today()
+            valid_types = {"DEUDA", "SALDO_A_FAVOR", "CREDITO", "CRÉDITO"}
+            if not alumno or amount is None or amount <= 0 or balance_type not in valid_types:
+                result.warn(f"Saldo inicial omitido en fila {source_row}: revisá alumno, tipo e importe.")
+                result.opening_balances.skipped += 1
+                continue
+
+            marker = f"SALDO-INICIAL:{balance_date.isoformat()}"
+            if balance_type == "DEUDA":
+                concept = ConceptoCobrable.objects.filter(
+                    nombre="Saldo inicial", sucursal=branch, carrera__isnull=True
+                ).first()
+                period = f"SALDO-{balance_date:%Y%m%d}"
+                existing = bool(concept and Cuota.objects.filter(
+                    alumno=alumno, concepto=concept, periodo=period
+                ).exists())
+                if persist and not existing:
+                    concept, _ = ConceptoCobrable.objects.get_or_create(
+                        nombre="Saldo inicial", sucursal=branch, carrera=None,
+                        defaults={"tipo": ConceptoCobrable.Tipo.OTRO, "importe": Decimal("0"), "activo": True},
+                    )
+                    Cuota.objects.create(
+                        alumno=alumno, concepto=concept, sucursal=branch, periodo=period,
+                        fecha_emision=balance_date, fecha_vencimiento=balance_date, importe=amount,
+                    )
+            else:
+                existing = Pago.objects.filter(
+                    alumno=alumno, sucursal=branch, medio=Pago.Medio.OTRO,
+                    importe=amount, observacion=marker,
+                ).exists()
+                if persist and not existing:
+                    payment = Pago.objects.create(
+                        alumno=alumno, sucursal=branch, importe=amount,
+                        medio=Pago.Medio.OTRO, observacion=marker,
+                    )
+                    Pago.objects.filter(pk=payment.pk).update(fecha=balance_date)
+            if existing:
+                result.opening_balances.updated += 1
+            else:
+                result.opening_balances.created += 1
 
     @staticmethod
     def _find_career(name, branch):

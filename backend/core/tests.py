@@ -2,16 +2,19 @@ from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase
+from django.core.management.base import CommandError
 from django.utils import timezone
 from decimal import Decimal
 from datetime import timedelta
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 from unittest.mock import patch
+from io import BytesIO
+from openpyxl import load_workbook
 
 from .contexts.importacion.application.import_ipac_workbook import IPACWorkbookImporter, parse_date_value, split_full_name
 from .contexts.cobranzas.application.registrar_pago import RegistrarPago
-from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, Matricula, MovimientoCaja, Pago, PerfilUsuario, Sucursal
+from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, EventoAuditoria, Matricula, MovimientoCaja, Pago, PerfilUsuario, ReglaRecargo, SaldoArrastrableCaja, Sucursal, TipoDescuento
 
 
 class SucursalSeedTests(TestCase):
@@ -36,6 +39,11 @@ class SucursalSeedTests(TestCase):
         self.assertGreaterEqual(CarreraCurso.objects.count(), 2)
         self.assertGreaterEqual(ConceptoCobrable.objects.count(), 2)
         self.assertGreaterEqual(Alumno.objects.count(), 3)
+
+    @patch.dict("os.environ", {"IPAC_ENVIRONMENT": "production", "IPAC_SEED_ADMIN_USERNAME": "", "IPAC_SEED_ADMIN_PASSWORD": ""})
+    def test_production_seed_requires_explicit_non_demo_credentials(self):
+        with self.assertRaisesMessage(CommandError, "son obligatorios"):
+            call_command("seed_initial_data", verbosity=0)
 
 
 class ModeloBaseTests(TestCase):
@@ -167,6 +175,45 @@ class ImportacionDatosTests(TestCase):
         self.assertEqual(Alumno.objects.count(), before)
         self.assertFalse(Alumno.objects.filter(dni="30999890").exists())
 
+    def test_imports_concepts_and_opening_balances_idempotently_after_preview(self):
+        alumno = Alumno.objects.create(
+            legajo="POS-SALDO-001", nombre="Ana", apellido="PEREZ",
+            dni="30999891", sucursal=self.posadas,
+        )
+
+        class FakeReader:
+            def read(self, source, filename):
+                return {
+                    "Conceptos": [
+                        ["sucursal_codigo", "nombre", "tipo", "importe", "carrera"],
+                        ["POS", "Material inicial", "material", "1500", ""],
+                    ],
+                    "Saldos iniciales": [
+                        ["sucursal_codigo", "legajo", "dni", "tipo", "importe", "fecha"],
+                        ["POS", alumno.legajo, "", "deuda", "10000", "01-08-2026"],
+                        ["POS", alumno.legajo, "", "saldo a favor", "2500", "01-08-2026"],
+                    ],
+                }
+
+        service = IPACWorkbookImporter(reader=FakeReader())
+        preview = service.preview_file(b"", "iniciales.xlsx", default_branch_code="POS")
+        self.assertEqual(preview.concepts.created, 1)
+        self.assertEqual(preview.opening_balances.created, 2)
+        self.assertFalse(ConceptoCobrable.objects.filter(nombre="Material inicial").exists())
+        self.assertEqual(Cuota.objects.count(), 0)
+        self.assertEqual(Pago.objects.count(), 0)
+
+        first = service.import_file(b"", "iniciales.xlsx", default_branch_code="POS")
+        second = service.import_file(b"", "iniciales.xlsx", default_branch_code="POS")
+
+        self.assertEqual(first.concepts.created, 1)
+        self.assertEqual(first.opening_balances.created, 2)
+        self.assertEqual(second.concepts.updated, 1)
+        self.assertEqual(second.opening_balances.updated, 2)
+        self.assertEqual(Cuota.objects.get(alumno=alumno).importe, Decimal("10000"))
+        self.assertEqual(Pago.objects.get(alumno=alumno).saldo_a_favor, Decimal("2500"))
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
+
 
 class ApiInicialTests(APITestCase):
     def setUp(self):
@@ -255,15 +302,54 @@ class ApiInicialTests(APITestCase):
             "POS;P-CSV-001;Lopez;Ana;30999888;;1990-01-17;ana.csv@example.com;3764000011;Centro;\n"
         ).encode("utf-8")
 
+        preview = self.client.post(
+            "/api/importaciones/workbook/preview/",
+            {"archivo": SimpleUploadedFile("alumnos.csv", content, content_type="text/csv"), "sucursal": "POS"},
+            format="multipart",
+        )
         response = self.client.post(
             "/api/importaciones/workbook/",
-            {"archivo": SimpleUploadedFile("alumnos.csv", content, content_type="text/csv"), "sucursal": "POS"},
+            {
+                "archivo": SimpleUploadedFile("alumnos.csv", content, content_type="text/csv"),
+                "sucursal": "POS",
+                "preview_token": preview.data["preview_token"],
+            },
             format="multipart",
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["alumnos"]["created"], 1)
         self.assertTrue(Alumno.objects.filter(legajo="P-CSV-001", dni="30999888").exists())
+
+    def test_import_requires_preview_of_the_exact_same_file(self):
+        self.client.force_authenticate(self.admin)
+        content = (
+            "sucursal_codigo;legajo;apellido;nombre;dni\n"
+            "POS;P-SIGNED-001;Lopez;Ana;30999885\n"
+        ).encode("utf-8")
+        direct = self.client.post(
+            "/api/importaciones/workbook/",
+            {"archivo": SimpleUploadedFile("signed.csv", content, content_type="text/csv"), "sucursal": "POS"},
+            format="multipart",
+        )
+        preview = self.client.post(
+            "/api/importaciones/workbook/preview/",
+            {"archivo": SimpleUploadedFile("signed.csv", content, content_type="text/csv"), "sucursal": "POS"},
+            format="multipart",
+        )
+        changed = self.client.post(
+            "/api/importaciones/workbook/",
+            {
+                "archivo": SimpleUploadedFile("signed.csv", content + b"\n", content_type="text/csv"),
+                "sucursal": "POS",
+                "preview_token": preview.data["preview_token"],
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(direct.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(changed.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Alumno.objects.filter(legajo="P-SIGNED-001").exists())
 
     def test_admin_can_preview_new_student_without_modifying_database(self):
         self.client.force_authenticate(self.admin)
@@ -611,6 +697,44 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], target.id)
 
+    def test_student_filters_include_backend_financial_status(self):
+        self.client.force_authenticate(user=self.admin)
+        debtor = Alumno.objects.get(legajo="P-001")
+        creditor = Alumno.objects.create(
+            legajo="CREDIT-001",
+            nombre="Saldo",
+            apellido="Favor",
+            dni="47777666",
+            sucursal=self.posadas,
+        )
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        Cuota.objects.create(
+            alumno=debtor,
+            concepto=concepto,
+            sucursal=self.posadas,
+            periodo="08-2026",
+            fecha_emision=timezone.localdate(),
+            fecha_vencimiento=timezone.localdate(),
+            importe="15000.00",
+        )
+        Pago.objects.create(
+            alumno=creditor,
+            sucursal=self.posadas,
+            importe="9000.00",
+            medio=Pago.Medio.TRANSFERENCIA,
+        )
+
+        debts = self.client.get("/api/alumnos/", {"con_deuda": "1"})
+        credits = self.client.get("/api/alumnos/", {"con_saldo_favor": "1"})
+
+        self.assertEqual(debts.status_code, status.HTTP_200_OK)
+        self.assertEqual(debts.data["count"], 1)
+        self.assertEqual(debts.data["results"][0]["id"], debtor.id)
+        self.assertEqual(debts.data["results"][0]["deuda_total"], "15000.00")
+        self.assertEqual(credits.data["count"], 1)
+        self.assertEqual(credits.data["results"][0]["id"], creditor.id)
+        self.assertEqual(credits.data["results"][0]["saldo_a_favor"], "9000.00")
+
     def test_student_statistics_count_all_matching_records_not_current_page(self):
         self.client.force_authenticate(user=self.admin)
         for index in range(55):
@@ -701,8 +825,145 @@ class ApiInicialTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         caja.refresh_from_db()
-        self.assertEqual(str(caja.total_esperado), "2200.00")
-        self.assertEqual(str(caja.diferencia), "-2200.00")
+        self.assertEqual(str(caja.total_esperado), "0")
+        self.assertEqual(str(caja.diferencia), "0.00")
+        self.assertEqual(str(caja.resumen.total_cobrado), "2200.00")
+        self.assertEqual(str(caja.resumen.transferencia), "2200.00")
+
+    def test_cashbox_summary_separates_physical_cash_from_electronic_payments(self):
+        caja = CajaDiaria.objects.create(
+            fecha=timezone.localdate(),
+            sucursal=self.posadas,
+            usuario=self.cajero,
+            saldo_inicial=Decimal("20000.00"),
+        )
+        MovimientoCaja.objects.create(
+            caja=caja,
+            tipo=MovimientoCaja.Tipo.PAGO,
+            medio=Pago.Medio.EFECTIVO,
+            importe=Decimal("150000.00"),
+        )
+        MovimientoCaja.objects.create(
+            caja=caja,
+            tipo=MovimientoCaja.Tipo.PAGO,
+            medio=Pago.Medio.TRANSFERENCIA,
+            importe=Decimal("80000.00"),
+        )
+        MovimientoCaja.objects.create(
+            caja=caja,
+            tipo=MovimientoCaja.Tipo.PAGO,
+            medio=Pago.Medio.MERCADO_PAGO,
+            importe=Decimal("40000.00"),
+        )
+        MovimientoCaja.objects.create(
+            caja=caja,
+            tipo=MovimientoCaja.Tipo.EGRESO,
+            medio=Pago.Medio.EFECTIVO,
+            importe=Decimal("10000.00"),
+        )
+
+        resumen = caja.resumen
+
+        self.assertEqual(resumen.efectivo_esperado, Decimal("160000.00"))
+        self.assertEqual(resumen.total_cobrado, Decimal("270000.00"))
+        self.assertEqual(resumen.transferencia, Decimal("80000.00"))
+        self.assertEqual(resumen.mercado_pago, Decimal("40000.00"))
+
+    def test_partial_carry_can_be_consumed_once_by_another_user_after_days_without_operation(self):
+        self.client.force_authenticate(user=self.admin)
+        origen = CajaDiaria.objects.create(
+            fecha=timezone.localdate() - timedelta(days=3),
+            sucursal=self.posadas,
+            usuario=self.admin,
+        )
+        MovimientoCaja.objects.create(
+            caja=origen,
+            tipo=MovimientoCaja.Tipo.INGRESO,
+            medio=Pago.Medio.EFECTIVO,
+            importe=Decimal("160000.00"),
+        )
+        cierre = self.client.post(
+            f"/api/cajas/{origen.id}/cerrar/",
+            {
+                "total_contado": "160000.00",
+                "importe_retirado": "110000.00",
+                "saldo_arrastrable": "50000.00",
+            },
+            format="json",
+        )
+        self.assertEqual(cierre.status_code, status.HTTP_200_OK)
+        self.assertEqual(cierre.data["saldo_arrastrable"], "50000.00")
+
+        self.client.force_authenticate(user=self.cajero)
+        destino = self.client.get(f"/api/cajas/hoy/?sucursal={self.posadas.id}").data
+        disponible = self.client.get(f"/api/cajas/{destino['id']}/saldo-anterior/")
+        self.assertEqual(disponible.status_code, status.HTTP_200_OK)
+        self.assertTrue(disponible.data["disponible"])
+        self.assertEqual(disponible.data["importe"], Decimal("50000.00"))
+        self.assertEqual(disponible.data["usuario_origen"], self.admin.username)
+
+        aplicado = self.client.post(
+            f"/api/cajas/{destino['id']}/saldo-anterior/",
+            {"saldo_id": disponible.data["id"]},
+            format="json",
+        )
+        self.assertEqual(aplicado.status_code, status.HTTP_200_OK)
+        self.assertEqual(aplicado.data["saldo_inicial"], "50000.00")
+        self.assertEqual(aplicado.data["total_esperado"], "50000.00")
+
+        saldo = SaldoArrastrableCaja.objects.get(caja_origen=origen)
+        self.assertEqual(saldo.caja_destino_id, destino["id"])
+        self.assertIsNotNone(saldo.utilizado_en)
+        segundo_intento = self.client.post(
+            f"/api/cajas/{destino['id']}/saldo-anterior/",
+            {"saldo_id": saldo.id},
+            format="json",
+        )
+        self.assertEqual(segundo_intento.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_close_can_withdraw_all_cash_without_creating_carry(self):
+        self.client.force_authenticate(user=self.admin)
+        caja = CajaDiaria.objects.create(
+            fecha=timezone.localdate(),
+            sucursal=self.posadas,
+            usuario=self.admin,
+        )
+
+        cierre = self.client.post(
+            f"/api/cajas/{caja.id}/cerrar/",
+            {
+                "total_contado": "12000.00",
+                "importe_retirado": "12000.00",
+                "saldo_arrastrable": "0.00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(cierre.status_code, status.HTTP_200_OK)
+        self.assertFalse(SaldoArrastrableCaja.objects.filter(caja_origen=caja).exists())
+
+    def test_close_rejects_carry_above_counted_cash_without_partial_effects(self):
+        self.client.force_authenticate(user=self.admin)
+        caja = CajaDiaria.objects.create(
+            fecha=timezone.localdate(),
+            sucursal=self.posadas,
+            usuario=self.admin,
+        )
+
+        cierre = self.client.post(
+            f"/api/cajas/{caja.id}/cerrar/",
+            {
+                "total_contado": "10000.00",
+                "importe_retirado": "0.00",
+                "saldo_arrastrable": "12000.00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(cierre.status_code, status.HTTP_400_BAD_REQUEST)
+        caja.refresh_from_db()
+        self.assertEqual(caja.estado, CajaDiaria.Estado.ABIERTA)
+        self.assertFalse(SaldoArrastrableCaja.objects.filter(caja_origen=caja).exists())
 
     def test_payment_is_rejected_without_side_effects_when_cashbox_is_closed(self):
         self.client.force_authenticate(user=self.admin)
@@ -914,6 +1175,43 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Matricula.objects.count(), 1)
 
+    def test_change_career_finalizes_previous_enrollment_and_preserves_history(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        original = CarreraCurso.objects.get(nombre="Secretariado")
+        replacement = CarreraCurso.objects.create(nombre="Administración avanzada", sucursal=self.posadas)
+        today = timezone.localdate()
+        created = self.client.post("/api/matriculas/", {"alumno": alumno.id, "carrera": original.id, "fecha_inicio": today}, format="json")
+
+        changed = self.client.post(
+            f"/api/matriculas/{created.data['id']}/cambiar-carrera/",
+            {"carrera": replacement.id, "fecha_inicio": today, "observacion": "Cambio solicitado"},
+            format="json",
+        )
+
+        self.assertEqual(changed.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(changed.data["carrera"], replacement.id)
+        self.assertEqual(Matricula.objects.filter(alumno=alumno, estado=Matricula.Estado.ACTIVA).count(), 1)
+        self.assertEqual(Matricula.objects.get(pk=created.data["id"]).estado, Matricula.Estado.FINALIZADA)
+        alumno.refresh_from_db()
+        self.assertEqual(alumno.carrera_id, replacement.id)
+
+    def test_annul_enrollment_requires_reason_and_clears_active_career(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        carrera = CarreraCurso.objects.get(nombre="Secretariado")
+        created = self.client.post("/api/matriculas/", {"alumno": alumno.id, "carrera": carrera.id, "fecha_inicio": timezone.localdate()}, format="json")
+
+        missing_reason = self.client.post(f"/api/matriculas/{created.data['id']}/anular/", {}, format="json")
+        annulled = self.client.post(f"/api/matriculas/{created.data['id']}/anular/", {"motivo": "Carga duplicada"}, format="json")
+
+        self.assertEqual(missing_reason.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(annulled.status_code, status.HTTP_200_OK)
+        self.assertEqual(annulled.data["estado"], Matricula.Estado.ANULADA)
+        self.assertIn("Carga duplicada", annulled.data["observacion"])
+        alumno.refresh_from_db()
+        self.assertIsNone(alumno.carrera_id)
+
     def test_partial_payment_updates_fee_and_keeps_credit_balance(self):
         self.client.force_authenticate(user=self.admin)
         alumno = Alumno.objects.get(legajo="P-001")
@@ -930,6 +1228,7 @@ class ApiInicialTests(APITestCase):
         detalle_pago = self.client.get(f"/api/pagos/{pago.data['id']}/")
         self.assertEqual(detalle_pago.data["importe_aplicado"], "10000.00")
         self.assertEqual(detalle_pago.data["saldo_a_favor"], "20000.00")
+        self.assertEqual(detalle_pago.data["saldo_pendiente_posterior"], "15000.00")
 
     def _create_fee(self, period, amount="25000.00"):
         alumno = Alumno.objects.get(legajo="P-001")
@@ -1043,10 +1342,11 @@ class ApiInicialTests(APITestCase):
     def test_payment_receipt_has_stable_number_and_details(self):
         self.client.force_authenticate(user=self.admin)
         alumno = Alumno.objects.get(legajo="P-001")
+        cuota = self._create_fee("2027-01", amount="25000.00")
 
         pago = self.client.post(
             "/api/pagos/",
-            {"alumno": alumno.id, "importe": "12500.00", "medio": Pago.Medio.TRANSFERENCIA},
+            {"alumno": alumno.id, "cuota": cuota.id, "importe": "12500.00", "medio": Pago.Medio.TRANSFERENCIA},
             format="json",
         )
 
@@ -1056,6 +1356,118 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(recibo.status_code, status.HTTP_200_OK)
         self.assertEqual(recibo.data["numero"], pago.data["numero_recibo"])
         self.assertEqual(recibo.data["pago"]["alumno_nombre"], "Perez, Pedro")
+        self.assertEqual(recibo.data["pago"]["saldo_pendiente_posterior"], "12500.00")
+        self.assertEqual(recibo.data["pago"]["usuario_nombre"], self.admin.username)
+
+    def test_automatic_payment_applies_oldest_fees_and_supports_multiple_fees(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        primera = self._create_fee("2027-02")
+        segunda = self._create_fee("2027-03")
+
+        response = self.client.post(
+            "/api/pagos/",
+            {
+                "alumno": alumno.id,
+                "importe": "30000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "aplicacion_automatica": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        primera.refresh_from_db()
+        segunda.refresh_from_db()
+        self.assertEqual(primera.estado, Cuota.Estado.PAGADA)
+        self.assertEqual(segunda.estado, Cuota.Estado.PARCIAL)
+        self.assertEqual(primera.saldo, Decimal("0"))
+        self.assertEqual(segunda.saldo, Decimal("20000.00"))
+        self.assertEqual(
+            list(AplicacionPago.objects.filter(pago_id=response.data["id"]).values_list("importe", flat=True)),
+            [Decimal("25000.00"), Decimal("5000.00")],
+        )
+
+    def test_manual_payment_only_applies_selected_fees(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        no_seleccionada = self._create_fee("2027-04")
+        seleccionada = self._create_fee("2027-05")
+
+        response = self.client.post(
+            "/api/pagos/",
+            {
+                "alumno": alumno.id,
+                "cuotas": [seleccionada.id],
+                "importe": "10000.00",
+                "medio": Pago.Medio.TRANSFERENCIA,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        no_seleccionada.refresh_from_db()
+        seleccionada.refresh_from_db()
+        self.assertEqual(no_seleccionada.estado, Cuota.Estado.PENDIENTE)
+        self.assertEqual(seleccionada.estado, Cuota.Estado.PARCIAL)
+        self.assertEqual(seleccionada.saldo, Decimal("15000.00"))
+
+    def test_authorized_payment_void_restores_fees_and_creates_inverse_cash_movement(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        cuota = self._create_fee("2027-06")
+        created = self.client.post(
+            "/api/pagos/",
+            {
+                "alumno": alumno.id,
+                "cuota": cuota.id,
+                "importe": "25000.00",
+                "medio": Pago.Medio.EFECTIVO,
+            },
+            format="json",
+        )
+        numero = created.data["numero_recibo"]
+
+        self.client.force_authenticate(user=self.tesoreria)
+        response = self.client.post(
+            f"/api/pagos/{created.data['id']}/anular/",
+            {"motivo": "Cobranza cargada por duplicado"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["estado"], Pago.Estado.ANULADO)
+        self.assertEqual(response.data["numero_recibo"], numero)
+        cuota.refresh_from_db()
+        self.assertEqual(cuota.estado, Cuota.Estado.PENDIENTE)
+        self.assertEqual(cuota.saldo, Decimal("25000.00"))
+        aplicacion = AplicacionPago.objects.get(pago_id=created.data["id"])
+        self.assertFalse(aplicacion.activa)
+        reverso = MovimientoCaja.objects.get(movimiento_origen__pago_id=created.data["id"])
+        self.assertEqual(reverso.tipo, MovimientoCaja.Tipo.REVERSO)
+        self.assertEqual(reverso.caja.usuario, self.tesoreria)
+
+        recibo = self.client.get(f"/api/pagos/{created.data['id']}/recibo/")
+        self.assertEqual(recibo.data["pago"]["estado"], Pago.Estado.ANULADO)
+        self.assertFalse(recibo.data["aplicaciones"][0]["activa"])
+
+    def test_unauthorized_user_cannot_void_payment(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        created = self.client.post(
+            "/api/pagos/",
+            {"alumno": alumno.id, "importe": "5000.00", "medio": Pago.Medio.EFECTIVO},
+            format="json",
+        )
+
+        response = self.client.post(
+            f"/api/pagos/{created.data['id']}/anular/",
+            {"motivo": "No autorizado"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Pago.objects.get(pk=created.data["id"]).estado, Pago.Estado.ACTIVO)
 
     def test_account_statement_returns_real_fees_and_credit(self):
         self.client.force_authenticate(user=self.admin)
@@ -1156,6 +1568,17 @@ class ApiInicialTests(APITestCase):
     def test_operational_report_respects_branch_and_date_range(self):
         self.client.force_authenticate(user=self.admin)
         alumno = Alumno.objects.get(legajo="P-001")
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        hoy = timezone.localdate()
+        Cuota.objects.create(
+            alumno=alumno,
+            concepto=concepto,
+            sucursal=self.posadas,
+            periodo="2027-02",
+            fecha_emision=hoy,
+            fecha_vencimiento=hoy,
+            importe="20000.00",
+        )
         Pago.objects.create(alumno=alumno, sucursal=self.posadas, importe="12500.00", medio=Pago.Medio.EFECTIVO)
 
         reporte = self.client.get(
@@ -1165,6 +1588,9 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(reporte.data["cobranzas"]["cantidad_pagos"], 1)
         self.assertEqual(str(reporte.data["cobranzas"]["total"]), "12500")
         self.assertEqual(str(reporte.data["cobranzas"]["por_medio"][Pago.Medio.EFECTIVO]), "12500")
+        self.assertEqual(str(reporte.data["cuenta_corriente"]["deuda"]), "20000.00")
+        self.assertEqual(str(reporte.data["cuenta_corriente"]["saldo_a_favor"]), "12500.00")
+        self.assertEqual(str(reporte.data["cuenta_corriente"]["saldo_neto"]), "7500.00")
 
     def test_payments_can_be_filtered_and_exported_as_csv(self):
         self.client.force_authenticate(user=self.admin)
@@ -1284,4 +1710,193 @@ class ApiInicialTests(APITestCase):
         self.assertTrue(all(item["sucursal"] == self.posadas.id for item in scoped.data["results"]))
         self.assertNotIn(elena.id, [item["id"] for item in scoped.data["results"]])
 
+    def test_collections_by_user_excludes_voided_payments_and_breaks_down_methods(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        Pago.objects.create(
+            alumno=alumno, sucursal=self.posadas, registrado_por=self.admin,
+            importe="1200.00", medio=Pago.Medio.EFECTIVO,
+        )
+        Pago.objects.create(
+            alumno=alumno, sucursal=self.posadas, registrado_por=self.admin,
+            importe="800.00", medio=Pago.Medio.MERCADO_PAGO,
+        )
+        Pago.objects.create(
+            alumno=alumno, sucursal=self.posadas, registrado_por=self.admin,
+            importe="999.00", medio=Pago.Medio.EFECTIVO, estado=Pago.Estado.ANULADO,
+        )
+
+        response = self.client.get("/api/reportes/cobranzas-usuarios/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["total"], Decimal("2000"))
+        row = response.data["resultados"][0]
+        self.assertEqual(row["usuario"], self.admin.username)
+        self.assertEqual(row["efectivo"], Decimal("1200"))
+        self.assertEqual(row["mercado_pago"], Decimal("800"))
+
+    def test_excel_export_preserves_typed_payment_values(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        Pago.objects.create(
+            alumno=alumno, sucursal=self.posadas, registrado_por=self.admin,
+            importe="2500.50", medio=Pago.Medio.TRANSFERENCIA,
+        )
+
+        response = self.client.get("/api/reportes/exportar.xlsx?tipo=pagos")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.content.startswith(b"PK"))
+        workbook = load_workbook(BytesIO(response.content), data_only=True)
+        sheet = workbook.active
+        self.assertEqual(sheet["A1"].value, "Recibo")
+        self.assertEqual(sheet["I2"].value, 2500.5)
+
+    def test_excel_export_supports_students_and_collection_user_filter(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        other = User.objects.create_user(username="otro-cajero", password="test")
+        PerfilUsuario.objects.create(user=other, rol=PerfilUsuario.Rol.CAJA, sucursal=self.posadas)
+        Pago.objects.create(
+            alumno=alumno, sucursal=self.posadas, registrado_por=other,
+            importe="700.00", medio=Pago.Medio.EFECTIVO,
+        )
+
+        filtered = self.client.get("/api/reportes/cobranzas-usuarios/", {"usuario": other.id})
+        exported = self.client.get("/api/reportes/exportar.xlsx?tipo=alumnos&sucursal=%s" % self.posadas.id)
+
+        self.assertEqual(filtered.status_code, status.HTTP_200_OK)
+        self.assertEqual(filtered.data["resultados"][0]["usuario"], other.username)
+        self.assertEqual(exported.status_code, status.HTTP_200_OK)
+        workbook = load_workbook(BytesIO(exported.content), data_only=True)
+        self.assertEqual(workbook.active["A1"].value, "Legajo")
+        self.assertIn("P-001", [cell.value for cell in workbook.active["A"]])
+
+    def test_configured_percentage_discount_is_calculated_and_traced(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        discount = TipoDescuento.objects.create(
+            nombre="Beca",
+            modalidad=TipoDescuento.Modalidad.PORCENTAJE,
+            valor="20.00",
+            sucursal=self.posadas,
+        )
+
+        response = self.client.post("/api/cuotas/", {
+            "alumno": alumno.id,
+            "concepto": concepto.id,
+            "periodo": "09-2026",
+            "fecha_emision": timezone.localdate(),
+            "fecha_vencimiento": timezone.localdate(),
+            "importe": "25000.00",
+            "tipo_descuento": discount.id,
+            "motivo_descuento": "Beca aprobada",
+        }, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["descuento"], "5000.00")
+        cuota = Cuota.objects.get(pk=response.data["id"])
+        self.assertEqual(cuota.descuento_registrado_por, self.admin)
+        self.assertEqual(cuota.total, Decimal("20000"))
+
+    def test_overdue_surcharge_respects_tolerance_and_excludes_paid_fees(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        rule = ReglaRecargo.objects.create(
+            nombre="Mora 10%",
+            sucursal=self.posadas,
+            concepto=concepto,
+            modalidad=ReglaRecargo.Modalidad.PORCENTAJE,
+            valor="10.00",
+            dias_tolerancia=5,
+        )
+        overdue = Cuota.objects.create(
+            alumno=alumno, concepto=concepto, sucursal=self.posadas, periodo="MORA-1",
+            fecha_emision=timezone.localdate() - timedelta(days=20),
+            fecha_vencimiento=timezone.localdate() - timedelta(days=6), importe="10000.00",
+        )
+        boundary = Cuota.objects.create(
+            alumno=alumno, concepto=concepto, sucursal=self.posadas, periodo="MORA-2",
+            fecha_emision=timezone.localdate() - timedelta(days=20),
+            fecha_vencimiento=timezone.localdate() - timedelta(days=5), importe="10000.00",
+        )
+
+        response = self.client.post("/api/reglas-recargo/recalcular/", {"sucursal": self.posadas.id}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        overdue.refresh_from_db()
+        boundary.refresh_from_db()
+        self.assertEqual(overdue.recargo, Decimal("1000"))
+        self.assertEqual(overdue.regla_recargo, rule)
+        self.assertEqual(boundary.recargo, Decimal("0"))
+
+
 # Create your tests here.
+
+
+class AuditoriaApiTests(APITestCase):
+    def setUp(self):
+        self.posadas = Sucursal.objects.create(codigo="POS-AUD", nombre="Posadas auditoría")
+        self.eldorado = Sucursal.objects.create(codigo="ELD-AUD", nombre="Eldorado auditoría")
+        self.admin = User.objects.create_user(username="audit-admin", password="test")
+        PerfilUsuario.objects.create(
+            user=self.admin,
+            rol=PerfilUsuario.Rol.ADMINISTRACION,
+            sucursal=self.posadas,
+        )
+        self.consulta = User.objects.create_user(username="audit-read", password="test")
+        PerfilUsuario.objects.create(
+            user=self.consulta,
+            rol=PerfilUsuario.Rol.CONSULTA,
+            sucursal=self.posadas,
+        )
+        self.client.force_authenticate(self.admin)
+
+    def test_create_student_registers_audit_event(self):
+        response = self.client.post(
+            "/api/alumnos/",
+            {
+                "legajo": "AUD-001",
+                "nombre": "Ada",
+                "apellido": "Lovelace",
+                "dni": "40111222",
+                "estado": Alumno.Estado.ACTIVO,
+                "sucursal": self.posadas.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        event = EventoAuditoria.objects.get(entidad="core.Alumno", entidad_id=str(response.data["id"]))
+        self.assertEqual(event.usuario, self.admin)
+        self.assertEqual(event.sucursal, self.posadas)
+        self.assertEqual(event.accion, "alta")
+        self.assertEqual(event.valores_nuevos["legajo"], "AUD-001")
+
+    def test_audit_log_is_read_only_scoped_and_not_available_to_consulta(self):
+        EventoAuditoria.objects.create(
+            usuario=self.admin,
+            sucursal=self.posadas,
+            modulo="alumnos",
+            accion="alta",
+            entidad="core.Alumno",
+            entidad_id="1",
+        )
+        EventoAuditoria.objects.create(
+            usuario=self.admin,
+            sucursal=self.eldorado,
+            modulo="alumnos",
+            accion="alta",
+            entidad="core.Alumno",
+            entidad_id="2",
+        )
+
+        listed = self.client.get("/api/auditoria/?modulo=alumnos")
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertEqual(listed.data["count"], 1)
+        self.assertEqual(listed.data["results"][0]["sucursal"], self.posadas.id)
+        self.assertEqual(self.client.post("/api/auditoria/", {}).status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.consulta)
+        self.assertEqual(self.client.get("/api/auditoria/").status_code, status.HTTP_403_FORBIDDEN)

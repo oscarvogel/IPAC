@@ -7,6 +7,7 @@
     <div class="recibo-header">
       <h1>Recibo N&deg; {{ recibo?.numero }}</h1>
       <p>{{ recibo?.pago?.sucursal_nombre }} &middot; {{ formatDate(recibo?.pago?.fecha) }}</p>
+      <strong v-if="recibo?.pago?.estado === 'anulado'" class="recibo-cancelled">ANULADO</strong>
     </div>
     <table class="recibo-alumno">
       <tbody>
@@ -20,7 +21,7 @@
         <tr><th>Concepto</th><th>Periodo</th><th>Importe</th></tr>
       </thead>
       <tbody>
-        <tr v-for="(app, i) in recibo?.aplicaciones || []" :key="i">
+        <tr v-for="(app, i) in recibo?.aplicaciones || []" :key="i" :class="{ 'recibo-application-cancelled': app.activa === false }">
           <td>{{ app.concepto }}</td>
           <td>{{ app.periodo }}</td>
           <td>$ {{ formatMoney(app.importe) }}</td>
@@ -31,10 +32,17 @@
       </tbody>
       <tfoot>
         <tr><td colspan="2"><strong>Total</strong></td><td><strong>$ {{ formatMoney(recibo?.pago?.importe) }}</strong></td></tr>
+        <tr v-if="recibo?.pago?.saldo_pendiente_posterior != null">
+          <td colspan="2"><strong>Saldo pendiente posterior</strong></td>
+          <td><strong>$ {{ formatMoney(recibo.pago.saldo_pendiente_posterior) }}</strong></td>
+        </tr>
       </tfoot>
     </table>
     <p class="recibo-obs" v-if="recibo?.pago?.observacion">
       Obs: {{ recibo.pago.observacion }}
+    </p>
+    <p v-if="recibo?.pago?.estado === 'anulado'" class="recibo-void-reason">
+      Motivo de anulación: {{ recibo.pago.motivo_anulacion }}
     </p>
     <footer class="recibo-footer">
       <span>Emitido: {{ formatDateTime(recibo?.emitido_en) }}</span>
@@ -83,6 +91,26 @@ defineProps({
   .recibo-header p {
     color: #6b7280;
     margin-bottom: 16px;
+  }
+
+  .recibo-cancelled {
+    display: inline-block;
+    margin-bottom: 16px;
+    padding: 6px 12px;
+    border: 2px solid #b91c1c;
+    color: #b91c1c;
+    font-size: 20px;
+    letter-spacing: .12em;
+  }
+
+  .recibo-application-cancelled {
+    text-decoration: line-through;
+  }
+
+  .recibo-void-reason {
+    margin-bottom: 20px;
+    color: #b91c1c;
+    font-weight: 700;
   }
 
   .recibo-alumno {

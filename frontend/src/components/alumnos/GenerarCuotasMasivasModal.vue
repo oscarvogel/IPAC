@@ -52,8 +52,8 @@
               </select>
             </label>
             <label>
-              Período
-              <input v-model="form.periodo" placeholder="ej. 2026-08" required />
+              Mes correspondiente
+              <input v-model="form.periodo" inputmode="numeric" placeholder="DD-MM-YYYY" pattern="[0-9]{2}-[0-9]{2}-[0-9]{4}" required />
             </label>
             <label>
               Fecha de emisión
@@ -68,9 +68,11 @@
               <input v-model="form.importe" type="number" min="0" step="0.01" required />
             </label>
             <label>
-              Descuento
-              <input v-model="form.descuento" type="number" min="0" step="0.01" />
+              Tipo de descuento
+              <select v-model="form.tipo_descuento"><option value="">Sin descuento</option><option v-for="tipo in tiposFiltrados" :key="tipo.id" :value="tipo.id">{{ tipo.nombre }}</option></select>
             </label>
+            <label v-if="form.tipo_descuento">Descuento<input v-model="form.descuento" type="number" min="0" step="0.01" :readonly="selectedDiscount?.valor > 0" /></label>
+            <label v-if="form.tipo_descuento">Motivo del descuento<input v-model.trim="form.motivo_descuento" required placeholder="Ej. Convenio vigente" /></label>
             <label>
               Recargo
               <input v-model="form.recargo" type="number" min="0" step="0.01" />
@@ -109,6 +111,7 @@ import { useToast } from '@/composables/useToast'
 import { confirmGeneracionCuotasMasivas, showResultadoCuotasMasivas } from '@/lib/swal'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
+import { useCatalogos } from '@/composables/useCatalogos'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -120,6 +123,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved'])
 const toast = useToast()
 const { alumnosElegibles, alumnosEncontrados, omitidas, loading, error, evaluar, generar } = useCuotasMasivas()
+const { tiposDescuento } = useCatalogos()
 
 const form = reactive({
   sucursal: '',
@@ -130,6 +134,8 @@ const form = reactive({
   fecha_vencimiento: '',
   importe: '',
   descuento: 0,
+  tipo_descuento: '',
+  motivo_descuento: '',
   recargo: 0,
 })
 const saving = ref(false)
@@ -145,6 +151,8 @@ const conceptosFiltrados = computed(() => props.conceptos.filter(
 const conceptoSeleccionado = computed(() => conceptosFiltrados.value.find(
   (concepto) => String(concepto.id) === String(form.concepto),
 ))
+const tiposFiltrados = computed(() => tiposDescuento.value.filter((tipo) => tipo.activo && String(tipo.sucursal) === String(form.sucursal)))
+const selectedDiscount = computed(() => tiposFiltrados.value.find((tipo) => String(tipo.id) === String(form.tipo_descuento)))
 
 const totalUnitario = computed(() => Math.max(
   Number(form.importe || 0) - Number(form.descuento || 0) + Number(form.recargo || 0),
@@ -166,6 +174,8 @@ function resetForm() {
   form.fecha_vencimiento = ''
   form.importe = ''
   form.descuento = 0
+  form.tipo_descuento = ''
+  form.motivo_descuento = ''
   form.recargo = 0
 }
 
@@ -179,6 +189,15 @@ watch(
     if (isOpen) resetForm()
   },
 )
+
+watch([() => form.tipo_descuento, () => form.importe], () => {
+  const tipo = selectedDiscount.value
+  if (!tipo) { form.descuento = 0; return }
+  if (Number(tipo.valor) <= 0) return
+  form.descuento = tipo.modalidad === 'porcentaje'
+    ? (Number(form.importe || 0) * Number(tipo.valor) / 100).toFixed(2)
+    : Math.min(Number(tipo.valor), Number(form.importe || 0)).toFixed(2)
+})
 
 watch(
   () => form.sucursal,
@@ -205,7 +224,7 @@ watch(
       sucursal: form.sucursal,
       carrera: form.carrera,
       concepto: form.concepto,
-      periodo: form.periodo,
+      periodo: periodoParaBackend(form.periodo),
     })
   },
 )
@@ -229,11 +248,13 @@ async function handleSubmit() {
     const response = await generar({
       alumnos: alumnosElegibles.value.map((alumno) => alumno.id),
       concepto: form.concepto,
-      periodo: form.periodo,
+      periodo: periodoParaBackend(form.periodo),
       fecha_emision: form.fecha_emision,
       fecha_vencimiento: form.fecha_vencimiento,
       importe: form.importe,
       descuento: form.descuento || 0,
+      tipo_descuento: form.tipo_descuento || null,
+      motivo_descuento: form.motivo_descuento,
       recargo: form.recargo || 0,
     })
     const creadas = Array.isArray(response) ? response.length : alumnosElegibles.value.length
@@ -255,5 +276,10 @@ async function handleSubmit() {
   } finally {
     saving.value = false
   }
+}
+
+function periodoParaBackend(value) {
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value || '')
+  return match ? `${match[3]}-${match[2]}` : value
 }
 </script>

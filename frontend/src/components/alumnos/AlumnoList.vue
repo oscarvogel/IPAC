@@ -43,6 +43,13 @@
             <component :is="statusIcon(alumno.estado)" aria-hidden="true" />
             {{ alumno.estado || 'sin estado' }}
           </em>
+          <span v-if="Number(alumno.deuda_total) > 0" class="student-financial-badge debt">
+            Debe {{ formatCurrency(alumno.deuda_total) }}
+          </span>
+          <span v-else-if="Number(alumno.saldo_a_favor) > 0" class="student-financial-badge credit">
+            A favor {{ formatCurrency(alumno.saldo_a_favor) }}
+          </span>
+          <span v-else class="student-financial-badge clear">Al día</span>
         </span>
 
         <ChevronRightIcon class="students-row-chevron" aria-hidden="true" />
@@ -101,5 +108,13 @@ function avatarInitials(alumno) {
   const name = (alumno.nombre || '').trim()
   const surname = (alumno.apellido || '').trim()
   return `${name.slice(0, 1)}${surname.slice(0, 1)}`.toUpperCase() || '?'
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0))
 }
 </script>

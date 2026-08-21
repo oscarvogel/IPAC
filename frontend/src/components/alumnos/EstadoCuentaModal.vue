@@ -89,6 +89,7 @@
                     {{ formatDate(pago.fecha) }} ·
                     {{ medioLabel(pago.medio) }} ·
                     <em v-if="pago.numero_recibo">{{ pago.numero_recibo }}</em>
+                    <em v-if="pago.estado === 'anulado'" class="payment-void-badge">ANULADO</em>
                   </span>
 
                   <div class="account-breakdown">
@@ -122,6 +123,18 @@
                     <ArrowPathIcon v-if="printingId === pago.id" class="is-spinning" aria-hidden="true" />
                     <PrinterIcon v-else aria-hidden="true" />
                   </button>
+                  <button
+                    v-if="pago.estado !== 'anulado' && auth.can('void-payments')"
+                    class="void-payment-btn"
+                    type="button"
+                    title="Anular pago"
+                    aria-label="Anular pago"
+                    :disabled="cancellingId === pago.id"
+                    @click="voidPayment(pago)"
+                  >
+                    <ArrowPathIcon v-if="cancellingId === pago.id" class="is-spinning" aria-hidden="true" />
+                    <NoSymbolIcon v-else aria-hidden="true" />
+                  </button>
                 </div>
               </div>
               <p v-if="!data.pagos.length" class="empty-state flat">
@@ -143,10 +156,12 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { ArrowPathIcon, PrinterIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { ArrowPathIcon, NoSymbolIcon, PrinterIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { usePagos } from '@/composables/usePagos'
+import { useAuth } from '@/composables/useAuth'
 import { useToast } from '@/composables/useToast'
 import { formatMoney, formatDate } from '@/lib/formatters'
+import { confirmAnularPago } from '@/lib/swal'
 import ReciboPrintView from '@/components/ui/ReciboPrintView.vue'
 import { vFocusTrap } from '@/directives/accessibility'
 
@@ -157,13 +172,15 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-const { getEstadoCuenta, getRecibo } = usePagos()
+const { getEstadoCuenta, getRecibo, anularPago } = usePagos()
+const auth = useAuth()
 const toast = useToast()
 
 const data = ref(null)
 const loading = ref(false)
 const reciboData = ref(null)
 const printingId = ref(null)
+const cancellingId = ref(null)
 
 function requestClose() {
   if (!printingId.value) emit('close')
@@ -183,9 +200,31 @@ async function printRecibo(pago) {
   }
 }
 
+async function voidPayment(pago) {
+  if (!pago.id || cancellingId.value) return
+  const confirmation = await confirmAnularPago({
+    recibo: pago.numero_recibo,
+    alumno: `${props.alumno?.apellido || ''}, ${props.alumno?.nombre || ''}`,
+    importe: pago.importe,
+  })
+  if (!confirmation.isConfirmed) return
+  cancellingId.value = pago.id
+  try {
+    await anularPago(pago.id, confirmation.value)
+    await loadAccount()
+    toast.success('Pago anulado y caja ajustada.')
+  } catch (err) {
+    toast.error(err.message || 'No se pudo anular el pago.')
+  } finally {
+    cancellingId.value = null
+  }
+}
+
 const paidTotal = computed(() => {
   if (!data.value?.pagos) return 0
-  return data.value.pagos.reduce((sum, pago) => sum + Number(pago.importe || 0), 0)
+  return data.value.pagos
+    .filter((pago) => pago.estado !== 'anulado')
+    .reduce((sum, pago) => sum + Number(pago.importe || 0), 0)
 })
 
 const cuotasById = computed(() => {
@@ -221,6 +260,7 @@ function medioLabel(medio) {
   const labels = {
     efectivo: 'Efectivo',
     transferencia: 'Transferencia',
+    mercado_pago: 'Mercado Pago',
     tarjeta: 'Tarjeta',
     otro: 'Otro',
   }
@@ -240,18 +280,22 @@ watch(
       data.value = null
       return
     }
-    loading.value = true
-    data.value = null
-    try {
-      data.value = await getEstadoCuenta(id)
-    } catch (err) {
-      toast.error(err.message || 'No se pudo cargar el estado de cuenta.')
-    } finally {
-      loading.value = false
-    }
+    await loadAccount(id)
   },
   { immediate: true },
 )
+
+async function loadAccount(id = props.alumno?.id) {
+  if (!id) return
+  loading.value = true
+  try {
+    data.value = await getEstadoCuenta(id)
+  } catch (err) {
+    toast.error(err.message || 'No se pudo cargar el estado de cuenta.')
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -259,6 +303,26 @@ watch(
 .estado-parcial { color: #1d4ed8; }
 .estado-pagada { color: #047857; }
 .estado-anulada { color: #6b7280; text-decoration: line-through; }
+
+.payment-void-badge {
+  margin-left: 6px;
+  color: #b91c1c;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.void-payment-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: 9px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+}
+
+.void-payment-btn svg { width: 18px; height: 18px; }
 
 .account-net-total {
   min-width: 190px;

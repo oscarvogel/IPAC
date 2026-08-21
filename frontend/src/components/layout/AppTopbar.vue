@@ -17,6 +17,10 @@
     </Transition>
 
     <div v-if="isDashboard" class="dashboard-context-actions">
+      <button class="icon-button" type="button" :aria-label="themeLabel" :title="themeLabel" @click="toggleTheme">
+        <SunIcon v-if="isDark" aria-hidden="true" />
+        <MoonIcon v-else aria-hidden="true" />
+      </button>
       <button
         class="icon-button"
         type="button"
@@ -40,7 +44,11 @@
       </label>
     </div>
 
-    <div v-else-if="actions.length" class="top-actions">
+    <div v-else class="top-actions">
+      <button class="icon-button" type="button" :aria-label="themeLabel" :title="themeLabel" @click="toggleTheme">
+        <SunIcon v-if="isDark" aria-hidden="true" />
+        <MoonIcon v-else aria-hidden="true" />
+      </button>
       <button
         v-for="action in actions"
         :key="action.label"
@@ -58,11 +66,12 @@
 <script setup>
 import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Bars3Icon, CalendarDaysIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
+import { Bars3Icon, CalendarDaysIcon, ChevronDownIcon, MoonIcon, SunIcon } from '@heroicons/vue/24/outline'
 import { useAuth } from '@/composables/useAuth'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useDashboardFilters } from '@/composables/useDashboardFilters'
 import { useTopbarActions } from '@/composables/useTopbarActions'
+import { useTheme } from '@/composables/useTheme'
 
 defineEmits(['toggle-sidebar'])
 
@@ -71,6 +80,8 @@ const { user } = useAuth()
 const { sucursales, loadCatalogos } = useCatalogos()
 const { selectedSucursalId } = useDashboardFilters()
 const { actions: providedActions } = useTopbarActions()
+const { isDark, toggleTheme } = useTheme()
+const themeLabel = computed(() => isDark.value ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro')
 
 const titles = {
   '/dashboard': 'Dashboard',
@@ -81,6 +92,10 @@ const titles = {
   '/reportes': 'Reportes',
   '/sucursales': 'Sucursales',
   '/usuarios': 'Usuarios',
+  '/configuracion': 'Configuración',
+  '/auditoria': 'Auditoría',
+  '/ajustes-cuotas': 'Descuentos y recargos',
+  '/importaciones': 'Importar datos',
 }
 
 const title = computed(() => titles[route.path] || 'IPAC')

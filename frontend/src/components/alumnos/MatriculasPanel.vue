@@ -23,7 +23,9 @@
         </div>
         <div v-if="canManage" class="matricula-actions">
           <button type="button" @click="openEdit(activeMatricula)">Editar</button>
+          <button type="button" @click="openCareerChange(activeMatricula)">Cambiar carrera</button>
           <button type="button" @click="requestFinalize(activeMatricula)">Finalizar</button>
+          <button type="button" class="danger" @click="requestAnnul(activeMatricula)">Anular</button>
         </div>
       </article>
 
@@ -52,6 +54,7 @@
       :open="showForm"
       :alumno="alumno"
       :matricula="editingMatricula"
+      :change-career="changingCareer"
       @close="closeForm"
       @saved="onSaved"
     />
@@ -63,7 +66,7 @@ import { computed, ref, watch } from 'vue'
 import MatriculaForm from '@/components/alumnos/MatriculaForm.vue'
 import { useMatriculas } from '@/composables/useMatriculas'
 import { useToast } from '@/composables/useToast'
-import { confirmFinalizarMatricula } from '@/lib/swal'
+import { confirmAnularMatricula, confirmFinalizarMatricula } from '@/lib/swal'
 import { formatDate } from '@/lib/formatters'
 
 const props = defineProps({
@@ -72,10 +75,11 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['changed', 'active-changed'])
-const { matriculas, loading, error, loadMatriculas, finalizarMatricula } = useMatriculas()
+const { matriculas, loading, error, loadMatriculas, finalizarMatricula, anularMatricula } = useMatriculas()
 const toast = useToast()
 const showForm = ref(false)
 const editingMatricula = ref(null)
+const changingCareer = ref(false)
 
 const activeMatricula = computed(() => matriculas.value.find((matricula) => matricula.estado === 'activa') || null)
 const history = computed(() => matriculas.value.filter((matricula) => matricula.estado !== 'activa'))
@@ -96,11 +100,19 @@ watch(() => props.alumno?.id, async (alumnoId) => {
 }, { immediate: true })
 
 function openCreate() {
+  changingCareer.value = false
   editingMatricula.value = null
   showForm.value = true
 }
 
 function openEdit(matricula) {
+  changingCareer.value = false
+  editingMatricula.value = matricula
+  showForm.value = true
+}
+
+function openCareerChange(matricula) {
+  changingCareer.value = true
   editingMatricula.value = matricula
   showForm.value = true
 }
@@ -108,6 +120,23 @@ function openEdit(matricula) {
 function closeForm() {
   showForm.value = false
   editingMatricula.value = null
+  changingCareer.value = false
+}
+
+async function requestAnnul(matricula) {
+  const confirmation = await confirmAnularMatricula({
+    alumno: `${props.alumno?.nombre || ''} ${props.alumno?.apellido || ''}`.trim(),
+    carrera: matricula.carrera_nombre,
+  })
+  if (!confirmation.isConfirmed) return
+  try {
+    await anularMatricula(matricula.id, confirmation.value)
+    toast.success('Matrícula anulada')
+    await refreshMatriculas(props.alumno?.id)
+    emit('changed')
+  } catch (err) {
+    toast.error(err.message || 'No se pudo anular la matrícula.')
+  }
 }
 
 async function onSaved() {
@@ -154,6 +183,7 @@ function stateLabel(state) {
   font-size: 11px;
   font-weight: 700;
 }
+.matricula-actions button.danger { color: var(--danger); }
 
 .matriculas-add-button {
   padding: 7px 10px;

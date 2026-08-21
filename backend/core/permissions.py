@@ -14,6 +14,7 @@ ADMIN_ROLES = frozenset({SUPERADMIN, ADMINISTRACION})
 OPERATIONAL_ROLES = frozenset({SUPERADMIN, ADMINISTRACION, TESORERIA, CAJA})
 CASH_ROLES = frozenset({SUPERADMIN, ADMINISTRACION, TESORERIA, CAJA})
 FEE_MANAGEMENT_ROLES = frozenset({SUPERADMIN, ADMINISTRACION, TESORERIA})
+PAYMENT_VOID_ROLES = frozenset({SUPERADMIN, TESORERIA})
 
 
 class RolePermission(BasePermission):
@@ -71,7 +72,8 @@ class PagoPermission(RolePermission):
     action_roles = {
         "update": frozenset({SUPERADMIN}),
         "partial_update": frozenset({SUPERADMIN}),
-        "destroy": frozenset({SUPERADMIN}),
+        "destroy": frozenset(),
+        "anular": PAYMENT_VOID_ROLES,
     }
 
 
@@ -89,6 +91,7 @@ class CajaPermission(RolePermission):
     action_roles = {
         "hoy": ALL_ROLES,
         "cerrar": CASH_ROLES,
+        "saldo_anterior": CASH_ROLES,
     }
 
 
@@ -106,6 +109,11 @@ class UserManagementPermission(RolePermission):
 class ImportacionPermission(RolePermission):
     read_roles = ADMIN_ROLES
     write_roles = ADMIN_ROLES
+
+
+class AuditoriaPermission(RolePermission):
+    read_roles = ADMIN_ROLES
+    write_roles = frozenset()
 
 
 def can_manage_user(actor, target=None, proposed_role=None, global_access=None):

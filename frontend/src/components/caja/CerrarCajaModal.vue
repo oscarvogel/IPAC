@@ -49,11 +49,24 @@
           </p>
           <div class="modal-grid">
             <label>Total contado<input v-model.number="totalContado" type="number" step="0.01" required /></label>
+            <label>
+              Efectivo a retirar
+              <input v-model.number="importeRetirado" type="number" min="0" step="0.01" required />
+              <small>Importe que sale físicamente de la sucursal al cerrar.</small>
+            </label>
+            <label>
+              Dejar para próxima apertura
+              <input v-model.number="saldoArrastrable" type="number" min="0" :max="totalContado" step="0.01" required />
+              <small>Quedará disponible como saldo inicial de la próxima caja de esta sucursal.</small>
+            </label>
           </div>
+          <p v-if="!distribucionValida" class="cash-close-warning" role="alert">
+            El efectivo retirado más el importe para la próxima apertura debe coincidir con el total contado.
+          </p>
         </section>
         <footer class="modal-actions">
           <button class="secondary-button" type="button" :disabled="loading" @click="requestClose">Cancelar</button>
-          <button class="primary-button modal-submit" :disabled="loading" type="submit">
+          <button class="primary-button modal-submit" :disabled="loading || !distribucionValida" type="submit">
             <AppButtonContent :loading="loading" label="Cerrar caja" loading-label="Cerrando" />
           </button>
         </footer>
@@ -78,10 +91,22 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'submit'])
 const totalContado = ref(Number(props.totalEsperado || 0).toFixed(2))
+const importeRetirado = ref(Number(props.totalEsperado || 0).toFixed(2))
+const saldoArrastrable = ref('0.00')
 const cajaSucursal = computed(() => props.cajaHoy?.sucursal_nombre || props.cajaHoy?.sucursal?.nombre || 'Sin sucursal')
 const cajaFecha = computed(() => props.cajaHoy?.fecha ? formatDate(props.cajaHoy.fecha) : 'Sin fecha')
 const diferencia = computed(() => Number(totalContado.value || 0) - Number(props.totalEsperado || 0))
 const tieneDiferencia = computed(() => Math.abs(diferencia.value) > 0.005)
+const distribucionValida = computed(() => {
+  const contado = Number(totalContado.value || 0)
+  const retirado = Number(importeRetirado.value || 0)
+  const arrastrable = Number(saldoArrastrable.value || 0)
+  return contado >= 0
+    && retirado >= 0
+    && arrastrable >= 0
+    && arrastrable <= contado
+    && Math.abs(retirado + arrastrable - contado) < 0.005
+})
 
 function requestClose() {
   if (!props.loading) emit('close')
@@ -96,6 +121,10 @@ watch(
   },
 )
 
+watch([totalContado, saldoArrastrable], ([contado, arrastrable]) => {
+  importeRetirado.value = Math.max(Number(contado || 0) - Number(arrastrable || 0), 0).toFixed(2)
+})
+
 async function submit() {
   const contado = Number(totalContado.value || 0)
   const diferencia = contado - Number(props.totalEsperado || 0)
@@ -105,8 +134,16 @@ async function submit() {
     totalEsperado: props.totalEsperado,
     totalContado: contado,
     diferencia,
+    importeRetirado: Number(importeRetirado.value || 0),
+    saldoArrastrable: Number(saldoArrastrable.value || 0),
   })
-  if (confirmation.isConfirmed) emit('submit', totalContado.value)
+  if (confirmation.isConfirmed) {
+    emit('submit', {
+      total_contado: totalContado.value,
+      importe_retirado: importeRetirado.value,
+      saldo_arrastrable: saldoArrastrable.value,
+    })
+  }
 }
 </script>
 

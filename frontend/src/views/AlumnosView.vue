@@ -60,10 +60,39 @@
           <ChevronDownIcon class="students-select-chevron" aria-hidden="true" />
         </label>
 
-        <label class="students-active-filter" :class="{ active: onlyActive }">
-          <input v-model="onlyActive" class="sr-only" type="checkbox" />
+        <label class="students-branch-field">
+          <AcademicCapIcon aria-hidden="true" />
+          <span class="sr-only">Filtrar por carrera o curso</span>
+          <select v-model="carreraFilter">
+            <option value="todas">Todas las carreras</option>
+            <option v-for="carrera in availableCareers" :key="carrera.id" :value="carrera.id">
+              {{ carrera.nombre }}
+            </option>
+          </select>
+          <ChevronDownIcon class="students-select-chevron" aria-hidden="true" />
+        </label>
+
+        <label class="students-branch-field">
           <CheckIcon aria-hidden="true" />
-          <span>Solo activos</span>
+          <span class="sr-only">Filtrar por estado</span>
+          <select v-model="estadoFilter">
+            <option value="todos">Todos los estados</option>
+            <option value="activo">Activos</option>
+            <option value="inactivo">Inactivos</option>
+            <option value="baja">Dados de baja</option>
+          </select>
+          <ChevronDownIcon class="students-select-chevron" aria-hidden="true" />
+        </label>
+
+        <label class="students-branch-field">
+          <BanknotesIcon aria-hidden="true" />
+          <span class="sr-only">Filtrar por situación financiera</span>
+          <select v-model="financialFilter">
+            <option value="todos">Cualquier situación financiera</option>
+            <option value="deuda">Con deuda</option>
+            <option value="saldo">Con saldo a favor</option>
+          </select>
+          <ChevronDownIcon class="students-select-chevron" aria-hidden="true" />
         </label>
 
         <button
@@ -84,6 +113,19 @@
           <UserPlusIcon aria-hidden="true" />
           <span>Generar cuotas masivas</span>
         </button>
+      </div>
+      <div v-if="activeFilterChips.length" class="students-filter-chips" aria-label="Filtros activos">
+        <span>Filtros activos:</span>
+        <button
+          v-for="chip in activeFilterChips"
+          :key="chip.id"
+          type="button"
+          :aria-label="`Quitar filtro ${chip.label}`"
+          @click="clearFilter(chip.id)"
+        >
+          {{ chip.label }} <span aria-hidden="true">×</span>
+        </button>
+        <button type="button" class="clear-all" @click="clearAllFilters">Limpiar todos</button>
       </div>
     </section>
 
@@ -202,6 +244,8 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import {
+  AcademicCapIcon,
+  BanknotesIcon,
   BuildingStorefrontIcon,
   CheckCircleIcon,
   CheckIcon,
@@ -244,12 +288,14 @@ const auth = useAuth()
 const canManageAlumnos = computed(() => auth.can('manage-alumnos'))
 const canRegisterPayments = computed(() => auth.can('register-payments'))
 const canManageFees = computed(() => auth.can('manage-fees'))
-const { sucursales, conceptos, loadCatalogos } = useCatalogos()
+const { sucursales, carreras, conceptos, loadCatalogos } = useCatalogos()
 const { pagos, loadPagos } = usePagos()
 
 const searchQuery = ref('')
 const sucursalFilter = ref('todas')
-const onlyActive = ref(false)
+const carreraFilter = ref('todas')
+const estadoFilter = ref('todos')
+const financialFilter = ref('todos')
 const pageSize = ref(10)
 const pageSizeOptions = [5, 10, 25]
 const currentPage = ref(1)
@@ -268,7 +314,7 @@ const pageError = ref('')
 onMounted(loadPage)
 
 watch(
-  [searchQuery, sucursalFilter, onlyActive, pageSize],
+  [searchQuery, sucursalFilter, carreraFilter, estadoFilter, financialFilter, pageSize],
   (_, __, onCleanup) => {
     currentPage.value = 1
     const timer = setTimeout(() => {
@@ -286,7 +332,10 @@ function studentQuery() {
     page_size: pageSize.value,
     search: searchQuery.value.trim(),
     sucursal: sucursalFilter.value === 'todas' ? '' : sucursalFilter.value,
-    estado: onlyActive.value ? 'activo' : '',
+    carrera: carreraFilter.value === 'todas' ? '' : carreraFilter.value,
+    estado: estadoFilter.value === 'todos' ? '' : estadoFilter.value,
+    con_deuda: financialFilter.value === 'deuda' ? '1' : '',
+    con_saldo_favor: financialFilter.value === 'saldo' ? '1' : '',
   }
 }
 
@@ -307,7 +356,8 @@ async function loadPage() {
   pageError.value = ''
   try {
     const query = studentQuery()
-    await Promise.all([loadCatalogos(), loadAlumnos(query), loadAlumnoStats(query), loadPagos()])
+    await Promise.all([loadCatalogos(), loadAlumnos(query), loadAlumnoStats(query)])
+    await loadPagos(selectedAlumno.value ? { alumno: selectedAlumno.value.id } : {})
     if (alumnosError.value) throw new Error(alumnosError.value)
     pageReady.value = true
   } catch (err) {
@@ -315,8 +365,9 @@ async function loadPage() {
   }
 }
 
-function onSelect(alumno) {
+async function onSelect(alumno) {
   setSelected(alumno.id)
+  await loadPagos({ alumno: alumno.id })
 }
 
 function openNewAlumnoForm() {
@@ -348,8 +399,9 @@ function closePagoForm() {
   showPagoForm.value = false
 }
 
-function onPagoSaved() {
-  // PagoForm ya recarga la lista. No hace falta hacer nada mas aca.
+async function onPagoSaved() {
+  if (selectedAlumno.value) await loadPagos({ alumno: selectedAlumno.value.id })
+  await loadStudentsPage()
 }
 
 function openEstadoCuenta() {
@@ -417,8 +469,51 @@ const visibleAlumnos = computed(() => alumnos.value)
 const hasActiveFilters = computed(() => Boolean(
   searchQuery.value.trim()
   || sucursalFilter.value !== 'todas'
-  || onlyActive.value,
+  || carreraFilter.value !== 'todas'
+  || estadoFilter.value !== 'todos'
+  || financialFilter.value !== 'todos',
 ))
+
+const availableCareers = computed(() => carreras.value.filter((carrera) => (
+  sucursalFilter.value === 'todas'
+  || String(carrera.sucursal) === String(sucursalFilter.value)
+)))
+
+const activeFilterChips = computed(() => {
+  const chips = []
+  if (searchQuery.value.trim()) chips.push({ id: 'search', label: `Búsqueda: ${searchQuery.value.trim()}` })
+  if (sucursalFilter.value !== 'todas') {
+    const item = sucursales.value.find((sucursal) => String(sucursal.id) === String(sucursalFilter.value))
+    chips.push({ id: 'sucursal', label: item?.nombre || 'Sucursal' })
+  }
+  if (carreraFilter.value !== 'todas') {
+    const item = carreras.value.find((carrera) => String(carrera.id) === String(carreraFilter.value))
+    chips.push({ id: 'carrera', label: item?.nombre || 'Carrera' })
+  }
+  if (estadoFilter.value !== 'todos') {
+    chips.push({ id: 'estado', label: { activo: 'Activos', inactivo: 'Inactivos', baja: 'Dados de baja' }[estadoFilter.value] })
+  }
+  if (financialFilter.value !== 'todos') {
+    chips.push({ id: 'financiero', label: financialFilter.value === 'deuda' ? 'Con deuda' : 'Con saldo a favor' })
+  }
+  return chips
+})
+
+function clearFilter(id) {
+  if (id === 'search') searchQuery.value = ''
+  if (id === 'sucursal') sucursalFilter.value = 'todas'
+  if (id === 'carrera') carreraFilter.value = 'todas'
+  if (id === 'estado') estadoFilter.value = 'todos'
+  if (id === 'financiero') financialFilter.value = 'todos'
+}
+
+function clearAllFilters() {
+  searchQuery.value = ''
+  sucursalFilter.value = 'todas'
+  carreraFilter.value = 'todas'
+  estadoFilter.value = 'todos'
+  financialFilter.value = 'todos'
+}
 
 const selectedBranchName = computed(() => {
   if (sucursalFilter.value === 'todas') return 'en toda la institución'
@@ -461,4 +556,7 @@ const stats = computed(() => [
 </script>
 
 <style scoped>
+.students-filter-chips { padding-top: .65rem; display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: .78rem; font-weight: 700; }
+.students-filter-chips button { min-height: 2rem; border: 1px solid var(--border); border-radius: 999px; padding: 0 .7rem; background: var(--primary-soft); color: var(--primary); font-size: .75rem; font-weight: 800; }
+.students-filter-chips button.clear-all { background: transparent; color: var(--text-secondary); }
 </style>

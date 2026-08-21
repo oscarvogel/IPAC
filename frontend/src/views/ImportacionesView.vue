@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">Administración</p>
         <h1>Cargar información</h1>
-        <p>Importá alumnos, carreras y cursos desde una plantilla o desde tus archivos Excel actuales.</p>
+        <p>Importá alumnos, carreras, conceptos y saldos iniciales desde plantillas o archivos Excel.</p>
       </div>
       <DocumentArrowUpIcon class="imports-header-icon" aria-hidden="true" />
     </header>
@@ -53,6 +53,12 @@
         <button type="button" class="secondary-button" :disabled="loading" @click="downloadTemplate('carreras')">
           Descargar plantilla de carreras
         </button>
+        <button type="button" class="secondary-button" :disabled="loading" @click="downloadTemplate('conceptos')">
+          Descargar plantilla de conceptos
+        </button>
+        <button type="button" class="secondary-button" :disabled="loading" @click="downloadTemplate('saldos_iniciales')">
+          Descargar plantilla de saldos
+        </button>
         <button type="button" class="primary-button" :disabled="loading || !selectedFile" @click="reviewImport">
           {{ loading ? 'Analizando…' : 'Revisar importación' }}
         </button>
@@ -79,6 +85,10 @@
         <article :class="{ 'imports-summary-danger': hasPreviewErrors }"><span>Errores críticos</span><strong>{{ preview.total_errores || 0 }}</strong></article>
         <article><span>Carreras nuevas</span><strong>{{ preview.carreras?.created || 0 }}</strong></article>
         <article><span>Carreras a actualizar</span><strong>{{ preview.carreras?.updated || 0 }}</strong></article>
+        <article><span>Conceptos nuevos</span><strong>{{ preview.conceptos?.created || 0 }}</strong></article>
+        <article><span>Conceptos a actualizar</span><strong>{{ preview.conceptos?.updated || 0 }}</strong></article>
+        <article><span>Saldos iniciales nuevos</span><strong>{{ preview.saldos_iniciales?.created || 0 }}</strong></article>
+        <article><span>Saldos ya registrados</span><strong>{{ preview.saldos_iniciales?.updated || 0 }}</strong></article>
         <article><span>Advertencias</span><strong>{{ preview.total_advertencias || 0 }}</strong></article>
       </div>
 
@@ -123,6 +133,10 @@
         <article><span>Carreras actualizadas</span><strong>{{ result.carreras.updated }}</strong></article>
         <article><span>Alumnos creados</span><strong>{{ result.alumnos.created }}</strong></article>
         <article><span>Alumnos actualizados</span><strong>{{ result.alumnos.updated }}</strong></article>
+        <article><span>Conceptos creados</span><strong>{{ result.conceptos?.created || 0 }}</strong></article>
+        <article><span>Conceptos actualizados</span><strong>{{ result.conceptos?.updated || 0 }}</strong></article>
+        <article><span>Saldos iniciales creados</span><strong>{{ result.saldos_iniciales?.created || 0 }}</strong></article>
+        <article><span>Saldos ya existentes</span><strong>{{ result.saldos_iniciales?.updated || 0 }}</strong></article>
       </div>
       <div v-if="result.advertencias?.length" class="imports-warnings">
         <h3>Advertencias ({{ result.total_advertencias }})</h3>
@@ -196,6 +210,8 @@ async function confirmImport() {
     archivo: preview.value.archivo,
     nuevos: preview.value.alumnos?.created || 0,
     actualizados: preview.value.alumnos?.updated || 0,
+    conceptos: (preview.value.conceptos?.created || 0) + (preview.value.conceptos?.updated || 0),
+    saldos: preview.value.saldos_iniciales?.created || 0,
     advertencias: preview.value.total_advertencias || 0,
     sucursal: branch ? `${branch.nombre} (${branch.codigo})` : selectedBranch.value,
   })
@@ -207,6 +223,7 @@ async function confirmImport() {
     result.value = await uploadFile('/importaciones/workbook/', selectedFile.value, {
       sucursal: selectedBranch.value,
       carrera: defaultCareer.value,
+      preview_token: preview.value.preview_token,
     })
     preview.value = null
   } catch (err) {

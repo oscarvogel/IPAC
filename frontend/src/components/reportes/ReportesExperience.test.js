@@ -38,7 +38,7 @@ describe('experiencia de reportes', () => {
             cantidad_pagos: 3,
             por_medio: { efectivo: 25000, transferencia: 75000 },
           },
-          cuenta_corriente: { saldo_neto: 12000 },
+          cuenta_corriente: { deuda: 32000, saldo_a_favor: 20000, saldo_neto: 12000 },
           cajas: { cerradas: 2 },
         },
       },
@@ -49,6 +49,11 @@ describe('experiencia de reportes', () => {
     expect(rows[0].text()).toContain('Transferencia')
     expect(rows[0].text()).toContain('75%')
     expect(wrapper.text()).toContain('3 pagos en el período')
+    expect(wrapper.text()).toContain('Deuda pendiente')
+    expect(wrapper.text()).toContain('$ 32.000,00')
+    expect(wrapper.text()).toContain('Saldo a favor')
+    expect(wrapper.text()).toContain('$ 20.000,00')
+    expect(wrapper.text()).not.toContain('Deuda neta')
   })
 
   it('presenta cada pago como tarjeta móvil sin perder datos clave', () => {

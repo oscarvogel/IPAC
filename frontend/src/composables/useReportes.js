@@ -14,6 +14,7 @@ const resumen = ref(null)
 const pagos = ref([])
 const loading = ref(false)
 const error = ref('')
+const cobranzasUsuarios = ref([])
 
 function buildQuery(filtros) {
   const query = {}
@@ -49,6 +50,11 @@ async function loadPagos(filtros = {}) {
   }
 }
 
+async function loadCobranzasUsuarios(filtros = {}) {
+  const data = await apiRequest('/reportes/cobranzas-usuarios/', { query: buildQuery(filtros) })
+  cobranzasUsuarios.value = data.resultados || []
+}
+
 function exportarCsv(filtros = {}) {
   const params = new URLSearchParams()
   const query = buildQuery(filtros)
@@ -79,6 +85,29 @@ function exportarCsv(filtros = {}) {
     })
 }
 
+function exportarExcel(tipo, filtros = {}) {
+  const params = new URLSearchParams({ tipo })
+  for (const [key, value] of Object.entries(buildQuery(filtros))) {
+    if (value !== undefined && value !== null && value !== '') params.set(key, String(value))
+  }
+  const url = `${API_BASE_URL}/reportes/exportar.xlsx?${params}`
+  return fetch(url, { headers: { Authorization: `Token ${getToken()}` } })
+    .then((res) => {
+      if (!res.ok) throw new Error('No se pudo generar el archivo Excel.')
+      return res.blob()
+    })
+    .then((blob) => {
+      const objectUrl = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = objectUrl
+      anchor.download = `ipac-${tipo}.xlsx`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(objectUrl)
+    })
+}
+
 function clearError() {
   error.value = ''
 }
@@ -87,11 +116,14 @@ export function useReportes() {
   return {
     resumen: readonly(resumen),
     pagos: readonly(pagos),
+    cobranzasUsuarios: readonly(cobranzasUsuarios),
     loading: readonly(loading),
     error: readonly(error),
     loadResumen,
     loadPagos,
+    loadCobranzasUsuarios,
     exportarCsv,
+    exportarExcel,
     clearError,
   }
 }

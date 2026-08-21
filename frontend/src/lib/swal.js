@@ -39,6 +39,31 @@ export function confirmSaldoAFavor({ importe, saldo, importeAplicado, saldoFavor
   })
 }
 
+export function confirmAnularPago({ recibo, alumno, importe }) {
+  return swalIpac.fire({
+    icon: 'warning',
+    title: 'Anular pago',
+    html: `
+      <p>Se revertirán las aplicaciones a cuotas y se registrará un movimiento inverso en caja.</p>
+      <dl class="ipac-swal-details">
+        <div><dt>Recibo</dt><dd>${escapeHtml(recibo)}</dd></div>
+        <div><dt>Alumno</dt><dd>${escapeHtml(alumno)}</dd></div>
+        <div><dt>Importe</dt><dd>$ ${formatMoney(importe)}</dd></div>
+      </dl>
+    `,
+    input: 'textarea',
+    inputLabel: 'Motivo obligatorio',
+    inputPlaceholder: 'Indicá por qué se anula esta cobranza',
+    inputAttributes: { maxlength: '500' },
+    inputValidator: (value) => value?.trim() ? undefined : 'Debe indicar el motivo de la anulación.',
+    showCancelButton: true,
+    confirmButtonText: 'Anular pago',
+    cancelButtonText: 'Cancelar',
+    reverseButtons: true,
+    focusCancel: true,
+  })
+}
+
 export function confirmSensitiveUserChange({ title, userName, description, beforeRole, afterRole }) {
   const roleDetails = beforeRole || afterRole
     ? `<dl class="ipac-swal-details">
@@ -80,7 +105,32 @@ export function confirmFinalizarMatricula({ alumno, carrera, fechaInicio }) {
   })
 }
 
-export function confirmCierreCaja({ sucursal, fecha, totalEsperado, totalContado, diferencia }) {
+export function confirmAnularMatricula({ alumno, carrera }) {
+  return swalIpac.fire({
+    icon: 'warning',
+    title: 'Anular matrícula',
+    html: `<p>La matrícula quedará anulada, pero se conservará en el historial.</p><dl class="ipac-swal-details"><div><dt>Alumno</dt><dd>${escapeHtml(alumno)}</dd></div><div><dt>Carrera/curso</dt><dd>${escapeHtml(carrera)}</dd></div></dl>`,
+    input: 'textarea',
+    inputLabel: 'Motivo de anulación',
+    inputPlaceholder: 'Indicá por qué se anula la matrícula',
+    inputValidator: (value) => value?.trim() ? undefined : 'Debe indicar el motivo de anulación.',
+    showCancelButton: true,
+    confirmButtonText: 'Anular matrícula',
+    cancelButtonText: 'Cancelar',
+    reverseButtons: true,
+    focusCancel: true,
+  })
+}
+
+export function confirmCierreCaja({
+  sucursal,
+  fecha,
+  totalEsperado,
+  totalContado,
+  diferencia,
+  importeRetirado = 0,
+  saldoArrastrable = 0,
+}) {
   const hasDifference = Math.abs(Number(diferencia || 0)) > 0.005
   const differenceClass = hasDifference ? 'ipac-swal-difference-warning' : ''
   const differenceMessage = hasDifference
@@ -98,6 +148,8 @@ export function confirmCierreCaja({ sucursal, fecha, totalEsperado, totalContado
         <div><dt>Total esperado</dt><dd>$ ${formatMoney(totalEsperado)}</dd></div>
         <div><dt>Total contado</dt><dd>$ ${formatMoney(totalContado)}</dd></div>
         <div class="${differenceClass}"><dt>Diferencia</dt><dd>$ ${formatMoney(diferencia)}</dd></div>
+        <div><dt>Efectivo a retirar</dt><dd>$ ${formatMoney(importeRetirado)}</dd></div>
+        <div><dt>Próxima apertura</dt><dd>$ ${formatMoney(saldoArrastrable)}</dd></div>
       </dl>
       ${differenceMessage}
     `,
@@ -141,17 +193,19 @@ export function confirmGeneracionCuotasMasivas({
   })
 }
 
-export function confirmImportacion({ archivo, nuevos, actualizados, advertencias, sucursal }) {
+export function confirmImportacion({ archivo, nuevos, actualizados, conceptos = 0, saldos = 0, advertencias, sucursal }) {
   return swalIpac.fire({
     icon: 'warning',
     title: 'Confirmar importación',
     html: `
-      <p>Se modificarán registros de alumnos y carreras en la base de datos.</p>
+      <p>Se modificarán registros académicos y financieros iniciales en la base de datos.</p>
       <dl class="ipac-swal-details">
         <div><dt>Archivo</dt><dd>${escapeHtml(archivo)}</dd></div>
         <div><dt>Sucursal</dt><dd>${escapeHtml(sucursal)}</dd></div>
         <div><dt>Alumnos nuevos</dt><dd>${nuevos}</dd></div>
         <div><dt>Alumnos actualizados</dt><dd>${actualizados}</dd></div>
+        <div><dt>Conceptos procesados</dt><dd>${conceptos}</dd></div>
+        <div><dt>Saldos iniciales nuevos</dt><dd>${saldos}</dd></div>
         <div><dt>Advertencias</dt><dd>${advertencias}</dd></div>
       </dl>
     `,

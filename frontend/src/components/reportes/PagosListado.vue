@@ -182,6 +182,7 @@ const printingId = ref(null)
 function paymentIcon(method) {
   if (method === 'efectivo') return BanknotesIcon
   if (method === 'transferencia') return BuildingLibraryIcon
+  if (method === 'mercado_pago') return CreditCardIcon
   if (method === 'tarjeta') return CreditCardIcon
   return QuestionMarkCircleIcon
 }
@@ -190,6 +191,7 @@ function paymentLabel(method) {
   const labels = {
     efectivo: 'Efectivo',
     transferencia: 'Transferencia',
+    mercado_pago: 'Mercado Pago',
     tarjeta: 'Tarjeta',
     otro: 'Otro',
   }

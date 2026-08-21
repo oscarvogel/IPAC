@@ -101,16 +101,13 @@ import {
   ArrowRightIcon,
   ArrowRightOnRectangleIcon,
   BanknotesIcon,
-  BuildingOffice2Icon,
   BuildingStorefrontIcon,
   ChartBarSquareIcon,
   Cog6ToothIcon,
-  DocumentArrowUpIcon,
   EllipsisVerticalIcon,
   GlobeAltIcon,
   HomeIcon,
   ShieldCheckIcon,
-  TagIcon,
   UserGroupIcon,
   UserIcon,
   WalletIcon,
@@ -146,13 +143,10 @@ const modules = computed(() => {
     { to: '/alumnos', label: 'Alumnos', meta: 'CRM', icon: UserGroupIcon },
     { to: '/deudores', label: 'Deudores', meta: 'Cobranzas', icon: BanknotesIcon },
     { to: '/caja', label: 'Caja', meta: 'Tesorería', icon: WalletIcon },
-    { to: '/conceptos', label: 'Conceptos', meta: 'Aranceles', icon: TagIcon },
     { to: '/reportes', label: 'Reportes', meta: 'Listados', icon: ChartBarSquareIcon },
-    { to: '/sucursales', label: 'Sucursales', meta: 'Accesos', icon: BuildingOffice2Icon },
   ]
   if (canManageUsers.value) {
-    base.push({ to: '/usuarios', label: 'Usuarios', meta: 'Permisos', icon: UserIcon })
-    base.push({ to: '/importaciones', label: 'Cargar datos', meta: 'Plantillas', icon: DocumentArrowUpIcon })
+    base.push({ to: '/configuracion', label: 'Configuración', meta: 'Catálogos y accesos', icon: Cog6ToothIcon })
   }
   return base
 })

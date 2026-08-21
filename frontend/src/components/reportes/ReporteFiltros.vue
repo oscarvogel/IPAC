@@ -32,6 +32,18 @@
           <ChevronDownIcon aria-hidden="true" />
         </span>
       </label>
+      <label v-if="showUser" class="reports-filter-field reports-select-field">
+        <span><UserIcon aria-hidden="true" /> Cajero</span>
+        <span class="reports-select-control">
+          <select v-model="local.usuario">
+            <option value="">Todos los cajeros</option>
+            <option v-for="usuario in usuarios" :key="usuario.id" :value="usuario.id">
+              {{ usuario.nombre }}
+            </option>
+          </select>
+          <ChevronDownIcon aria-hidden="true" />
+        </span>
+      </label>
       <label class="reports-filter-field reports-select-field">
         <span><CreditCardIcon aria-hidden="true" /> Medio</span>
         <span class="reports-select-control">
@@ -39,6 +51,7 @@
             <option value="">Todos los medios</option>
             <option value="efectivo">Efectivo</option>
             <option value="transferencia">Transferencia</option>
+            <option value="mercado_pago">Mercado Pago</option>
             <option value="tarjeta">Tarjeta</option>
             <option value="otro">Otro</option>
           </select>
@@ -63,7 +76,7 @@
           @click="exportar"
         >
           <ArrowDownTrayIcon aria-hidden="true" />
-          <span>Exportar CSV</span>
+          <span>{{ exportLabel }}</span>
         </button>
       </div>
     </div>
@@ -81,12 +94,16 @@ import {
   ChevronDownIcon,
   CreditCardIcon,
   FunnelIcon,
+  UserIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
   filtros: { type: Object, required: true },
   sucursales: { type: Array, required: true },
   loading: { type: Boolean, default: false },
+  exportLabel: { type: String, default: 'Exportar Excel' },
+  usuarios: { type: Array, default: () => [] },
+  showUser: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:filtros', 'aplicar', 'exportar'])

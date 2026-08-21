@@ -19,13 +19,15 @@ class GestionarMatricula:
     def _validate_active_uniqueness(alumno, carrera, instance=None):
         active = Matricula.objects.filter(
             alumno_id=alumno.id,
-            carrera_id=carrera.id,
             estado=Matricula.Estado.ACTIVA,
         )
         if instance is not None:
             active = active.exclude(pk=instance.pk)
         if active.exists():
-            raise MatriculaError("El alumno ya tiene una matrícula activa para esta carrera.")
+            current = active.select_related("carrera").first()
+            if current.carrera_id == carrera.id:
+                raise MatriculaError("El alumno ya tiene una matrícula activa para esta carrera.")
+            raise MatriculaError("El alumno ya tiene una matrícula activa. Utilice la acción Cambiar carrera.")
 
     @staticmethod
     def _sync_legacy_career(alumno):
@@ -88,3 +90,40 @@ class GestionarMatricula:
         current.save(update_fields=["estado", "fecha_fin", "actualizado"])
         self._sync_legacy_career(current.alumno)
         return current
+
+    @transaction.atomic
+    def anular(self, matricula, *, motivo, fecha_fin):
+        current = Matricula.objects.select_for_update().select_related("alumno", "carrera", "sucursal").get(pk=matricula.pk)
+        if current.estado == Matricula.Estado.ANULADA:
+            raise MatriculaError("La matrícula seleccionada ya está anulada.")
+        if not str(motivo or "").strip():
+            raise MatriculaError("Debe indicar el motivo de anulación.")
+        current.estado = Matricula.Estado.ANULADA
+        current.fecha_fin = current.fecha_fin or fecha_fin
+        current.observacion = "\n".join(filter(None, [current.observacion, f"Anulación: {str(motivo).strip()}"]))
+        current.save(update_fields=["estado", "fecha_fin", "observacion", "actualizado"])
+        self._sync_legacy_career(current.alumno)
+        return current
+
+    @transaction.atomic
+    def cambiar_carrera(self, matricula, *, carrera, fecha_inicio, observacion=""):
+        current = Matricula.objects.select_for_update().select_related("alumno", "carrera", "sucursal").get(pk=matricula.pk)
+        if current.estado != Matricula.Estado.ACTIVA:
+            raise MatriculaError("Solo puede cambiarse una matrícula activa.")
+        carrera = CarreraCurso.objects.select_related("sucursal").get(pk=carrera.pk)
+        self._validate_same_branch(current.alumno, carrera)
+        if current.carrera_id == carrera.id:
+            raise MatriculaError("Seleccione una carrera diferente a la matrícula actual.")
+        current.estado = Matricula.Estado.FINALIZADA
+        current.fecha_fin = fecha_inicio
+        current.save(update_fields=["estado", "fecha_fin", "actualizado"])
+        replacement = Matricula.objects.create(
+            alumno=current.alumno,
+            carrera=carrera,
+            sucursal=current.sucursal,
+            fecha_inicio=fecha_inicio,
+            estado=Matricula.Estado.ACTIVA,
+            observacion=observacion,
+        )
+        self._sync_legacy_career(current.alumno)
+        return replacement

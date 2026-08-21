@@ -13,6 +13,9 @@ import UsuariosView from '@/views/UsuariosView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 import ImportacionesView from '@/views/ImportacionesView.vue'
 import AccessDeniedView from '@/views/AccessDeniedView.vue'
+import ConfiguracionView from '@/views/ConfiguracionView.vue'
+import AuditoriaView from '@/views/AuditoriaView.vue'
+import AjustesCuotasView from '@/views/AjustesCuotasView.vue'
 import { canViewRoute } from '@/lib/permissions'
 import { useAuth } from '@/composables/useAuth'
 
@@ -76,6 +79,24 @@ const routes = [
         path: 'usuarios',
         name: 'usuarios',
         component: UsuariosView,
+        meta: { roles: ['superadmin', 'administracion'] },
+      },
+      {
+        path: 'configuracion',
+        name: 'configuracion',
+        component: ConfiguracionView,
+        meta: { roles: ['superadmin', 'administracion'] },
+      },
+      {
+        path: 'ajustes-cuotas',
+        name: 'ajustes-cuotas',
+        component: AjustesCuotasView,
+        meta: { roles: ['superadmin', 'administracion'] },
+      },
+      {
+        path: 'auditoria',
+        name: 'auditoria',
+        component: AuditoriaView,
         meta: { roles: ['superadmin', 'administracion'] },
       },
       {

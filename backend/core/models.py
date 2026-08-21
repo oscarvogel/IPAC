@@ -139,6 +139,58 @@ class ConceptoCobrable(TimeStampedModel):
         return self.nombre
 
 
+class TipoDescuento(TimeStampedModel):
+    class Modalidad(models.TextChoices):
+        IMPORTE = "importe", "Importe fijo"
+        PORCENTAJE = "porcentaje", "Porcentaje"
+
+    nombre = models.CharField(max_length=100)
+    modalidad = models.CharField(max_length=20, choices=Modalidad.choices)
+    valor = models.DecimalField(max_digits=12, decimal_places=2)
+    sucursal = models.ForeignKey(Sucursal, on_delete=models.PROTECT, related_name="tipos_descuento")
+    vigencia_desde = models.DateField(blank=True, null=True)
+    vigencia_hasta = models.DateField(blank=True, null=True)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nombre"]
+        unique_together = [("nombre", "sucursal")]
+
+    def calcular(self, importe):
+        if self.modalidad == self.Modalidad.PORCENTAJE:
+            return (importe * self.valor / Decimal("100")).quantize(Decimal("0.01"))
+        return min(self.valor, importe)
+
+    def __str__(self):
+        return self.nombre
+
+
+class ReglaRecargo(TimeStampedModel):
+    class Modalidad(models.TextChoices):
+        IMPORTE = "importe", "Importe fijo"
+        PORCENTAJE = "porcentaje", "Porcentaje"
+
+    nombre = models.CharField(max_length=100)
+    sucursal = models.ForeignKey(Sucursal, on_delete=models.PROTECT, related_name="reglas_recargo")
+    concepto = models.ForeignKey(ConceptoCobrable, on_delete=models.PROTECT, related_name="reglas_recargo", blank=True, null=True)
+    modalidad = models.CharField(max_length=20, choices=Modalidad.choices)
+    valor = models.DecimalField(max_digits=12, decimal_places=2)
+    dias_tolerancia = models.PositiveIntegerField(default=0)
+    vigencia_desde = models.DateField(blank=True, null=True)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sucursal", "concepto", "dias_tolerancia", "id"]
+
+    def calcular(self, importe):
+        if self.modalidad == self.Modalidad.PORCENTAJE:
+            return (importe * self.valor / Decimal("100")).quantize(Decimal("0.01"))
+        return self.valor
+
+    def __str__(self):
+        return self.nombre
+
+
 class Matricula(TimeStampedModel):
     class Estado(models.TextChoices):
         ACTIVA = "activa", "Activa"
@@ -155,7 +207,7 @@ class Matricula(TimeStampedModel):
 
     class Meta:
         ordering = ["-fecha_inicio", "-id"]
-        constraints = [models.UniqueConstraint(fields=["alumno", "carrera"], condition=models.Q(estado="activa"), name="unique_active_enrollment_per_course")]
+        constraints = [models.UniqueConstraint(fields=["alumno"], condition=models.Q(estado="activa"), name="unique_active_enrollment_per_student")]
 
     def save(self, *args, **kwargs):
         if not self.sucursal_id and self.alumno_id:
@@ -182,7 +234,12 @@ class Cuota(TimeStampedModel):
     fecha_vencimiento = models.DateField()
     importe = models.DecimalField(max_digits=12, decimal_places=2)
     descuento = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tipo_descuento = models.ForeignKey(TipoDescuento, on_delete=models.PROTECT, related_name="cuotas", blank=True, null=True)
+    motivo_descuento = models.CharField(max_length=255, blank=True)
+    descuento_registrado_por = models.ForeignKey(User, on_delete=models.PROTECT, related_name="descuentos_cuota", blank=True, null=True)
     recargo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    regla_recargo = models.ForeignKey(ReglaRecargo, on_delete=models.PROTECT, related_name="cuotas", blank=True, null=True)
+    recargo_calculado_en = models.DateTimeField(blank=True, null=True)
     estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.PENDIENTE)
 
     class Meta:
@@ -195,7 +252,7 @@ class Cuota(TimeStampedModel):
 
     @property
     def total_pagado(self):
-        return sum((item.importe for item in self.aplicaciones.all()), Decimal("0"))
+        return sum((item.importe for item in self.aplicaciones.all() if item.activa), Decimal("0"))
 
     @property
     def saldo(self):
@@ -214,9 +271,14 @@ class Cuota(TimeStampedModel):
 
 
 class Pago(TimeStampedModel):
+    class Estado(models.TextChoices):
+        ACTIVO = "activo", "Activo"
+        ANULADO = "anulado", "Anulado"
+
     class Medio(models.TextChoices):
         EFECTIVO = "efectivo", "Efectivo"
         TRANSFERENCIA = "transferencia", "Transferencia"
+        MERCADO_PAGO = "mercado_pago", "Mercado Pago"
         TARJETA = "tarjeta", "Tarjeta"
         OTRO = "otro", "Otro"
 
@@ -234,6 +296,32 @@ class Pago(TimeStampedModel):
     medio = models.CharField(max_length=30, choices=Medio.choices, default=Medio.EFECTIVO)
     observacion = models.TextField(blank=True)
     numero_recibo = models.CharField(max_length=30, unique=True, blank=True, null=True, editable=False)
+    saldo_pendiente_posterior = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        editable=False,
+    )
+    registrado_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="pagos_registrados",
+        blank=True,
+        null=True,
+        editable=False,
+    )
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.ACTIVO)
+    motivo_anulacion = models.TextField(blank=True)
+    anulado_en = models.DateTimeField(blank=True, null=True)
+    anulado_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="pagos_anulados",
+        blank=True,
+        null=True,
+        editable=False,
+    )
 
     class Meta:
         ordering = ["-fecha", "-id"]
@@ -253,10 +341,12 @@ class Pago(TimeStampedModel):
 
     @property
     def importe_aplicado(self):
-        return sum((item.importe for item in self.aplicaciones.all()), Decimal("0"))
+        return sum((item.importe for item in self.aplicaciones.all() if item.activa), Decimal("0"))
 
     @property
     def saldo_a_favor(self):
+        if self.estado == self.Estado.ANULADO:
+            return Decimal("0")
         return max(self.importe - self.importe_aplicado, Decimal("0"))
 
 
@@ -264,6 +354,8 @@ class AplicacionPago(TimeStampedModel):
     pago = models.ForeignKey(Pago, on_delete=models.PROTECT, related_name="aplicaciones")
     cuota = models.ForeignKey(Cuota, on_delete=models.PROTECT, related_name="aplicaciones")
     importe = models.DecimalField(max_digits=12, decimal_places=2)
+    activa = models.BooleanField(default=True)
+    anulada_en = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         ordering = ["creado", "id"]
@@ -282,7 +374,10 @@ class CajaDiaria(TimeStampedModel):
     sucursal = models.ForeignKey(Sucursal, on_delete=models.PROTECT, related_name="cajas")
     usuario = models.ForeignKey(User, on_delete=models.PROTECT, related_name="cajas")
     estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.ABIERTA)
+    saldo_inicial = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_contado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    importe_retirado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    saldo_arrastrable = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cerrada_en = models.DateTimeField(blank=True, null=True)
 
     class Meta:
@@ -292,9 +387,18 @@ class CajaDiaria(TimeStampedModel):
         verbose_name_plural = "cajas diarias"
 
     @property
+    def resumen(self):
+        from .contexts.caja.domain.resumen_caja import calcular_resumen_caja
+
+        return calcular_resumen_caja(
+            saldo_inicial=self.saldo_inicial,
+            movimientos=self.movimientos.all(),
+        )
+
+    @property
     def total_esperado(self):
-        total = sum(movimiento.signed_amount for movimiento in self.movimientos.all())
-        return total
+        """Alias compatible: representa exclusivamente el efectivo físico esperado."""
+        return self.resumen.efectivo_esperado
 
     @property
     def diferencia(self):
@@ -304,6 +408,43 @@ class CajaDiaria(TimeStampedModel):
         return f"{self.fecha} - {self.sucursal} - {self.usuario}"
 
 
+class SaldoArrastrableCaja(TimeStampedModel):
+    sucursal = models.ForeignKey(Sucursal, on_delete=models.PROTECT, related_name="saldos_caja")
+    caja_origen = models.OneToOneField(
+        CajaDiaria,
+        on_delete=models.PROTECT,
+        related_name="saldo_generado",
+    )
+    caja_destino = models.OneToOneField(
+        CajaDiaria,
+        on_delete=models.PROTECT,
+        related_name="saldo_recibido",
+        blank=True,
+        null=True,
+    )
+    importe = models.DecimalField(max_digits=12, decimal_places=2)
+    utilizado_en = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-caja_origen__fecha", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sucursal"],
+                condition=models.Q(caja_destino__isnull=True),
+                name="unique_pending_cash_balance_per_branch",
+            )
+        ]
+        verbose_name = "saldo arrastrable de caja"
+        verbose_name_plural = "saldos arrastrables de caja"
+
+    @property
+    def utilizado(self):
+        return self.caja_destino_id is not None
+
+    def __str__(self):
+        return f"{self.sucursal} - {self.importe} - caja {self.caja_origen_id}"
+
+
 class MovimientoCaja(TimeStampedModel):
     class Tipo(models.TextChoices):
         PAGO = "pago", "Pago"
@@ -311,6 +452,7 @@ class MovimientoCaja(TimeStampedModel):
         EGRESO = "egreso", "Egreso"
         RETIRO = "retiro", "Retiro"
         PASE = "pase", "Pase"
+        REVERSO = "reverso", "Reverso de pago"
 
     caja = models.ForeignKey(CajaDiaria, on_delete=models.PROTECT, related_name="movimientos")
     tipo = models.CharField(max_length=30, choices=Tipo.choices)
@@ -324,6 +466,13 @@ class MovimientoCaja(TimeStampedModel):
         blank=True,
         null=True,
     )
+    movimiento_origen = models.OneToOneField(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="movimiento_reverso",
+        blank=True,
+        null=True,
+    )
 
     class Meta:
         ordering = ["-creado", "-id"]
@@ -332,9 +481,47 @@ class MovimientoCaja(TimeStampedModel):
 
     @property
     def signed_amount(self):
-        if self.tipo in {self.Tipo.EGRESO, self.Tipo.RETIRO, self.Tipo.PASE}:
+        if self.tipo in {self.Tipo.EGRESO, self.Tipo.RETIRO, self.Tipo.PASE, self.Tipo.REVERSO}:
             return -self.importe
         return self.importe
 
     def __str__(self):
         return f"{self.get_tipo_display()} - {self.importe}"
+
+
+class EventoAuditoria(TimeStampedModel):
+    usuario = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="eventos_auditoria",
+        blank=True,
+        null=True,
+    )
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.PROTECT,
+        related_name="eventos_auditoria",
+        blank=True,
+        null=True,
+    )
+    modulo = models.CharField(max_length=50)
+    accion = models.CharField(max_length=50)
+    entidad = models.CharField(max_length=100)
+    entidad_id = models.CharField(max_length=80)
+    descripcion = models.CharField(max_length=255, blank=True)
+    valores_anteriores = models.JSONField(default=dict, blank=True)
+    valores_nuevos = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-creado", "-id"]
+        indexes = [
+            models.Index(fields=["modulo", "creado"]),
+            models.Index(fields=["entidad", "entidad_id"]),
+            models.Index(fields=["usuario", "creado"]),
+        ]
+        verbose_name = "evento de auditoría"
+        verbose_name_plural = "eventos de auditoría"
+
+    def __str__(self):
+        return f"{self.modulo}:{self.accion} {self.entidad}#{self.entidad_id}"

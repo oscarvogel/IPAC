@@ -72,6 +72,23 @@
               <option value="antiguedad">Mayor antigüedad</option>
             </select>
           </label>
+
+          <label class="debtors-filter-field">
+            <span class="sr-only">Mes correspondiente</span>
+            <input v-model.trim="periodo" placeholder="Mes (MM-AAAA)" aria-label="Mes correspondiente" />
+          </label>
+
+          <label class="debtors-order-field">
+            <span class="sr-only">Segmento de morosidad</span>
+            <select v-model="segmento" aria-label="Segmento de morosidad">
+              <option value="">Todas las antigüedades</option>
+              <option value="1">1 cuota vencida</option>
+              <option value="2">2 cuotas vencidas</option>
+              <option value="3plus">3 o más cuotas vencidas</option>
+            </select>
+          </label>
+
+          <button type="button" class="debtors-export" @click="exportDebt"><ArrowDownTrayIcon aria-hidden="true" /> Exportar Excel</button>
         </div>
       </section>
 
@@ -116,7 +133,7 @@
                   <strong>{{ deudor.cuotas_pendientes }}</strong>
                   <small>{{ deudor.cuotas_vencidas }} vencidas</small>
                 </td>
-                <td>{{ deudor.cuota_vencida_mas_antigua ? formatDate(deudor.cuota_vencida_mas_antigua) : 'Sin vencidas' }}</td>
+                <td>{{ deudor.cuota_vencida_mas_antigua ? `${formatDate(deudor.cuota_vencida_mas_antigua)} · ${deudor.dias_mora} días` : 'Sin vencidas' }}</td>
                 <td>{{ deudor.fecha_ultimo_pago ? formatDate(deudor.fecha_ultimo_pago) : 'Sin pagos' }}</td>
                 <td>
                   <div class="users-row-actions debtors-actions">
@@ -127,6 +144,13 @@
               </tr>
             </tbody>
           </table>
+        </div>
+        <div v-if="deudores.length" class="mobile-record-list debtors-mobile-list" role="list">
+          <article v-for="deudor in deudores" :key="`mobile-${deudor.id}`" class="mobile-record-card" role="listitem">
+            <header class="mobile-record-head"><span class="mobile-record-title"><strong>{{ deudor.apellido }}, {{ deudor.nombre }}</strong><small>{{ deudor.legajo }} · {{ deudor.sucursal_nombre }}</small></span><strong class="debtors-debt">$ {{ formatMoney(deudor.deuda_total, { fractionDigits: 2 }) }}</strong></header>
+            <dl class="mobile-record-meta"><div><dt>Cuotas</dt><dd>{{ deudor.cuotas_pendientes }} pendientes · {{ deudor.cuotas_vencidas }} vencidas</dd></div><div><dt>Antigüedad</dt><dd>{{ deudor.dias_mora ? `${deudor.dias_mora} días` : 'Sin vencidas' }}</dd></div><div><dt>Contacto</dt><dd>{{ deudor.telefono || deudor.email || 'Sin informar' }}</dd></div></dl>
+            <footer class="mobile-record-footer debtors-mobile-actions"><button type="button" @click="openEstado(deudor)">Estado de cuenta</button><button v-if="canRegisterPayments" type="button" @click="openPago(deudor)">Registrar pago</button></footer>
+          </article>
         </div>
       </section>
 
@@ -165,6 +189,7 @@ import {
   ChevronDownIcon,
   ExclamationCircleIcon,
   MagnifyingGlassIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/vue/24/outline'
 import AppPageState from '@/components/ui/AppPageState.vue'
 import EstadoCuentaModal from '@/components/alumnos/EstadoCuentaModal.vue'
@@ -174,11 +199,13 @@ import { useDeudores } from '@/composables/useDeudores'
 import { useAuth } from '@/composables/useAuth'
 import { useToast } from '@/composables/useToast'
 import { formatDate, formatMoney } from '@/lib/formatters'
+import { useReportes } from '@/composables/useReportes'
 
 const { sucursales, carreras, conceptos, loadCatalogos } = useCatalogos()
 const { deudores, pagination, loading, error, loadDeudores } = useDeudores()
 const auth = useAuth()
 const toast = useToast()
+const { exportarExcel } = useReportes()
 
 const search = ref('')
 const sucursalFilter = ref('todas')
@@ -187,6 +214,8 @@ const onlyOverdue = ref(false)
 const deudaMin = ref('')
 const deudaMax = ref('')
 const ordering = ref('deuda')
+const periodo = ref('')
+const segmento = ref('')
 const pageSize = ref(10)
 const currentPage = ref(1)
 const pageSizeOptions = [5, 10, 25]
@@ -213,6 +242,8 @@ function buildQuery() {
     deuda_min: deudaMin.value,
     deuda_max: deudaMax.value,
     orden: ordering.value,
+    periodo: periodo.value,
+    segmento: segmento.value,
   }
 }
 
@@ -236,7 +267,7 @@ async function loadFilteredPage() {
 }
 
 watch(
-  [search, sucursalFilter, carreraFilter, onlyOverdue, deudaMin, deudaMax, ordering, pageSize],
+  [search, sucursalFilter, carreraFilter, onlyOverdue, deudaMin, deudaMax, ordering, periodo, segmento, pageSize],
   (_, __, onCleanup) => {
     currentPage.value = 1
     const timer = setTimeout(() => loadFilteredPage(), 250)
@@ -272,6 +303,15 @@ async function onPagoSaved() {
   await loadFilteredPage()
 }
 
+async function exportDebt() {
+  try {
+    await exportarExcel('morosidad', buildQuery())
+    toast.success('Reporte de morosidad descargado')
+  } catch (err) {
+    toast.error(err.message || 'No se pudo exportar la morosidad.')
+  }
+}
+
 onMounted(loadPage)
 </script>
 
@@ -297,6 +337,7 @@ onMounted(loadPage)
 }
 
 .debtors-filter-field select,
+.debtors-filter-field input,
 .debtors-order-field select,
 .debtors-amount-field input {
   width: 154px;
@@ -308,6 +349,10 @@ onMounted(loadPage)
   background: var(--surface);
   font-size: 12px;
 }
+
+.debtors-export { display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; border: 1px solid var(--primary); border-radius: 10px; padding: 0 .8rem; background: transparent; color: var(--primary); font-weight: 800; }
+.debtors-export svg { width: 1.1rem; }
+.debtors-mobile-list { display: none; }
 
 .debtors-order-field select {
   width: 145px;
@@ -388,13 +433,10 @@ onMounted(loadPage)
 }
 
 @media (max-width: 820px) {
-  .debtors-table-wrap {
-    overflow-x: auto;
-  }
-
-  .debtors-table {
-    min-width: 980px;
-  }
+  .debtors-table-wrap .users-table-wrap { display: none; }
+  .debtors-mobile-list { display: grid; gap: .75rem; padding: .75rem; }
+  .debtors-mobile-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .debtors-mobile-actions button { min-height: 42px; border: 1px solid var(--border); border-radius: .6rem; background: var(--surface); color: var(--primary); font-weight: 800; }
 
   .debtors-filters,
   .debtors-filters > * {
@@ -403,6 +445,7 @@ onMounted(loadPage)
 
   .debtors-search-field,
   .debtors-filter-field select,
+  .debtors-filter-field input,
   .debtors-order-field select,
   .debtors-amount-field input {
     width: 100%;

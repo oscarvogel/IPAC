@@ -17,7 +17,7 @@ describe('experiencia de caja', () => {
     })
 
     expect(wrapper.text()).toContain('Posadas')
-    expect(wrapper.find('.cash-status-badge').text()).toContain('abierta')
+    expect(wrapper.find('.cash-status-badge').text()).toContain('Abierta')
 
     const buttons = wrapper.findAll('button')
     await buttons.find((button) => button.text().includes('Ingreso')).trigger('click')
@@ -25,6 +25,26 @@ describe('experiencia de caja', () => {
 
     expect(wrapper.emitted('movimiento')[0]).toEqual(['ingreso'])
     expect(wrapper.emitted('cerrar')).toHaveLength(1)
+  })
+
+  it('prioriza consulta e impresión cuando la caja está cerrada', () => {
+    const wrapper = mount(CajaHero, {
+      props: {
+        cajaHoy: {
+          fecha: '2026-07-31',
+          estado: 'cerrada',
+          sucursal_nombre: 'Posadas',
+          usuario_nombre: 'cajero',
+          cerrada_en: '2026-07-31T18:30:00-03:00',
+        },
+        puedeMover: false,
+      },
+    })
+
+    expect(wrapper.text()).toContain('Caja cerrada')
+    expect(wrapper.text()).toContain('Imprimir cierre')
+    expect(wrapper.text()).not.toContain('Ingreso')
+    expect(wrapper.text()).not.toContain('Cerrar caja')
   })
 
   it('diferencia visualmente ingresos y egresos en el historial', () => {

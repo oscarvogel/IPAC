@@ -4,14 +4,28 @@
     <h1>{{ sucursalLabel }}</h1>
     <p>{{ cajaHoy?.fecha }} · Usuario: {{ username }} · Estado: {{ cajaHoy?.estado }}</p>
     <div class="print-totals">
-      <div><span>Total esperado</span><strong>$ {{ formatMoney(cajaTotales.total) }}</strong></div>
-      <div><span>Efectivo</span><strong>$ {{ formatMoney(cajaTotales.efectivo) }}</strong></div>
+      <div><span>Saldo inicial</span><strong>$ {{ formatMoney(cajaTotales.saldoInicial) }}</strong></div>
+      <div><span>Cobranzas en efectivo</span><strong>$ {{ formatMoney(cajaTotales.cobranzasEfectivo) }}</strong></div>
+      <div><span>Otros ingresos en efectivo</span><strong>$ {{ formatMoney(cajaTotales.otrosIngresosEfectivo) }}</strong></div>
+      <div><span>Egresos en efectivo</span><strong>$ {{ formatMoney(cajaTotales.egresosEfectivo) }}</strong></div>
+      <div><span>Retiros en efectivo</span><strong>$ {{ formatMoney(cajaTotales.retirosEfectivo) }}</strong></div>
+      <div><span>Efectivo esperado</span><strong>$ {{ formatMoney(cajaTotales.efectivoEsperado) }}</strong></div>
+      <div><span>Total cobrado</span><strong>$ {{ formatMoney(cajaTotales.totalCobrado) }}</strong></div>
       <div><span>Transferencia</span><strong>$ {{ formatMoney(cajaTotales.transferencia) }}</strong></div>
+      <div><span>Mercado Pago</span><strong>$ {{ formatMoney(cajaTotales.mercadoPago) }}</strong></div>
+      <div><span>Tarjetas</span><strong>$ {{ formatMoney(cajaTotales.tarjeta) }}</strong></div>
+      <div><span>Otros medios</span><strong>$ {{ formatMoney(cajaTotales.otro) }}</strong></div>
       <div v-if="cajaHoy?.estado === 'cerrada'">
         <span>Total contado</span><strong>$ {{ formatMoney(cajaHoy.total_contado) }}</strong>
       </div>
       <div v-if="cajaHoy?.estado === 'cerrada'">
         <span>Diferencia</span><strong>$ {{ formatMoney(cajaHoy.diferencia) }}</strong>
+      </div>
+      <div v-if="cajaHoy?.estado === 'cerrada'">
+        <span>Efectivo retirado</span><strong>$ {{ formatMoney(cajaHoy.importe_retirado) }}</strong>
+      </div>
+      <div v-if="cajaHoy?.estado === 'cerrada'">
+        <span>Saldo para próxima apertura</span><strong>$ {{ formatMoney(cajaHoy.saldo_arrastrable) }}</strong>
       </div>
     </div>
     <table>

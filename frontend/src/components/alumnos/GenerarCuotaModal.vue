@@ -58,9 +58,21 @@
               <input v-model="form.importe" type="number" min="0" step="0.01" required />
             </label>
             <label>
+              Tipo de descuento
+              <select v-model="form.tipo_descuento">
+                <option value="">Sin descuento</option>
+                <option v-for="tipo in tiposFiltrados" :key="tipo.id" :value="tipo.id">{{ tipo.nombre }}</option>
+              </select>
+              <small class="field-help">Identifica la autorización aplicada a esta cuota.</small>
+            </label>
+            <label v-if="form.tipo_descuento">
               Descuento
-              <input v-model="form.descuento" type="number" min="0" step="0.01" value="0" />
-              <small class="field-help">Importe que se resta del valor de la cuota. Dejar en $0 si no corresponde.</small>
+              <input v-model="form.descuento" type="number" min="0" step="0.01" :readonly="selectedDiscount?.valor > 0" />
+              <small class="field-help">Importe que se resta del valor de la cuota.</small>
+            </label>
+            <label v-if="form.tipo_descuento">
+              Motivo del descuento
+              <input v-model.trim="form.motivo_descuento" placeholder="Ej. Beca aprobada" required />
             </label>
             <label>
               Recargo
@@ -98,6 +110,7 @@ import { usePagos } from '@/composables/usePagos'
 import { useToast } from '@/composables/useToast'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
+import { useCatalogos } from '@/composables/useCatalogos'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -109,6 +122,7 @@ const emit = defineEmits(['close', 'saved'])
 
 const { generarCuota } = usePagos()
 const toast = useToast()
+const { tiposDescuento } = useCatalogos()
 
 const form = reactive({
   concepto: '',
@@ -117,6 +131,8 @@ const form = reactive({
   fecha_vencimiento: '',
   importe: '',
   descuento: 0,
+  tipo_descuento: '',
+  motivo_descuento: '',
   recargo: 0,
 })
 
@@ -130,6 +146,8 @@ const conceptosFiltrados = computed(() => {
   if (!props.alumno) return []
   return props.conceptos.filter((c) => c.activo && c.sucursal === props.alumno.sucursal)
 })
+const tiposFiltrados = computed(() => tiposDescuento.value.filter((tipo) => tipo.activo && String(tipo.sucursal) === String(props.alumno?.sucursal)))
+const selectedDiscount = computed(() => tiposFiltrados.value.find((tipo) => String(tipo.id) === String(form.tipo_descuento)))
 
 function todayStr() {
   const d = new Date()
@@ -147,10 +165,21 @@ watch(
     form.fecha_emision = todayStr()
     form.fecha_vencimiento = ''
     form.descuento = 0
+    form.tipo_descuento = ''
+    form.motivo_descuento = ''
     form.recargo = 0
   },
   { immediate: true },
 )
+
+watch([() => form.tipo_descuento, () => form.importe], () => {
+  const tipo = selectedDiscount.value
+  if (!tipo) { form.descuento = 0; return }
+  if (Number(tipo.valor) <= 0) return
+  form.descuento = tipo.modalidad === 'porcentaje'
+    ? (Number(form.importe || 0) * Number(tipo.valor) / 100).toFixed(2)
+    : Math.min(Number(tipo.valor), Number(form.importe || 0)).toFixed(2)
+})
 
 watch(
   () => form.concepto,
@@ -174,6 +203,8 @@ async function handleSubmit() {
       fecha_vencimiento: form.fecha_vencimiento,
       importe: form.importe,
       descuento: form.descuento || 0,
+      tipo_descuento: form.tipo_descuento || null,
+      motivo_descuento: form.motivo_descuento,
       recargo: form.recargo || 0,
     })
     toast.success('Cuota generada')

@@ -7,9 +7,9 @@ export const ROLES = Object.freeze({
 })
 
 const ROLE_CAPABILITIES = Object.freeze({
-  superadmin: ['manage-users', 'manage-alumnos', 'register-payments', 'manage-fees', 'manage-concepts', 'manage-branches', 'operate-cash', 'import-data'],
+  superadmin: ['manage-users', 'manage-alumnos', 'register-payments', 'void-payments', 'manage-fees', 'manage-concepts', 'manage-branches', 'operate-cash', 'import-data'],
   administracion: ['manage-users', 'manage-alumnos', 'register-payments', 'manage-fees', 'manage-concepts', 'manage-branches', 'operate-cash', 'import-data'],
-  tesoreria: ['register-payments', 'manage-fees', 'operate-cash'],
+  tesoreria: ['register-payments', 'void-payments', 'manage-fees', 'operate-cash'],
   caja: ['register-payments', 'operate-cash'],
   consulta: [],
 })
