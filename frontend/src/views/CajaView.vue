@@ -112,7 +112,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowsRightLeftIcon,
   BanknotesIcon,
@@ -136,6 +137,8 @@ import AppPageState from '@/components/ui/AppPageState.vue'
 const auth = useAuth()
 const caja = useCaja()
 const toast = useToast()
+const route = useRoute()
+const router = useRouter()
 
 const { cajaHoy, saldoAnterior, cajaMovimientos, cajaTotales, loading, error: cajaError } = caja
 
@@ -255,6 +258,15 @@ function printCajaResumen() {
 
 onMounted(loadPage)
 
+watch(
+  [pageReady, () => route.query.accion],
+  ([ready, accion]) => {
+    if (!ready || !accion) return
+    consumeRouteAction(accion)
+  },
+  { immediate: true },
+)
+
 async function loadPage() {
   pageReady.value = false
   pageError.value = ''
@@ -273,5 +285,22 @@ async function applyPreviousBalance() {
   } catch (err) {
     toast.error(err.message || 'No se pudo aplicar el saldo anterior.')
   }
+}
+
+function consumeRouteAction(accion) {
+  const { accion: _discarded, ...query } = route.query
+  router.replace({ path: route.path, query, hash: route.hash })
+
+  const movementActions = ['ingreso', 'egreso', 'retiro']
+  const validAction = movementActions.includes(accion) || accion === 'cerrar'
+  if (!validAction || !auth.can('operate-cash')) return
+
+  if (!puedeMover.value) {
+    toast.error('La caja del día debe estar abierta para realizar esta operación.')
+    return
+  }
+
+  if (accion === 'cerrar') openCerrar()
+  else openMovimiento(accion)
 }
 </script>

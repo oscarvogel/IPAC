@@ -21,7 +21,7 @@
     />
 
     <nav class="reports-tabs" aria-label="Categorías de reportes">
-      <button v-for="tab in tabs" :key="tab.id" type="button" :class="{ active: activeTab === tab.id }" @click="activeTab = tab.id">
+      <button v-for="tab in tabs" :key="tab.id" type="button" :class="{ active: activeTab === tab.id }" @click="selectTab(tab.id)">
         {{ tab.label }}
       </button>
     </nav>
@@ -70,7 +70,8 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useReportes } from '@/composables/useReportes'
 import { useToast } from '@/composables/useToast'
@@ -92,9 +93,12 @@ const {
   exportarExcel,
 } = useReportes()
 const toast = useToast()
+const route = useRoute()
+const router = useRouter()
 const pageReady = ref(false)
 const pageError = ref('')
-const activeTab = ref('resumen')
+const reportSections = ['resumen', 'cobranzas', 'morosidad', 'caja', 'alumnos']
+const activeTab = ref(reportSections.includes(route.query.seccion) ? route.query.seccion : 'resumen')
 const cajeros = ref([])
 const tabs = [
   { id: 'resumen', label: 'Resumen' },
@@ -103,6 +107,25 @@ const tabs = [
   { id: 'caja', label: 'Caja' },
   { id: 'alumnos', label: 'Alumnos' },
 ]
+
+watch(
+  () => route.query.seccion,
+  (section) => {
+    if (reportSections.includes(section)) {
+      activeTab.value = section
+      return
+    }
+    activeTab.value = 'resumen'
+    if (section) router.replace({ path: route.path, query: { ...route.query, seccion: 'resumen' }, hash: route.hash })
+  },
+)
+
+function selectTab(section) {
+  if (!reportSections.includes(section)) return
+  activeTab.value = section
+  if (route.query.seccion === section) return
+  router.push({ path: route.path, query: { ...route.query, seccion: section }, hash: route.hash })
+}
 
 const filtros = reactive({
   desde: '',

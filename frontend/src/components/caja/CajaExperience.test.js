@@ -20,7 +20,10 @@ describe('experiencia de caja', () => {
     expect(wrapper.find('.cash-status-badge').text()).toContain('Abierta')
 
     const buttons = wrapper.findAll('button')
-    await buttons.find((button) => button.text().includes('Ingreso')).trigger('click')
+    expect(wrapper.text()).toContain('Ingreso manual')
+    expect(wrapper.text()).toContain('Egreso manual')
+    expect(wrapper.text()).toContain('Retiro de efectivo')
+    await buttons.find((button) => button.text().includes('Ingreso manual')).trigger('click')
     await buttons.find((button) => button.text().includes('Cerrar caja')).trigger('click')
 
     expect(wrapper.emitted('movimiento')[0]).toEqual(['ingreso'])
@@ -43,7 +46,7 @@ describe('experiencia de caja', () => {
 
     expect(wrapper.text()).toContain('Caja cerrada')
     expect(wrapper.text()).toContain('Imprimir cierre')
-    expect(wrapper.text()).not.toContain('Ingreso')
+    expect(wrapper.text()).not.toContain('Ingreso manual')
     expect(wrapper.text()).not.toContain('Cerrar caja')
   })
 

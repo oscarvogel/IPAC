@@ -2,7 +2,6 @@
   <section class="settings-view">
     <header class="settings-header">
       <p class="eyebrow">Administración del sistema</p>
-      <h1>Configuración</h1>
       <p>Catálogos, accesos y herramientas que definen cómo funciona IPAC.</p>
     </header>
 

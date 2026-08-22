@@ -35,4 +35,23 @@ describe('experiencias de login independientes', () => {
       remember: false,
     })
   })
+
+  it('ofrece el cambio de tema en desktop y mobile', async () => {
+    const desktop = mount(DesktopLogin)
+    const mobile = mount(MobileLogin)
+    const desktopToggle = desktop.get('.login-theme-toggle')
+    const mobileToggle = mobile.get('.login-theme-toggle')
+    const desktopInitialLabel = desktopToggle.attributes('aria-label')
+    const mobileInitialLabel = mobileToggle.attributes('aria-label')
+
+    await desktopToggle.trigger('click')
+    expect(desktopToggle.attributes('aria-label')).not.toBe(desktopInitialLabel)
+    expect(mobileToggle.attributes('aria-label')).not.toBe(mobileInitialLabel)
+
+    await mobileToggle.trigger('click')
+    expect(desktopToggle.attributes('aria-label')).toBe(desktopInitialLabel)
+    expect(mobileToggle.attributes('aria-label')).toBe(mobileInitialLabel)
+    desktop.unmount()
+    mobile.unmount()
+  })
 })

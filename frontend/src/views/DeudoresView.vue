@@ -101,8 +101,8 @@
         <div v-if="loading" class="debtors-loading" aria-live="polite">Cargando cartera...</div>
         <div v-else-if="!deudores.length" class="students-empty-state debtors-empty">
           <span><BanknotesIcon aria-hidden="true" /></span>
-          <strong>No encontramos deudores</strong>
-          <p>Probá cambiando la búsqueda o los filtros seleccionados.</p>
+          <strong>{{ hasActiveFilters ? 'No hay resultados para estos filtros' : 'No hay alumnos con deuda' }}</strong>
+          <p>{{ hasActiveFilters ? 'Probá cambiando la búsqueda o los filtros seleccionados.' : 'Cuando exista una deuda pendiente, aparecerá en esta cartera.' }}</p>
         </div>
         <div v-else class="users-table-wrap">
           <table class="users-table debtors-table">
@@ -230,6 +230,16 @@ const careerOptions = computed(() => carreras.value.filter((carrera) => (
   sucursalFilter.value === 'todas' || String(carrera.sucursal) === String(sucursalFilter.value)
 )))
 const totalPages = computed(() => Math.max(1, Math.ceil(pagination.value.count / pagination.value.pageSize)))
+const hasActiveFilters = computed(() => Boolean(
+  search.value.trim()
+  || sucursalFilter.value !== 'todas'
+  || carreraFilter.value
+  || onlyOverdue.value
+  || deudaMin.value
+  || deudaMax.value
+  || periodo.value
+  || segmento.value,
+))
 
 function buildQuery() {
   return {

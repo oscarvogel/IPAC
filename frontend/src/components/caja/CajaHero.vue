@@ -44,7 +44,7 @@
         @click="$emit('movimiento', 'ingreso')"
       >
         <PlusCircleIcon aria-hidden="true" />
-        <span>Ingreso</span>
+        <span>Ingreso manual</span>
       </button>
       <button
         v-if="!isClosed"
@@ -54,7 +54,7 @@
         @click="$emit('movimiento', 'egreso')"
       >
         <MinusCircleIcon aria-hidden="true" />
-        <span>Egreso</span>
+        <span>Egreso manual</span>
       </button>
       <button
         v-if="!isClosed"
@@ -64,7 +64,7 @@
         @click="$emit('movimiento', 'retiro')"
       >
         <BanknotesIcon aria-hidden="true" />
-        <span>Retiro</span>
+        <span>Retiro de efectivo</span>
       </button>
       <button
         v-if="!isClosed"

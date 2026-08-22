@@ -8,13 +8,14 @@
       @retry="loadPage"
     />
     <template v-else>
-    <div class="stats-grid">
+    <div id="dashboard-indicators" class="stats-grid" :class="{ 'show-all-mobile-stats': showAllMobileStats }">
       <component
         v-for="stat in stats"
         :key="stat.label"
         :is="stat.to ? 'RouterLink' : 'article'"
         :to="stat.to"
         class="stat-card border-border bg-surface"
+        :class="{ 'stat-card-secondary': !stat.mobilePrimary }"
       >
         <span class="stat-icon" :class="`stat-icon-${stat.tone}`">
           <component :is="stat.icon" aria-hidden="true" />
@@ -23,9 +24,23 @@
           <span class="stat-label">{{ stat.label }}</span>
           <strong>{{ stat.value }}</strong>
           <small>{{ stat.detail }}</small>
+          <span v-if="stat.action" class="stat-action">
+            <span>{{ stat.action }}</span>
+            <ArrowRightIcon aria-hidden="true" />
+          </span>
         </span>
       </component>
     </div>
+    <button
+      type="button"
+      class="dashboard-stats-toggle"
+      aria-controls="dashboard-indicators"
+      :aria-expanded="showAllMobileStats"
+      @click="showAllMobileStats = !showAllMobileStats"
+    >
+      <span>{{ showAllMobileStats ? 'Ver menos indicadores' : 'Ver más indicadores' }}</span>
+      <ChevronDownIcon aria-hidden="true" />
+    </button>
 
     <div class="dashboard-grid">
       <article class="panel cash-card border-border bg-surface">
@@ -87,8 +102,10 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import {
+  ArrowRightIcon,
   BanknotesIcon,
   BuildingStorefrontIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
   CreditCardIcon,
   LockClosedIcon,
@@ -126,6 +143,7 @@ const cobrosPorSucursal = ref([])
 const cajasPeriodo = ref({ abiertas: 0, cerradas: 0, diferencia_acumulada: 0 })
 const pageReady = ref(false)
 const pageError = ref('')
+const showAllMobileStats = ref(false)
 const ultimosPagos = computed(() => pagosMes.value.slice(0, 5))
 
 const { cajaHoy, cajaMovimientos, error: cajaError, loadCajaHoy } = caja
@@ -228,6 +246,8 @@ const sucursalPrincipal = computed(() => {
 const stats = computed(() => [
   {
     label: 'Alumnos',
+    mobilePrimary: true,
+    action: 'Ver alumnos',
     value: alumnosCount.value,
     detail: 'base cargada',
     tone: 'gold',
@@ -236,6 +256,7 @@ const stats = computed(() => [
   },
   {
     label: 'Sucursales',
+    action: auth.can('manage-branches') ? 'Ver sucursales' : undefined,
     value: sucursales.value.length,
     detail: sucursales.value.map((sucursal) => sucursal.nombre).join(' y '),
     tone: 'blue',
@@ -244,6 +265,8 @@ const stats = computed(() => [
   },
   {
     label: 'Cobrado del mes',
+    mobilePrimary: true,
+    action: 'Ver cobranzas',
     value: `$ ${formatMoney(totalCobradoMes.value, { fractionDigits: 2 })}`,
     detail: `${pagosMesCount.value} pagos`,
     tone: 'green',
@@ -252,6 +275,7 @@ const stats = computed(() => [
   },
   {
     label: 'Pagos del mes',
+    action: 'Ver pagos',
     value: pagosMesCount.value,
     detail: 'filtrados por período actual',
     tone: 'violet',
@@ -260,6 +284,8 @@ const stats = computed(() => [
   },
   {
     label: 'Cobrado hoy',
+    mobilePrimary: true,
+    action: 'Ver cobranzas',
     value: `$ ${formatMoney(cobradoHoy.value, { fractionDigits: 2 })}`,
     detail: 'cobranzas del día',
     tone: 'green',
@@ -268,6 +294,8 @@ const stats = computed(() => [
   },
   {
     label: 'Deuda pendiente',
+    mobilePrimary: true,
+    action: 'Gestionar deuda',
     value: `$ ${formatMoney(deudaTotal.value, { fractionDigits: 2 })}`,
     detail: `${alumnosConDeuda.value} alumnos · ${cuotasVencidas.value} cuotas vencidas`,
     tone: 'gold',
@@ -276,6 +304,7 @@ const stats = computed(() => [
   },
   {
     label: 'Saldo a favor',
+    action: 'Ver reportes',
     value: `$ ${formatMoney(saldoFavor.value, { fractionDigits: 2 })}`,
     detail: 'crédito disponible de alumnos',
     tone: 'blue',
@@ -284,6 +313,7 @@ const stats = computed(() => [
   },
   {
     label: 'Medio principal',
+    action: 'Ver reportes',
     value: medioPrincipal.value.nombre,
     detail: `$ ${formatMoney(medioPrincipal.value.importe, { fractionDigits: 2 })} del mes`,
     tone: 'violet',
@@ -292,6 +322,7 @@ const stats = computed(() => [
   },
   ...(cobrosPorSucursal.value.length > 1 && sucursalPrincipal.value ? [{
     label: 'Sucursal con mayor cobro',
+    action: 'Ver reportes',
     value: sucursalPrincipal.value.nombre,
     detail: `$ ${formatMoney(sucursalPrincipal.value.total, { fractionDigits: 2 })} del mes`,
     tone: 'blue',
@@ -300,6 +331,7 @@ const stats = computed(() => [
   }] : []),
   {
     label: 'Cajas del período',
+    action: 'Ver cajas',
     value: `${cajasPeriodo.value.abiertas || 0} abiertas`,
     detail: `${cajasPeriodo.value.cerradas || 0} cerradas · diferencia $ ${formatMoney(cajasPeriodo.value.diferencia_acumulada || 0)}`,
     tone: 'gold',

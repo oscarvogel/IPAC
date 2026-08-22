@@ -243,6 +243,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   AcademicCapIcon,
   BanknotesIcon,
@@ -285,6 +286,8 @@ const {
 } = useAlumnos()
 const toast = useToast()
 const auth = useAuth()
+const route = useRoute()
+const router = useRouter()
 const canManageAlumnos = computed(() => auth.can('manage-alumnos'))
 const canRegisterPayments = computed(() => auth.can('register-payments'))
 const canManageFees = computed(() => auth.can('manage-fees'))
@@ -312,6 +315,15 @@ const pageReady = ref(false)
 const pageError = ref('')
 
 onMounted(loadPage)
+
+watch(
+  [pageReady, () => route.query.accion],
+  ([ready, accion]) => {
+    if (!ready || !accion) return
+    consumeRouteAction(accion)
+  },
+  { immediate: true },
+)
 
 watch(
   [searchQuery, sucursalFilter, carreraFilter, estadoFilter, financialFilter, pageSize],
@@ -428,6 +440,17 @@ function onCuotaGenerada() {
 
 function openGenerarCuotasMasivas() {
   if (canManageFees.value) showGenerarCuotasMasivas.value = true
+}
+
+function consumeRouteAction(accion) {
+  const { accion: _discarded, ...query } = route.query
+  router.replace({ path: route.path, query, hash: route.hash })
+
+  if (accion === 'nuevo' && canManageAlumnos.value) {
+    openNewAlumnoForm()
+  } else if (accion === 'cuotas-masivas' && canManageFees.value) {
+    openGenerarCuotasMasivas()
+  }
 }
 
 function onCuotasMasivasSaved() {

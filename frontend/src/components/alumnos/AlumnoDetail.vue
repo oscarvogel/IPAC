@@ -99,7 +99,8 @@
         <div class="students-section-heading">
           <div>
             <p class="eyebrow">Facturación</p>
-            <h3 id="student-concepts-title">Conceptos asociados</h3>
+            <h3 id="student-concepts-title">Conceptos facturables</h3>
+            <p class="students-concepts-help">Son conceptos activos de la sucursal; no representan una matrícula vigente.</p>
           </div>
           <span>{{ detailConcepts.length }}</span>
         </div>
@@ -257,5 +258,6 @@ function avatarInitials(alumno) {
 .student-history-list svg { width: 1.05rem; }
 .student-history-list span:nth-child(2) { min-width: 0; display: grid; gap: .15rem; }
 .student-history-list small { overflow: hidden; color: var(--text-secondary); text-overflow: ellipsis; white-space: nowrap; }
+.students-concepts-help { margin-top: .25rem; color: var(--text-secondary); font-size: .72rem; line-height: 1.35; }
 @media (max-width: 430px) { .student-detail-tabs { grid-template-columns: repeat(2, 1fr); } }
 </style>

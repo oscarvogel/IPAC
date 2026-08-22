@@ -65,7 +65,7 @@
       </div>
 
       <p class="imports-hint">
-        Las plantillas descargadas son CSV UTF-8 y se abren directamente con Excel. En alumnos, `apellido`, `nombre`, `dni` y `sucursal_codigo` son las columnas principales.
+        Las plantillas descargadas son CSV UTF-8 y se abren directamente con Excel. Para importar alumnos, completá apellido, nombre, DNI y código de sucursal.
       </p>
     </section>
 
