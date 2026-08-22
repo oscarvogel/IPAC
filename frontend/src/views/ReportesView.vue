@@ -217,11 +217,11 @@ function money(value) {
 <style scoped>
 .reports-tabs { display: flex; gap: .35rem; padding: .35rem; border: 1px solid var(--border); border-radius: .85rem; background: var(--surface); overflow-x: auto; }
 .reports-tabs button { min-height: 2.5rem; border: 0; border-radius: .65rem; padding: 0 1rem; background: transparent; color: var(--text-secondary); font-weight: 800; white-space: nowrap; }
-.reports-tabs button.active { background: var(--primary); color: white; }
+.reports-tabs button.active { background: var(--primary); color: var(--on-primary); }
 .report-category-card { padding: 1.1rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
 .report-category-card h2 { margin: .2rem 0; }
 .report-category-callout { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-.report-category-card > a { display: inline-flex; padding: .7rem 1rem; border-radius: .7rem; background: var(--primary); color: white; text-decoration: none; font-weight: 800; }
+.report-category-card > a { display: inline-flex; padding: .7rem 1rem; border-radius: .7rem; background: var(--primary); color: var(--on-primary); text-decoration: none; font-weight: 800; }
 .report-difference { color: var(--danger); font-weight: 800; }
 @media (max-width: 700px) { .report-category-callout { align-items: stretch; flex-direction: column; } }
 </style>

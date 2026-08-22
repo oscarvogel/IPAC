@@ -249,9 +249,9 @@ function avatarInitials(alumno) {
 </script>
 
 <style scoped>
-.student-detail-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .25rem; padding: .25rem; border: 1px solid var(--border); border-radius: .7rem; background: var(--background); }
+.student-detail-tabs { margin-top: 16px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .25rem; padding: .25rem; border: 1px solid var(--border); border-radius: .7rem; background: var(--background); }
 .student-detail-tabs button { min-height: 2.25rem; border: 0; border-radius: .5rem; padding: .35rem .45rem; background: transparent; color: var(--text-secondary); font-size: .72rem; font-weight: 800; }
-.student-detail-tabs button.active { background: var(--primary); color: #fff; }
+.student-detail-tabs button.active { background: var(--primary); color: var(--on-primary); }
 .student-history-list { margin: 0; padding: 0; display: grid; list-style: none; }
 .student-history-list li { padding: .65rem 0; display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; align-items: center; gap: .55rem; border-bottom: 1px solid var(--border); }
 .student-history-list li > span:first-child { width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: .55rem; background: var(--primary-soft); color: var(--primary); }

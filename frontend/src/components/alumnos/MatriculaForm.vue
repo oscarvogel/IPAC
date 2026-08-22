@@ -158,7 +158,7 @@ async function handleSubmit() {
 
 .matricula-form-help {
   margin: .9rem 0 0;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: .82rem;
   line-height: 1.4;
 }

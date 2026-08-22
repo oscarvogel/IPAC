@@ -17,11 +17,11 @@ defineProps({
   max-width: 720px;
   margin: 4rem auto;
   padding: 2.5rem;
-  background: #ffffff;
-  border: 1px dashed #c9c9d4;
+  background: var(--surface);
+  border: 1px dashed var(--border);
   border-radius: 12px;
   text-align: center;
-  color: #2a2a35;
+  color: var(--text-primary);
 }
 
 .placeholder-view h1 {
@@ -31,7 +31,7 @@ defineProps({
 
 .placeholder-view p {
   margin: 0;
-  color: #6a6a78;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 </style>

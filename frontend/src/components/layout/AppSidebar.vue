@@ -80,6 +80,7 @@
           class="sidebar-user-menu"
           type="button"
           aria-label="Ver información de la sesión"
+          data-tooltip-disabled="true"
           aria-controls="sidebar-session-menu"
           :aria-expanded="userMenuOpen"
           @click="userMenuOpen = !userMenuOpen"

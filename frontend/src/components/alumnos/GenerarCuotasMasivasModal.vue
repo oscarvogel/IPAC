@@ -112,6 +112,40 @@
   font-size: 11px;
   line-height: 1.35;
 }
+
+.massive-fee-summary {
+  margin: 0 24px 24px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+  border-radius: 12px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--primary-soft) 68%, var(--surface));
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.massive-fee-summary strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.massive-fee-summary span {
+  display: block;
+}
+
+.massive-fee-summary .students-inline-error {
+  margin: 2px 0 0;
+}
+
+@media (max-width: 560px) {
+  .massive-fee-summary {
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+}
 </style>
 
 <script setup>

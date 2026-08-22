@@ -299,14 +299,14 @@ async function loadAccount(id = props.alumno?.id) {
 </script>
 
 <style scoped>
-.estado-pendiente { color: #b45309; }
-.estado-parcial { color: #1d4ed8; }
-.estado-pagada { color: #047857; }
-.estado-anulada { color: #6b7280; text-decoration: line-through; }
+.estado-pendiente { color: var(--warning); }
+.estado-parcial { color: var(--primary); }
+.estado-pagada { color: var(--success); }
+.estado-anulada { color: var(--text-muted); text-decoration: line-through; }
 
 .payment-void-badge {
   margin-left: 6px;
-  color: #b91c1c;
+  color: var(--danger);
   font-weight: 800;
   text-decoration: none;
 }
@@ -331,13 +331,13 @@ async function loadAccount(id = props.alumno?.id) {
 .account-net-total small {
   display: block;
   margin-top: 4px;
-  color: var(--muted-text);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
-.balance-debt { color: #b91c1c; }
-.balance-credit { color: #047857; }
-.balance-zero { color: var(--text); }
+.balance-debt { color: var(--danger); }
+.balance-credit { color: var(--success); }
+.balance-zero { color: var(--text-primary); }
 
 .account-row-detailed {
   align-items: flex-start;
@@ -353,7 +353,7 @@ async function loadAccount(id = props.alumno?.id) {
   flex-wrap: wrap;
   gap: 6px 14px;
   margin-top: 7px;
-  color: var(--muted-text);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -365,7 +365,7 @@ async function loadAccount(id = props.alumno?.id) {
 }
 
 .account-balance span {
-  color: var(--muted-text);
+  color: var(--text-secondary);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -380,7 +380,7 @@ async function loadAccount(id = props.alumno?.id) {
 }
 
 .payment-applications-title {
-  color: var(--muted-text);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -396,7 +396,7 @@ async function loadAccount(id = props.alumno?.id) {
 
 .payment-unapplied-note {
   margin: 8px 0 0;
-  color: var(--muted-text);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 

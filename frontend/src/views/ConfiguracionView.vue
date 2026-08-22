@@ -46,7 +46,7 @@ const items = [
 .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
 .settings-card { display: grid; grid-template-columns: 3rem 1fr 1.25rem; align-items: center; gap: 1rem; min-height: 7.5rem; padding: 1.15rem; border: 1px solid var(--color-border); border-radius: 1rem; background: var(--color-surface); color: var(--color-text-primary); text-decoration: none; box-shadow: var(--shadow-card); }
 .settings-card:hover, .settings-card:focus-visible { border-color: var(--color-primary); transform: translateY(-1px); }
-.settings-card-icon { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: .9rem; background: #eaf2ff; color: var(--color-primary); }
+.settings-card-icon { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: .9rem; background: var(--primary-soft); color: var(--primary); }
 .settings-card-icon svg, .settings-card > svg { width: 1.35rem; }
 .settings-card span:nth-child(2) { display: grid; gap: .35rem; }
 .settings-card small { color: var(--color-text-secondary); line-height: 1.4; }

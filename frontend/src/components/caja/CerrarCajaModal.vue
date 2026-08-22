@@ -159,12 +159,12 @@ async function submit() {
   display: flex;
   justify-content: space-between;
   gap: .75rem;
-  border-bottom: 1px solid var(--border, #e2e8f0);
+  border-bottom: 1px solid var(--border);
   padding-bottom: .45rem;
 }
 
 .cash-close-summary dt {
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
 }
 
 .cash-close-summary dd {
@@ -174,15 +174,16 @@ async function submit() {
 }
 
 .cash-close-difference-warning {
-  color: #9f1239;
+  color: var(--danger);
 }
 
 .cash-close-warning {
   margin: 0 0 1rem;
   border-radius: .65rem;
   padding: .7rem .8rem;
-  color: #92400e;
-  background: #fffbeb;
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border));
+  color: var(--warning);
+  background: var(--warning-soft);
   font-size: .85rem;
 }
 

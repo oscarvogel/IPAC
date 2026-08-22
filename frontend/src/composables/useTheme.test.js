@@ -12,6 +12,7 @@ describe('tema de interfaz', () => {
 
     expect(theme.value).not.toBe(initial)
     expect(document.documentElement.dataset.theme).toBe(theme.value)
+    expect(document.documentElement.style.colorScheme).toBe(theme.value)
     expect(localStorage.getItem('ipac-theme')).toBe(theme.value)
   })
 })
