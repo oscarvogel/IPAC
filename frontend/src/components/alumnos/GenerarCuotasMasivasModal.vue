@@ -53,7 +53,8 @@
             </label>
             <label>
               Mes correspondiente
-              <input v-model="form.periodo" inputmode="numeric" placeholder="DD-MM-YYYY" pattern="[0-9]{2}-[0-9]{2}-[0-9]{4}" required />
+              <input v-model="form.periodo" type="date" required />
+              <small class="field-help">Elegí cualquier fecha del mes al que corresponde la cuota; el día no modifica el período.</small>
             </label>
             <label>
               Fecha de emisión
@@ -102,6 +103,16 @@
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.field-help {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+</style>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
@@ -279,6 +290,7 @@ async function handleSubmit() {
 }
 
 function periodoParaBackend(value) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return value.slice(0, 7)
   const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value || '')
   return match ? `${match[3]}-${match[2]}` : value
 }

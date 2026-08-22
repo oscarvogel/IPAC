@@ -434,8 +434,10 @@ async function onMatriculaChanged() {
   await loadStudentsPage()
 }
 
-function onCuotaGenerada() {
+async function onCuotaGenerada() {
   showGenerarCuota.value = false
+  if (selectedAlumno.value) await loadPagos({ alumno: selectedAlumno.value.id })
+  await loadStudentsPage()
 }
 
 function openGenerarCuotasMasivas() {
