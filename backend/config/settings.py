@@ -18,6 +18,9 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-ipac-dev-key")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "1").lower() in {"1", "true", "yes", "on"}
 
+if not DEBUG and SECRET_KEY == "django-insecure-ipac-dev-key":
+    raise RuntimeError("DJANGO_SECRET_KEY es obligatoria cuando DJANGO_DEBUG=0.")
+
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
@@ -134,6 +137,14 @@ for origin in CORS_ALLOWED_ORIGINS:
     parsed = urlparse(origin)
     if parsed.scheme and parsed.netloc:
         CSRF_TRUSTED_ORIGINS.append(f"{parsed.scheme}://{parsed.netloc}")
+
+SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "0").lower() in {"1", "true", "yes", "on"}
+SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "0"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
+SECURE_HSTS_PRELOAD = SECURE_HSTS_SECONDS > 0
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

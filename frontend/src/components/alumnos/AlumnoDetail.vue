@@ -12,6 +12,7 @@
         </div>
 
         <button
+          v-if="canEdit"
           type="button"
           class="students-icon-action"
           title="Editar alumno"
@@ -27,21 +28,38 @@
           <component :is="statusIcon" aria-hidden="true" />
           {{ alumno.estado || 'sin estado' }}
         </span>
-        <span>{{ alumno.carrera_nombre || 'Sin carrera asignada' }}</span>
+        <span>{{ activeMatricula?.carrera_nombre || 'Sin matrícula activa' }}</span>
       </div>
 
       <div class="students-detail-actions">
-        <button type="button" class="primary" @click="$emit('register-pago')">
+        <button v-if="canRegisterPago" type="button" class="primary" @click="$emit('register-pago')">
           <BanknotesIcon aria-hidden="true" />
           <span>Registrar pago</span>
         </button>
-        <button type="button" @click="$emit('generar-cuota')">
+        <button v-if="canGenerateFee" type="button" @click="$emit('generar-cuota')">
           <DocumentPlusIcon aria-hidden="true" />
           <span>Generar cuota</span>
         </button>
+        <button type="button" @click="$emit('view-estado')">
+          <ArrowRightIcon aria-hidden="true" />
+          <span>Estado de cuenta</span>
+        </button>
       </div>
 
-      <section class="students-info-section" aria-labelledby="student-contact-title">
+      <nav class="student-detail-tabs" aria-label="Secciones de la ficha del alumno">
+        <button
+          v-for="tab in detailTabs"
+          :key="tab.id"
+          type="button"
+          :class="{ active: activeTab === tab.id }"
+          :aria-pressed="activeTab === tab.id"
+          @click="activeTab = tab.id"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
+
+      <section v-show="activeTab === 'datos'" class="students-info-section" aria-labelledby="student-contact-title">
         <div class="students-section-heading">
           <div>
             <p class="eyebrow">Información</p>
@@ -55,8 +73,8 @@
             <dd>{{ alumno.sucursal_nombre || 'Sin asignar' }}</dd>
           </div>
           <div>
-            <dt><AcademicCapIcon aria-hidden="true" /> Carrera</dt>
-            <dd>{{ alumno.carrera_nombre || 'Sin asignar' }}</dd>
+            <dt><AcademicCapIcon aria-hidden="true" /> Trayectoria académica</dt>
+            <dd>{{ activeMatricula?.carrera_nombre || 'Sin matrícula activa' }}</dd>
           </div>
           <div>
             <dt><EnvelopeIcon aria-hidden="true" /> Email</dt>
@@ -69,11 +87,20 @@
         </dl>
       </section>
 
-      <section class="students-concepts" aria-labelledby="student-concepts-title">
+      <MatriculasPanel
+        v-show="activeTab === 'matriculas'"
+        :alumno="alumno"
+        :can-manage="canManageMatriculas"
+        @active-changed="handleActiveMatricula"
+        @changed="$emit('matricula-changed')"
+      />
+
+      <section v-show="activeTab === 'cuenta'" class="students-concepts" aria-labelledby="student-concepts-title">
         <div class="students-section-heading">
           <div>
             <p class="eyebrow">Facturación</p>
-            <h3 id="student-concepts-title">Conceptos asociados</h3>
+            <h3 id="student-concepts-title">Conceptos facturables</h3>
+            <p class="students-concepts-help">Son conceptos activos de la sucursal; no representan una matrícula vigente.</p>
           </div>
           <span>{{ detailConcepts.length }}</span>
         </div>
@@ -90,14 +117,14 @@
         </p>
       </section>
 
-      <section class="students-account-summary" aria-label="Resumen de cuenta">
+      <section v-show="activeTab === 'cuenta'" class="students-account-summary" aria-label="Resumen de cuenta">
         <div>
-          <span>Pagado</span>
-          <strong>$ {{ formatMoney(paidTotal) }}</strong>
+          <span>Deuda pendiente</span>
+          <strong>$ {{ formatMoney(alumno.deuda_total || 0) }}</strong>
         </div>
         <div>
-          <span>Saldo estimado</span>
-          <strong>$ {{ formatMoney(pendingTotal) }}</strong>
+          <span>Saldo a favor</span>
+          <strong>$ {{ formatMoney(alumno.saldo_a_favor || 0) }}</strong>
         </div>
         <button type="button" @click="$emit('view-estado')">
           <span>Ver estado de cuenta</span>
@@ -105,7 +132,25 @@
         </button>
       </section>
 
+      <section v-show="activeTab === 'historial'" class="students-info-section student-history" aria-labelledby="student-history-title">
+        <div class="students-section-heading">
+          <div>
+            <p class="eyebrow">Actividad</p>
+            <h3 id="student-history-title">Historial reciente</h3>
+          </div>
+        </div>
+        <ol v-if="studentPayments.length" class="student-history-list">
+          <li v-for="pago in studentPayments" :key="pago.id">
+            <span><BanknotesIcon aria-hidden="true" /></span>
+            <span><strong>{{ pago.numero_recibo || 'Pago registrado' }}</strong><small>{{ pago.fecha }} · {{ pago.medio_label || pago.medio }}</small></span>
+            <strong>$ {{ formatMoney(pago.importe) }}</strong>
+          </li>
+        </ol>
+        <p v-else class="students-inline-empty">Todavía no hay pagos registrados para este alumno.</p>
+      </section>
+
       <button
+        v-if="canToggleState"
         type="button"
         :class="['students-state-action', alumno.estado === 'inactivo' ? 'activate' : 'deactivate']"
         @click="$emit('toggle-estado', alumno)"
@@ -124,7 +169,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   AcademicCapIcon,
   ArrowPathIcon,
@@ -142,14 +187,38 @@ import {
   PhoneIcon,
 } from '@heroicons/vue/24/outline'
 import { formatMoney } from '@/lib/formatters'
+import MatriculasPanel from '@/components/alumnos/MatriculasPanel.vue'
 
 const props = defineProps({
   alumno: { type: Object, default: null },
   conceptos: { type: Array, default: () => [] },
   pagos: { type: Array, default: () => [] },
+  canEdit: { type: Boolean, default: true },
+  canRegisterPago: { type: Boolean, default: true },
+  canGenerateFee: { type: Boolean, default: true },
+  canToggleState: { type: Boolean, default: true },
+  canManageMatriculas: { type: Boolean, default: false },
 })
 
-defineEmits(['register-pago', 'edit', 'view-estado', 'generar-cuota', 'toggle-estado'])
+const activeMatricula = ref(null)
+const activeTab = ref('datos')
+const detailTabs = [
+  { id: 'datos', label: 'Datos' },
+  { id: 'cuenta', label: 'Cuenta' },
+  { id: 'matriculas', label: 'Matrículas' },
+  { id: 'historial', label: 'Historial' },
+]
+
+watch(() => props.alumno?.id, () => {
+  activeMatricula.value = null
+  activeTab.value = 'datos'
+}, { immediate: true })
+
+defineEmits(['register-pago', 'edit', 'view-estado', 'generar-cuota', 'toggle-estado', 'matricula-changed'])
+
+function handleActiveMatricula(matricula) {
+  activeMatricula.value = matricula
+}
 
 const statusIcon = computed(() =>
   props.alumno?.estado === 'activo' ? CheckCircleIcon : PauseCircleIcon,
@@ -163,19 +232,13 @@ const detailConcepts = computed(() => {
     .slice(0, 3)
 })
 
-const paidTotal = computed(() => {
-  if (!props.alumno) return 0
+const studentPayments = computed(() => {
+  if (!props.alumno) return []
   return props.pagos
     .filter((pago) => pago.alumno === props.alumno.id)
-    .reduce((sum, pago) => sum + Number(pago.importe || 0), 0)
-})
-
-const pendingTotal = computed(() => {
-  const conceptsTotal = detailConcepts.value.reduce(
-    (sum, concepto) => sum + Number(concepto.importe || 0),
-    0,
-  )
-  return Math.max(conceptsTotal - paidTotal.value, 0)
+    .slice()
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+    .slice(0, 8)
 })
 
 function avatarInitials(alumno) {
@@ -184,3 +247,17 @@ function avatarInitials(alumno) {
   return `${name.slice(0, 1)}${surname.slice(0, 1)}`.toUpperCase() || '?'
 }
 </script>
+
+<style scoped>
+.student-detail-tabs { margin-top: 16px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .25rem; padding: .25rem; border: 1px solid var(--border); border-radius: .7rem; background: var(--background); }
+.student-detail-tabs button { min-height: 2.25rem; border: 0; border-radius: .5rem; padding: .35rem .45rem; background: transparent; color: var(--text-secondary); font-size: .72rem; font-weight: 800; }
+.student-detail-tabs button.active { background: var(--primary); color: var(--on-primary); }
+.student-history-list { margin: 0; padding: 0; display: grid; list-style: none; }
+.student-history-list li { padding: .65rem 0; display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; align-items: center; gap: .55rem; border-bottom: 1px solid var(--border); }
+.student-history-list li > span:first-child { width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: .55rem; background: var(--primary-soft); color: var(--primary); }
+.student-history-list svg { width: 1.05rem; }
+.student-history-list span:nth-child(2) { min-width: 0; display: grid; gap: .15rem; }
+.student-history-list small { overflow: hidden; color: var(--text-secondary); text-overflow: ellipsis; white-space: nowrap; }
+.students-concepts-help { margin-top: .25rem; color: var(--text-secondary); font-size: .72rem; line-height: 1.35; }
+@media (max-width: 430px) { .student-detail-tabs { grid-template-columns: repeat(2, 1fr); } }
+</style>

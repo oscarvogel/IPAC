@@ -35,6 +35,7 @@
     </section>
 
     <section class="desktop-login-access bg-background">
+      <LoginThemeToggle />
       <form v-form-validation class="desktop-login-form border-border bg-surface" @submit.prevent="submitForm">
         <div class="desktop-form-brand">
           <img src="/logo-ipac.jpg" alt="IPAC" />
@@ -134,6 +135,7 @@ import {
   WalletIcon,
 } from '@heroicons/vue/24/outline'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import LoginThemeToggle from '@/components/auth/LoginThemeToggle.vue'
 import { vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({

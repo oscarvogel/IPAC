@@ -29,6 +29,7 @@ let previousTitle = null
 function tooltipTarget(node) {
   const target = node?.closest?.('button[aria-label], a[aria-label], [data-tooltip]')
   if (!target) return null
+  if (target.dataset.tooltipDisabled === 'true') return null
   const explicit = target.dataset.tooltip
   const isIconOnly = !target.textContent.trim()
   return explicit || isIconOnly ? target : null

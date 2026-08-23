@@ -10,10 +10,9 @@
     <template v-else>
     <div class="branches-metrics-grid cash-metrics-grid">
       <article
-        v-for="(stat, index) in stats"
+        v-for="stat in stats"
         :key="stat.label"
         class="branches-metric-card cash-metric-card border-border bg-surface"
-        :class="{ 'cash-metric-card-featured': index === 0 }"
       >
         <span class="cash-metric-icon" :class="`cash-metric-icon-${stat.tone}`">
           <component :is="stat.icon" aria-hidden="true" />
@@ -39,6 +38,7 @@
       </div>
       <button
         type="button"
+        v-if="canManageBranches"
         class="branches-primary-action bg-primary hover:bg-primary-hover"
         @click="openNewSucursalForm"
       >
@@ -50,6 +50,8 @@
     <SucursalList
       :sucursales="sucursales"
       :carreras="carreras"
+      :can-edit="canManageBranches"
+      :can-deactivate="canManageBranches"
       @edit="openEditForm"
       @deactivate="requestDeactivate"
     />
@@ -87,6 +89,7 @@ import {
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useSucursales } from '@/composables/useSucursales'
 import { useToast } from '@/composables/useToast'
+import { useAuth } from '@/composables/useAuth'
 import SucursalForm from '@/components/sucursales/SucursalForm.vue'
 import SucursalList from '@/components/sucursales/SucursalList.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
@@ -95,6 +98,8 @@ import AppPageState from '@/components/ui/AppPageState.vue'
 const { sucursales, error: sucursalesError, loadSucursales, updateSucursal } = useSucursales()
 const { carreras, loadCatalogos } = useCatalogos()
 const toast = useToast()
+const auth = useAuth()
+const canManageBranches = computed(() => auth.can('manage-branches'))
 
 const showSucursalForm = ref(false)
 const editingSucursal = ref(null)

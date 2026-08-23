@@ -35,7 +35,7 @@
         </section>
 
         <section class="modal-section">
-          <h3>Contacto y cursada</h3>
+          <h3>Contacto y administración</h3>
           <div class="modal-grid">
             <label>Email<input v-model="form.email" name="email" type="email" autocomplete="email" /></label>
             <label>Teléfono<input v-model="form.telefono" name="telefono" type="tel" inputmode="tel" autocomplete="tel" /></label>
@@ -45,14 +45,10 @@
                 <option v-for="s in sucursales" :key="s.id" :value="s.id">{{ s.nombre }}</option>
               </select>
             </label>
-            <label>
-              Carrera
-              <select v-model="form.carrera">
-                <option value="">Sin asignar</option>
-                <option v-for="c in carreras" :key="c.id" :value="c.id">{{ c.nombre }}</option>
-              </select>
-            </label>
           </div>
+          <p class="alumno-form-guidance">
+            La carrera se asigna mediante una matrícula desde la ficha del alumno.
+          </p>
         </section>
 
         <footer class="modal-actions">
@@ -87,7 +83,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved'])
 
 const { createAlumno, updateAlumno } = useAlumnos()
-const { sucursales, carreras } = useCatalogos()
+const { sucursales } = useCatalogos()
 const toast = useToast()
 
 const form = reactive({
@@ -98,7 +94,6 @@ const form = reactive({
   email: '',
   telefono: '',
   sucursal: '',
-  carrera: '',
 })
 
 const editingId = ref(null)
@@ -117,7 +112,6 @@ function resetForm() {
     email: '',
     telefono: '',
     sucursal: sucursales.value[0]?.id || '',
-    carrera: '',
   })
   editingId.value = null
 }
@@ -136,7 +130,6 @@ watch(
         email: alumno.email || '',
         telefono: alumno.telefono || '',
         sucursal: alumno.sucursal,
-        carrera: alumno.carrera || '',
       })
     } else {
       resetForm()
@@ -148,11 +141,11 @@ watch(
 async function handleSubmit() {
   saving.value = true
   try {
-    const payload = { ...form, carrera: form.carrera || null }
+    const payload = { ...form }
     const saved = editingId.value
       ? await updateAlumno(editingId.value, payload)
       : await createAlumno(payload)
-    toast.success(editingId.value ? 'Alumno actualizado' : 'Alumno creado')
+    toast.success(editingId.value ? 'Alumno actualizado' : 'Alumno creado. Ahora podés registrar su matrícula desde la ficha.')
     emit('saved', saved)
     emit('close')
   } catch (err) {
@@ -162,3 +155,11 @@ async function handleSubmit() {
   }
 }
 </script>
+
+<style scoped>
+.alumno-form-guidance {
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+</style>

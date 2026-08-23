@@ -10,6 +10,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useCatalogos } from '@/composables/useCatalogos'
 
 const cajaHoy = ref(null)
+const saldoAnterior = ref(null)
 const loading = ref(false)
 const error = ref('')
 
@@ -32,6 +33,8 @@ async function loadCajaHoy(sucursalId) {
   error.value = ''
   try {
     cajaHoy.value = await apiRequest('/cajas/hoy/', { query: { sucursal: id } })
+    const saldo = await apiRequest(`/cajas/${cajaHoy.value.id}/saldo-anterior/`)
+    saldoAnterior.value = saldo?.disponible ? saldo : null
   } catch (err) {
     error.value = err.message
   } finally {
@@ -55,15 +58,35 @@ async function createMovimiento(payload) {
   }
 }
 
-async function cerrarCaja(totalContado) {
+async function cerrarCaja(cierre) {
   if (!cajaHoy.value) return null
   loading.value = true
   error.value = ''
   try {
     cajaHoy.value = await apiRequest(`/cajas/${cajaHoy.value.id}/cerrar/`, {
       method: 'POST',
-      body: { total_contado: totalContado },
+      body: typeof cierre === 'object' ? cierre : { total_contado: cierre },
     })
+    saldoAnterior.value = null
+    return cajaHoy.value
+  } catch (err) {
+    error.value = err.message
+    throw err
+  } finally {
+    loading.value = false
+  }
+}
+
+async function aplicarSaldoAnterior() {
+  if (!cajaHoy.value || !saldoAnterior.value) return null
+  loading.value = true
+  error.value = ''
+  try {
+    cajaHoy.value = await apiRequest(`/cajas/${cajaHoy.value.id}/saldo-anterior/`, {
+      method: 'POST',
+      body: { saldo_id: saldoAnterior.value.id },
+    })
+    saldoAnterior.value = null
     return cajaHoy.value
   } catch (err) {
     error.value = err.message
@@ -79,32 +102,46 @@ function clearError() {
 
 const cajaMovimientos = computed(() => cajaHoy.value?.movimientos || [])
 
-// Logica pura de totales. Vive afuera del computed para poder testearla
-// sin tener que instanciar el composable ni mockear la API.
-const TIPOS_NEGATIVOS = new Set(['egreso', 'retiro', 'pase'])
-const MEDIOS_INICIALES = { total: 0, efectivo: 0, transferencia: 0, tarjeta: 0, otro: 0 }
-
-export function calcularTotalesCaja(movimientos = []) {
-  return movimientos.reduce((acc, movimiento) => {
-    const amount = Number(movimiento.importe || 0)
-    const signed = TIPOS_NEGATIVOS.has(movimiento.tipo) ? -amount : amount
-    acc.total += signed
-    acc[movimiento.medio] = (acc[movimiento.medio] || 0) + signed
-    return acc
-  }, { ...MEDIOS_INICIALES })
+function amount(value) {
+  return Number(value || 0)
 }
 
-const cajaTotales = computed(() => calcularTotalesCaja(cajaMovimientos.value))
+export function mapearResumenCaja(caja = null) {
+  const resumen = caja?.resumen || {}
+  const efectivoEsperado = amount(resumen.efectivo_esperado ?? caja?.total_esperado)
+  return {
+    saldoInicial: amount(resumen.saldo_inicial ?? caja?.saldo_inicial),
+    cobranzasEfectivo: amount(resumen.cobranzas_efectivo),
+    otrosIngresosEfectivo: amount(resumen.otros_ingresos_efectivo),
+    egresosEfectivo: amount(resumen.egresos_efectivo),
+    retirosEfectivo: amount(resumen.retiros_efectivo),
+    efectivoEsperado,
+    saldoFinalFisico: amount(caja?.saldo_final_fisico ?? efectivoEsperado),
+    totalIngresos: amount(resumen.total_ingresos),
+    totalEgresos: amount(resumen.total_egresos),
+    totalCobrado: amount(resumen.total_cobrado),
+    efectivo: amount(resumen.efectivo),
+    transferencia: amount(resumen.transferencia),
+    mercadoPago: amount(resumen.mercado_pago),
+    tarjeta: amount(resumen.tarjeta),
+    otro: amount(resumen.otro),
+    total: efectivoEsperado,
+  }
+}
+
+const cajaTotales = computed(() => mapearResumenCaja(cajaHoy.value))
 
 export function useCaja() {
   return {
     cajaHoy: readonly(cajaHoy),
+    saldoAnterior: readonly(saldoAnterior),
     cajaMovimientos,
     cajaTotales,
     loading: readonly(loading),
     error: readonly(error),
     loadCajaHoy,
     createMovimiento,
+    aplicarSaldoAnterior,
     cerrarCaja,
     clearError,
   }

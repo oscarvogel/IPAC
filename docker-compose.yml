@@ -1,21 +1,28 @@
 services:
   db:
     image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: ipac
-      POSTGRES_USER: ipac
-      POSTGRES_PASSWORD: ipac
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ./backend/.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ipac -d ipac"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   backend:
     build:
       context: ./backend
+    restart: unless-stopped
+    init: true
     env_file:
       - ./backend/.env
     depends_on:
@@ -27,16 +34,44 @@ services:
       - media_data:/app/media
     command: >
       sh -c "python manage.py migrate
-      && python manage.py seed_initial_data
+      && if [ \"$$IPAC_RUN_SEED\" = \"1\" ]; then python manage.py seed_initial_data; fi
       && gunicorn config.wsgi:application --bind 0.0.0.0:8000"
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   frontend:
     build:
       context: ./frontend
+    restart: unless-stopped
+    init: true
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "8084:80"
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz | grep -q ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 volumes:
   postgres_data:

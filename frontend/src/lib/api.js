@@ -114,3 +114,53 @@ export async function apiRequest(path, options = {}) {
   if (raw) return response
   return payload
 }
+
+export async function uploadFile(path, file, fields = {}) {
+  const formData = new FormData()
+  formData.append('archivo', file)
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined && value !== null && value !== '') formData.append(key, String(value))
+  }
+
+  const headers = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Token ${token}`
+
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { method: 'POST', headers, body: formData })
+  } catch {
+    throw new ApiError('No se pudo conectar con el servidor.', { status: 0 })
+  }
+
+  if (response.status === 401) setToken(null)
+  const text = await response.text()
+  let payload = null
+  if (text) {
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      payload = text
+    }
+  }
+  if (!response.ok) throw new ApiError(pickErrorMessage(payload), { status: response.status, payload })
+  return payload
+}
+
+export async function downloadFile(path) {
+  const headers = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Token ${token}`
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers })
+  if (!response.ok) {
+    const text = await response.text()
+    let payload = null
+    try {
+      payload = text ? JSON.parse(text) : null
+    } catch {
+      payload = text
+    }
+    throw new ApiError(pickErrorMessage(payload), { status: response.status, payload })
+  }
+  return response.blob()
+}

@@ -8,6 +8,8 @@ import { apiRequest } from '@/lib/api'
 const sucursales = ref([])
 const carreras = ref([])
 const conceptos = ref([])
+const tiposDescuento = ref([])
+const reglasRecargo = ref([])
 const loaded = ref(false)
 const loading = ref(false)
 
@@ -15,14 +17,18 @@ async function loadCatalogos(force = false) {
   if (loaded.value && !force) return
   loading.value = true
   try {
-    const [suc, car, con] = await Promise.all([
+    const [suc, car, con, discounts, surchargeRules] = await Promise.all([
       apiRequest('/sucursales/'),
       apiRequest('/carreras/'),
       apiRequest('/conceptos/'),
+      apiRequest('/tipos-descuento/'),
+      apiRequest('/reglas-recargo/'),
     ])
     sucursales.value = suc.results || []
     carreras.value = car.results || []
     conceptos.value = con.results || []
+    tiposDescuento.value = discounts.results || []
+    reglasRecargo.value = surchargeRules.results || []
     loaded.value = true
   } finally {
     loading.value = false
@@ -34,6 +40,8 @@ export function useCatalogos() {
     sucursales: readonly(sucursales),
     carreras: readonly(carreras),
     conceptos: readonly(conceptos),
+    tiposDescuento: readonly(tiposDescuento),
+    reglasRecargo: readonly(reglasRecargo),
     loaded: readonly(loaded),
     loading: readonly(loading),
     loadCatalogos,

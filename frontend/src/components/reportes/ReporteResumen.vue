@@ -1,11 +1,10 @@
 <template>
   <div class="reports-summary">
-    <div class="reports-metrics-grid cash-metrics-grid">
+    <div v-if="showMetrics" class="reports-metrics-grid cash-metrics-grid">
       <article
-        v-for="(stat, index) in stats"
+        v-for="stat in stats"
         :key="stat.label"
         class="reports-metric-card cash-metric-card border-border bg-surface"
-        :class="{ 'cash-metric-card-featured': index === 0 }"
       >
         <span class="cash-metric-icon" :class="`cash-metric-icon-${stat.tone}`">
           <component :is="stat.icon" aria-hidden="true" />
@@ -18,7 +17,7 @@
       </article>
     </div>
 
-    <section class="reports-distribution-card border-border bg-surface">
+    <section v-if="showDistribution" class="reports-distribution-card border-border bg-surface">
       <header class="reports-distribution-head">
         <div class="reports-distribution-title">
           <span class="reports-distribution-icon">
@@ -71,14 +70,16 @@ import {
   ChartPieIcon,
   CreditCardIcon,
   ExclamationTriangleIcon,
+  GiftIcon,
   LockClosedIcon,
   QuestionMarkCircleIcon,
-  ReceiptPercentIcon,
 } from '@heroicons/vue/24/outline'
 import { formatMoney } from '@/lib/formatters'
 
 const props = defineProps({
   resumen: { type: Object, default: null },
+  showMetrics: { type: Boolean, default: true },
+  showDistribution: { type: Boolean, default: true },
 })
 
 const totalCobrado = computed(
@@ -87,8 +88,11 @@ const totalCobrado = computed(
 const cantidadPagos = computed(
   () => props.resumen?.cobranzas?.cantidad_pagos ?? 0,
 )
-const deudaNeta = computed(
-  () => Number(props.resumen?.cuenta_corriente?.saldo_neto || 0),
+const deudaPendiente = computed(
+  () => Math.max(Number(props.resumen?.cuenta_corriente?.deuda || 0), 0),
+)
+const saldoAFavor = computed(
+  () => Math.max(Number(props.resumen?.cuenta_corriente?.saldo_a_favor || 0), 0),
 )
 const cajasCerradas = computed(
   () => props.resumen?.cajas?.cerradas ?? 0,
@@ -103,18 +107,18 @@ const stats = computed(() => [
     icon: BanknotesIcon,
   },
   {
-    label: 'Cantidad de pagos',
-    value: cantidadPagos.value,
-    detail: 'operaciones encontradas',
-    tone: 'success',
-    icon: ReceiptPercentIcon,
-  },
-  {
-    label: 'Deuda neta',
-    value: `$ ${formatMoney(deudaNeta.value, { fractionDigits: 2 })}`,
-    detail: 'saldo pendiente consolidado',
+    label: 'Deuda pendiente',
+    value: `$ ${formatMoney(deudaPendiente.value, { fractionDigits: 2 })}`,
+    detail: 'importe total que aún deben los alumnos',
     tone: 'warning',
     icon: ExclamationTriangleIcon,
+  },
+  {
+    label: 'Saldo a favor',
+    value: `$ ${formatMoney(saldoAFavor.value, { fractionDigits: 2 })}`,
+    detail: 'crédito disponible de los alumnos',
+    tone: 'success',
+    icon: GiftIcon,
   },
   {
     label: 'Cajas cerradas',
@@ -140,6 +144,7 @@ const porMedioRows = computed(() => {
 function paymentIcon(method) {
   if (method === 'efectivo') return BanknotesIcon
   if (method === 'transferencia') return BuildingLibraryIcon
+  if (method === 'mercado_pago') return CreditCardIcon
   if (method === 'tarjeta') return CreditCardIcon
   return QuestionMarkCircleIcon
 }
@@ -148,6 +153,7 @@ function paymentLabel(method) {
   const labels = {
     efectivo: 'Efectivo',
     transferencia: 'Transferencia',
+    mercado_pago: 'Mercado Pago',
     tarjeta: 'Tarjeta',
     otro: 'Otro',
   }

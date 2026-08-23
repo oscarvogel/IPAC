@@ -56,7 +56,7 @@ py -3.12 -m venv .venv
 ```
 
 El backend expone la API bajo `http://localhost:8000/api/` y acepta CORS local para `localhost` y `127.0.0.1`.
-El seed crea un usuario inicial `admin` / `admin123` salvo que se ajusten `IPAC_SEED_ADMIN_USERNAME` e `IPAC_SEED_ADMIN_PASSWORD`.
+En desarrollo el seed puede crear `admin` / `admin123`. Con `DJANGO_DEBUG=0` exige credenciales explícitas y rechaza esos valores de demostración.
 
 ### Frontend
 
@@ -75,6 +75,19 @@ El frontend usa `VITE_API_BASE_URL`; ver `frontend/.env.example`.
 npm --prefix frontend run build
 ```
 
+### Importación de alumnos, carreras y cursos
+
+Desde la pantalla `Administración → Cargar datos`, un usuario de Administración puede descargar las plantillas CSV y cargar archivos `.csv` o `.xlsx`. La carga es idempotente, deduplica alumnos por DNI o legajo y devuelve advertencias para datos incompletos o inconsistentes.
+
+También se puede ejecutar desde consola:
+
+```powershell
+.\.venv\Scripts\python.exe backend\manage.py import_ipac_excel ".\CARRERAS Y CURSOS 2026.xlsx" --sucursal POS
+.\.venv\Scripts\python.exe backend\manage.py import_ipac_excel ".\Alumnos IPAC- Posadas.xlsx" --sucursal POS
+```
+
+Las columnas esperadas están documentadas en [docs/plantillas/README.md](docs/plantillas/README.md).
+
 ## Docker Compose
 
 Docker no esta disponible actualmente en esta maquina, pero el repo queda preparado para:
@@ -90,3 +103,6 @@ Servicios previstos:
 - `frontend`: Vue compilado y servido por Nginx.
 
 Copiar los `.env.example` antes de un despliegue real y ajustar claves, hosts, CORS y credenciales.
+
+La estrategia de respaldo y restauración está documentada en [docs/BACKUP_Y_RESTAURACION.md](docs/BACKUP_Y_RESTAURACION.md).
+El procedimiento de actualización, healthchecks y rollback está documentado en [docs/DEPLOY_PRODUCCION.md](docs/DEPLOY_PRODUCCION.md).

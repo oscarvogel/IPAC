@@ -18,6 +18,13 @@ async function getRecibo(pagoId) {
   return await apiRequest(`/pagos/${pagoId}/recibo/`)
 }
 
+async function anularPago(pagoId, motivo) {
+  return await apiRequest(`/pagos/${pagoId}/anular/`, {
+    method: 'POST',
+    body: { motivo },
+  })
+}
+
 async function getEstadoCuenta(alumnoId) {
   return await apiRequest(`/alumnos/${alumnoId}/estado-cuenta/`)
 }
@@ -32,6 +39,7 @@ export function usePagos() {
     loadPagos,
     createPago,
     getRecibo,
+    anularPago,
     getEstadoCuenta,
     generarCuota,
   }

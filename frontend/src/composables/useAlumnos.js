@@ -8,13 +8,29 @@ const alumnos = ref([])
 const selectedAlumnoId = ref(null)
 const loading = ref(false)
 const error = ref('')
+const alumnoStats = ref({ total: 0, activos: 0, inactivos: 0 })
+const alumnoStatsError = ref('')
+const pagination = ref({
+  count: 0,
+  page: 1,
+  pageSize: 10,
+  next: null,
+  previous: null,
+})
 
-async function loadAlumnos() {
+async function loadAlumnos(query = {}) {
   loading.value = true
   error.value = ''
   try {
-    const data = await apiRequest('/alumnos/')
+    const data = await apiRequest('/alumnos/', { query })
     alumnos.value = data.results || []
+    pagination.value = {
+      count: Number(data.count || 0),
+      page: Number(data.page || query.page || 1),
+      pageSize: Number(data.page_size || 10),
+      next: data.next || null,
+      previous: data.previous || null,
+    }
     if (!selectedAlumnoId.value && alumnos.value.length) {
       selectedAlumnoId.value = alumnos.value[0].id
     }
@@ -22,6 +38,15 @@ async function loadAlumnos() {
     error.value = err.message
   } finally {
     loading.value = false
+  }
+}
+
+async function loadAlumnoStats(query = {}) {
+  alumnoStatsError.value = ''
+  try {
+    alumnoStats.value = await apiRequest('/alumnos/estadisticas/', { query })
+  } catch (err) {
+    alumnoStatsError.value = err.message || 'No se pudieron cargar las estadísticas de alumnos.'
   }
 }
 
@@ -61,12 +86,16 @@ export function useAlumnos() {
   return {
     alumnos: readonly(alumnos),
     selectedAlumnoId,
+    pagination: readonly(pagination),
+    alumnoStats: readonly(alumnoStats),
+    alumnoStatsError: readonly(alumnoStatsError),
     selectedAlumno: computed(
       () => alumnos.value.find((a) => a.id === selectedAlumnoId.value) || null,
     ),
     loading: readonly(loading),
     error: readonly(error),
     loadAlumnos,
+    loadAlumnoStats,
     createAlumno,
     updateAlumno,
     deactivateAlumno,

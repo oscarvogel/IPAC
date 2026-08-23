@@ -3,6 +3,7 @@
 
 import { ref, computed, readonly } from 'vue'
 import { apiRequest, getToken, setToken } from '@/lib/api'
+import { can as canPermission, roleOf } from '@/lib/permissions'
 
 const user = ref(null)
 const loading = ref(false)
@@ -55,6 +56,8 @@ function clearError() {
 export function useAuth() {
   return {
     user: readonly(user),
+    role: computed(() => roleOf(user.value)),
+    can: (capability) => canPermission(user.value, capability),
     loading: readonly(loading),
     error: readonly(error),
     isAuthenticated: computed(() => Boolean(user.value && getToken())),

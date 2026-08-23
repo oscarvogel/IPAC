@@ -2,6 +2,7 @@ import os
 
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
+from django.core.management.base import CommandError
 
 from core.models import Alumno, CarreraCurso, ConceptoCobrable, Pago, PerfilUsuario, Sucursal
 
@@ -105,8 +106,15 @@ class Command(BaseCommand):
             defaults={"observacion": "Pago demo por transferencia"},
         )
 
-        username = os.getenv("IPAC_SEED_ADMIN_USERNAME", "admin")
-        password = os.getenv("IPAC_SEED_ADMIN_PASSWORD", "admin123")
+        production = os.getenv("IPAC_ENVIRONMENT", "development").lower() == "production"
+        username = os.getenv("IPAC_SEED_ADMIN_USERNAME", "" if production else "admin").strip()
+        password = os.getenv("IPAC_SEED_ADMIN_PASSWORD", "" if production else "admin123")
+        if not username or not password:
+            raise CommandError(
+                "En producción IPAC_SEED_ADMIN_USERNAME e IPAC_SEED_ADMIN_PASSWORD son obligatorios."
+            )
+        if production and (username == "admin" or password == "admin123"):
+            raise CommandError("Las credenciales de demostración no están permitidas en producción.")
         admin, created = User.objects.get_or_create(
             username=username,
             defaults={

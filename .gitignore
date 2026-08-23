@@ -10,5 +10,10 @@ node_modules/
 dist/
 .vite/
 *.log
+backups/
 .DS_Store
 .superpowers/
+
+# Fuentes de importación con datos personales; se cargan localmente y no se versionan.
+Alumnos IPAC- Posadas.xlsx
+CARRERAS Y CURSOS 2026.xlsx

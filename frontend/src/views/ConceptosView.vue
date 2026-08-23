@@ -10,10 +10,9 @@
     <template v-else>
     <div class="concepts-metrics-grid">
       <article
-        v-for="(stat, index) in stats"
+        v-for="stat in stats"
         :key="stat.label"
         class="concepts-metric-card border-border bg-surface"
-        :class="{ 'concepts-metric-card-featured': index === 0 }"
       >
         <span class="concepts-metric-icon" :class="`concepts-metric-icon-${stat.tone}`">
           <component :is="stat.icon" aria-hidden="true" />
@@ -65,6 +64,7 @@
 
         <button
           type="button"
+          v-if="canManageConcepts"
           class="concepts-primary-action bg-primary hover:bg-primary-hover"
           @click="openNewConceptoForm"
         >
@@ -77,6 +77,8 @@
     <ConceptoList
       :conceptos="filteredConceptos"
       :filtered="hasActiveFilters"
+      :can-edit="canManageConcepts"
+      :can-deactivate="canManageConcepts"
       @edit="openEditForm"
       @deactivate="requestDeactivate"
     />
@@ -118,6 +120,7 @@ import {
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useConceptos } from '@/composables/useConceptos'
 import { useToast } from '@/composables/useToast'
+import { useAuth } from '@/composables/useAuth'
 import { formatMoney } from '@/lib/formatters'
 import ConceptoList from '@/components/conceptos/ConceptoList.vue'
 import ConceptoForm from '@/components/conceptos/ConceptoForm.vue'
@@ -127,6 +130,8 @@ import AppPageState from '@/components/ui/AppPageState.vue'
 const { sucursales, loadCatalogos } = useCatalogos()
 const { conceptos, error: conceptosError, loadConceptos, deactivateConcepto } = useConceptos()
 const toast = useToast()
+const auth = useAuth()
+const canManageConcepts = computed(() => auth.can('manage-concepts'))
 
 const searchQuery = ref('')
 const sucursalFilter = ref('todas')

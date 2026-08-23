@@ -8,12 +8,14 @@
       @retry="loadPage"
     />
     <template v-else>
-    <div class="stats-grid">
-      <article
-        v-for="(stat, index) in stats"
+    <div id="dashboard-indicators" class="stats-grid" :class="{ 'show-all-mobile-stats': showAllMobileStats }">
+      <component
+        v-for="stat in stats"
         :key="stat.label"
+        :is="stat.to ? 'RouterLink' : 'article'"
+        :to="stat.to"
         class="stat-card border-border bg-surface"
-        :class="{ 'stat-card-featured': index === 0 }"
+        :class="{ 'stat-card-secondary': !stat.mobilePrimary }"
       >
         <span class="stat-icon" :class="`stat-icon-${stat.tone}`">
           <component :is="stat.icon" aria-hidden="true" />
@@ -22,9 +24,23 @@
           <span class="stat-label">{{ stat.label }}</span>
           <strong>{{ stat.value }}</strong>
           <small>{{ stat.detail }}</small>
+          <span v-if="stat.action" class="stat-action">
+            <span>{{ stat.action }}</span>
+            <ArrowRightIcon aria-hidden="true" />
+          </span>
         </span>
-      </article>
+      </component>
     </div>
+    <button
+      type="button"
+      class="dashboard-stats-toggle"
+      aria-controls="dashboard-indicators"
+      :aria-expanded="showAllMobileStats"
+      @click="showAllMobileStats = !showAllMobileStats"
+    >
+      <span>{{ showAllMobileStats ? 'Ver menos indicadores' : 'Ver más indicadores' }}</span>
+      <ChevronDownIcon aria-hidden="true" />
+    </button>
 
     <div class="dashboard-grid">
       <article class="panel cash-card border-border bg-surface">
@@ -76,46 +92,7 @@
           </router-link>
         </div>
 
-        <div class="payments-table-wrap">
-          <table class="payments-table">
-            <thead>
-              <tr>
-                <th>Recibo</th>
-                <th>Fecha</th>
-                <th>Alumno</th>
-                <th>Medio</th>
-                <th>Importe</th>
-                <th><span class="sr-only">Acciones</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="pago in ultimosPagos" :key="pago.id">
-                <td>{{ pago.numero_recibo || '—' }}</td>
-                <td>{{ formatDate(pago.fecha) }}</td>
-                <td>{{ pago.alumno_nombre || '—' }}</td>
-                <td>
-                  <span class="payment-method">
-                    <component :is="paymentIcon(pago.medio)" aria-hidden="true" />
-                    {{ paymentLabel(pago.medio) }}
-                  </span>
-                </td>
-                <td class="payment-amount">
-                  $ {{ formatMoney(pago.importe, { fractionDigits: 2 }) }}
-                </td>
-                <td class="payment-actions">
-                  <button type="button" aria-label="Más opciones">
-                    <EllipsisVerticalIcon aria-hidden="true" />
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-if="!ultimosPagos.length" class="dashboard-empty-state">
-            <span><DocumentMagnifyingGlassIcon aria-hidden="true" /></span>
-            <strong>Todavía no hay pagos este mes</strong>
-            <p>Las próximas cobranzas aparecerán acá automáticamente.</p>
-          </div>
-        </div>
+        <DashboardRecentPayments :pagos="ultimosPagos" />
       </article>
     </div>
     </template>
@@ -125,12 +102,13 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import {
+  ArrowRightIcon,
   BanknotesIcon,
   BuildingStorefrontIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
   CreditCardIcon,
-  DocumentMagnifyingGlassIcon,
-  EllipsisVerticalIcon,
+  LockClosedIcon,
   ReceiptPercentIcon,
   UserGroupIcon,
   WalletIcon,
@@ -143,6 +121,7 @@ import { apiRequest } from '@/lib/api'
 import { formatDate, formatMoney } from '@/lib/formatters'
 import { useToast } from '@/composables/useToast'
 import AppPageState from '@/components/ui/AppPageState.vue'
+import DashboardRecentPayments from '@/components/dashboard/DashboardRecentPayments.vue'
 
 const auth = useAuth()
 const caja = useCaja()
@@ -152,21 +131,23 @@ const { selectedSucursalId } = useDashboardFilters()
 
 const alumnosCount = ref(0)
 const pagosMes = ref([])
+const pagosMesCount = ref(0)
+const totalCobradoMes = ref(0)
+const cobradoHoy = ref(0)
+const deudaTotal = ref(0)
+const saldoFavor = ref(0)
+const alumnosConDeuda = ref(0)
+const cuotasVencidas = ref(0)
+const cobrosPorMedio = ref({})
+const cobrosPorSucursal = ref([])
+const cajasPeriodo = ref({ abiertas: 0, cerradas: 0, diferencia_acumulada: 0 })
 const pageReady = ref(false)
 const pageError = ref('')
+const showAllMobileStats = ref(false)
 const ultimosPagos = computed(() => pagosMes.value.slice(0, 5))
-const totalCobradoMes = computed(() =>
-  pagosMes.value.reduce((sum, pago) => sum + Number(pago.importe || 0), 0),
-)
 
 const { cajaHoy, cajaMovimientos, error: cajaError, loadCajaHoy } = caja
-const cajaTotalEsperado = computed(() =>
-  cajaMovimientos.value.reduce((total, movimiento) => {
-    const amount = Number(movimiento.importe || 0)
-    const signed = ['egreso', 'retiro', 'pase'].includes(movimiento.tipo) ? -amount : amount
-    return total + signed
-  }, 0),
-)
+const cajaTotalEsperado = computed(() => Number(cajaHoy.value?.resumen?.efectivo_esperado || 0))
 
 const cajaTitle = computed(() => {
   if (!cajaHoy.value) return 'Sin caja abierta'
@@ -225,63 +206,138 @@ async function cargarResumen(sucursalId) {
   const hoy = new Date()
   const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
   const iso = (date) => date.toISOString().slice(0, 10)
-  const [alumnos, pagos] = await Promise.all([
-    apiRequest('/alumnos/'),
+  const [alumnos, pagos, resumen, resumenInstitucion] = await Promise.all([
+    apiRequest('/alumnos/', { query: { sucursal: sucursalId } }),
     apiRequest('/pagos/', {
       query: { desde: iso(primero), hasta: iso(hoy), sucursal: sucursalId },
     }),
+    apiRequest('/reportes/resumen/', {
+      query: { desde: iso(primero), hasta: iso(hoy), sucursal: sucursalId },
+    }),
+    apiRequest('/reportes/resumen/', {
+      query: { desde: iso(primero), hasta: iso(hoy) },
+    }),
   ])
-  const alumnosFiltrados = sucursalId
-    ? (alumnos.results || []).filter(
-      (alumno) => String(alumno.sucursal) === String(sucursalId),
-    )
-    : (alumnos.results || [])
-  alumnosCount.value = alumnosFiltrados.length
+  alumnosCount.value = Number(alumnos.count || 0)
   pagosMes.value = pagos.results || []
+  pagosMesCount.value = Number(resumen.cobranzas?.cantidad_pagos || 0)
+  totalCobradoMes.value = Number(resumen.cobranzas?.total || 0)
+  cobradoHoy.value = Number(resumen.cobranzas?.hoy || 0)
+  deudaTotal.value = Number(resumen.cuenta_corriente?.deuda || 0)
+  saldoFavor.value = Number(resumen.cuenta_corriente?.saldo_a_favor || 0)
+  alumnosConDeuda.value = Number(resumen.cuenta_corriente?.alumnos_con_deuda || 0)
+  cuotasVencidas.value = Number(resumen.cuenta_corriente?.cuotas_vencidas || 0)
+  cobrosPorMedio.value = resumen.cobranzas?.por_medio || {}
+  cobrosPorSucursal.value = resumenInstitucion.cobranzas?.por_sucursal || []
+  cajasPeriodo.value = resumen.cajas || cajasPeriodo.value
 }
+
+const medioPrincipal = computed(() => {
+  const labels = { efectivo: 'Efectivo', transferencia: 'Transferencia', mercado_pago: 'Mercado Pago', tarjeta: 'Tarjeta', otro: 'Otros' }
+  const [medio, importe] = Object.entries(cobrosPorMedio.value).sort((a, b) => Number(b[1]) - Number(a[1]))[0] || ['—', 0]
+  return { nombre: labels[medio] || medio, importe: Number(importe || 0) }
+})
+
+const sucursalPrincipal = computed(() => {
+  const row = [...cobrosPorSucursal.value].sort((a, b) => Number(b.total) - Number(a.total))[0]
+  return row ? { nombre: row.sucursal__nombre, total: Number(row.total || 0) } : null
+})
 
 const stats = computed(() => [
   {
     label: 'Alumnos',
+    mobilePrimary: true,
+    action: 'Ver alumnos',
     value: alumnosCount.value,
     detail: 'base cargada',
     tone: 'gold',
     icon: UserGroupIcon,
+    to: '/alumnos',
   },
   {
     label: 'Sucursales',
+    action: auth.can('manage-branches') ? 'Ver sucursales' : undefined,
     value: sucursales.value.length,
     detail: sucursales.value.map((sucursal) => sucursal.nombre).join(' y '),
     tone: 'blue',
     icon: BuildingStorefrontIcon,
+    to: auth.can('manage-branches') ? '/configuracion' : null,
   },
   {
     label: 'Cobrado del mes',
+    mobilePrimary: true,
+    action: 'Ver cobranzas',
     value: `$ ${formatMoney(totalCobradoMes.value, { fractionDigits: 2 })}`,
-    detail: `${pagosMes.value.length} pagos`,
+    detail: `${pagosMesCount.value} pagos`,
     tone: 'green',
     icon: BanknotesIcon,
+    to: '/reportes',
   },
   {
     label: 'Pagos del mes',
-    value: pagosMes.value.length,
+    action: 'Ver pagos',
+    value: pagosMesCount.value,
     detail: 'filtrados por período actual',
     tone: 'violet',
     icon: CreditCardIcon,
+    to: '/reportes',
+  },
+  {
+    label: 'Cobrado hoy',
+    mobilePrimary: true,
+    action: 'Ver cobranzas',
+    value: `$ ${formatMoney(cobradoHoy.value, { fractionDigits: 2 })}`,
+    detail: 'cobranzas del día',
+    tone: 'green',
+    icon: BanknotesIcon,
+    to: '/reportes',
+  },
+  {
+    label: 'Deuda pendiente',
+    mobilePrimary: true,
+    action: 'Gestionar deuda',
+    value: `$ ${formatMoney(deudaTotal.value, { fractionDigits: 2 })}`,
+    detail: `${alumnosConDeuda.value} alumnos · ${cuotasVencidas.value} cuotas vencidas`,
+    tone: 'gold',
+    icon: WalletIcon,
+    to: '/deudores',
+  },
+  {
+    label: 'Saldo a favor',
+    action: 'Ver reportes',
+    value: `$ ${formatMoney(saldoFavor.value, { fractionDigits: 2 })}`,
+    detail: 'crédito disponible de alumnos',
+    tone: 'blue',
+    icon: CreditCardIcon,
+    to: '/reportes',
+  },
+  {
+    label: 'Medio principal',
+    action: 'Ver reportes',
+    value: medioPrincipal.value.nombre,
+    detail: `$ ${formatMoney(medioPrincipal.value.importe, { fractionDigits: 2 })} del mes`,
+    tone: 'violet',
+    icon: CreditCardIcon,
+    to: '/reportes',
+  },
+  ...(cobrosPorSucursal.value.length > 1 && sucursalPrincipal.value ? [{
+    label: 'Sucursal con mayor cobro',
+    action: 'Ver reportes',
+    value: sucursalPrincipal.value.nombre,
+    detail: `$ ${formatMoney(sucursalPrincipal.value.total, { fractionDigits: 2 })} del mes`,
+    tone: 'blue',
+    icon: BuildingStorefrontIcon,
+    to: '/reportes',
+  }] : []),
+  {
+    label: 'Cajas del período',
+    action: 'Ver cajas',
+    value: `${cajasPeriodo.value.abiertas || 0} abiertas`,
+    detail: `${cajasPeriodo.value.cerradas || 0} cerradas · diferencia $ ${formatMoney(cajasPeriodo.value.diferencia_acumulada || 0)}`,
+    tone: 'gold',
+    icon: LockClosedIcon,
+    to: '/reportes',
   },
 ])
 
-function paymentLabel(medio) {
-  const labels = {
-    efectivo: 'efectivo',
-    transferencia: 'transferencia',
-    tarjeta: 'tarjeta',
-    otro: 'otro',
-  }
-  return labels[medio] || medio || 'otro'
-}
-
-function paymentIcon(medio) {
-  return medio === 'tarjeta' ? CreditCardIcon : BanknotesIcon
-}
 </script>

@@ -57,12 +57,12 @@
         </div>
 
         <footer class="branch-card-actions">
-          <button type="button" @click="$emit('edit', sucursal)">
+          <button v-if="canEdit" type="button" @click="$emit('edit', sucursal)">
             <PencilSquareIcon aria-hidden="true" />
             <span>Editar sede</span>
           </button>
           <button
-            v-if="sucursal.activa"
+            v-if="canDeactivate && sucursal.activa"
             type="button"
             class="deactivate"
             @click="$emit('deactivate', sucursal)"
@@ -98,6 +98,8 @@ import {
 const props = defineProps({
   sucursales: { type: Array, required: true },
   carreras: { type: Array, default: () => [] },
+  canEdit: { type: Boolean, default: true },
+  canDeactivate: { type: Boolean, default: true },
 })
 
 defineEmits(['edit', 'deactivate'])

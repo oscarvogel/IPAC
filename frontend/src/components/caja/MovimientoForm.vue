@@ -37,6 +37,7 @@
               <select v-model="form.medio">
                 <option value="efectivo">Efectivo</option>
                 <option value="transferencia">Transferencia</option>
+                <option value="mercado_pago">Mercado Pago</option>
                 <option value="tarjeta">Tarjeta</option>
                 <option value="otro">Otro</option>
               </select>

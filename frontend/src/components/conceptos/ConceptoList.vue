@@ -56,7 +56,14 @@
                 {{ concepto.sucursal_nombre || 'Sin sucursal' }}
               </span>
             </td>
-            <td class="concepts-career">{{ concepto.carrera_nombre || 'Todas las carreras' }}</td>
+            <td class="concepts-career">
+              <span
+                class="concepts-career-text"
+                :title="concepto.carrera_nombre || 'Todas las carreras'"
+              >
+                {{ concepto.carrera_nombre || 'Todas las carreras' }}
+              </span>
+            </td>
             <td>
               <span :class="['concepts-status', concepto.activo ? 'active' : 'inactive']">
                 <component :is="concepto.activo ? CheckCircleIcon : PauseCircleIcon" aria-hidden="true" />
@@ -66,6 +73,7 @@
             <td>
               <div class="concepts-row-actions">
                 <button
+                  v-if="canEdit"
                   type="button"
                   title="Editar concepto"
                   aria-label="Editar concepto"
@@ -74,7 +82,7 @@
                   <PencilSquareIcon aria-hidden="true" />
                 </button>
                 <button
-                  v-if="concepto.activo"
+                  v-if="canDeactivate && concepto.activo"
                   type="button"
                   class="deactivate"
                   title="Desactivar concepto"
@@ -105,12 +113,12 @@
               <small>{{ typeLabel(concepto.tipo) }}</small>
             </span>
             <MobileActionMenu :label="`Acciones para ${concepto.nombre}`">
-              <button type="button" role="menuitem" @click="$emit('edit', concepto)">
+              <button v-if="canEdit" type="button" role="menuitem" @click="$emit('edit', concepto)">
                 <PencilSquareIcon aria-hidden="true" />
                 <span>Editar concepto</span>
               </button>
               <button
-                v-if="concepto.activo"
+                v-if="canDeactivate && concepto.activo"
                 type="button"
                 class="danger"
                 role="menuitem"
@@ -175,6 +183,8 @@ import MobileActionMenu from '@/components/ui/MobileActionMenu.vue'
 const props = defineProps({
   conceptos: { type: Array, required: true },
   filtered: { type: Boolean, default: false },
+  canEdit: { type: Boolean, default: true },
+  canDeactivate: { type: Boolean, default: true },
 })
 
 defineEmits(['edit', 'deactivate'])

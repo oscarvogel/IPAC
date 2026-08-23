@@ -15,6 +15,7 @@
     </section>
 
     <section class="mobile-login-access bg-surface">
+      <LoginThemeToggle />
       <div class="mobile-form-heading">
         <span class="mobile-form-icon bg-primary-soft text-primary">
           <AcademicCapIcon aria-hidden="true" />
@@ -119,6 +120,7 @@ import {
   UserIcon,
 } from '@heroicons/vue/24/outline'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import LoginThemeToggle from '@/components/auth/LoginThemeToggle.vue'
 import { vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
