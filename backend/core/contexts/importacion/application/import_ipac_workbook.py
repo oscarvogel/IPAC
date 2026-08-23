@@ -393,16 +393,17 @@ class IPACWorkbookImporter:
                 result.careers.created += 1
             else:
                 result.careers.updated += 1
+            ciclo = date.today().year
             if persist and career.importe_matricula is not None:
                 ConceptoCobrable.objects.update_or_create(
-                    nombre="Matrícula",
+                    nombre=f"Matrícula {ciclo}",
                     sucursal=branch,
                     carrera=career,
                     defaults={"tipo": ConceptoCobrable.Tipo.MATRICULA, "importe": career.importe_matricula, "activo": True},
                 )
             if persist and career.cuota_total is not None:
                 ConceptoCobrable.objects.update_or_create(
-                    nombre="Cuota mensual",
+                    nombre=f"Cuota mensual {ciclo}",
                     sucursal=branch,
                     carrera=career,
                     defaults={"tipo": ConceptoCobrable.Tipo.CUOTA, "importe": career.cuota_total, "activo": True},
