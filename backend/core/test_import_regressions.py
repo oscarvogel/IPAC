@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.test import TestCase
 
 from core.contexts.importacion.application.import_ipac_workbook import IPACWorkbookImporter
@@ -37,7 +39,7 @@ class ImportacionRegresionesTests(TestCase):
         self.assertEqual(alumno.email, "ana@nueva.test")
         self.assertTrue(any("traslados deben realizarse explícitamente" in warning for warning in result.warnings))
 
-    def test_catalog_import_creates_year_agnostic_concepts(self):
+    def test_catalog_import_uses_dynamic_cycle_in_concept_names(self):
         class FakeReader:
             def read(self, source, filename):
                 return {
@@ -52,12 +54,12 @@ class ImportacionRegresionesTests(TestCase):
         )
 
         carrera = CarreraCurso.objects.get(nombre="Tecnicatura de prueba", sucursal=self.posadas)
+        ciclo = date.today().year
         self.assertEqual(
-            ConceptoCobrable.objects.get(nombre="Matrícula", carrera=carrera).importe,
+            ConceptoCobrable.objects.get(nombre=f"Matrícula {ciclo}", carrera=carrera).importe,
             41400,
         )
         self.assertEqual(
-            ConceptoCobrable.objects.get(nombre="Cuota mensual", carrera=carrera).importe,
+            ConceptoCobrable.objects.get(nombre=f"Cuota mensual {ciclo}", carrera=carrera).importe,
             82000,
         )
-        self.assertFalse(ConceptoCobrable.objects.filter(nombre__contains="2026", carrera=carrera).exists())
