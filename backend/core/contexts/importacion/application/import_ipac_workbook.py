@@ -395,14 +395,14 @@ class IPACWorkbookImporter:
                 result.careers.updated += 1
             if persist and career.importe_matricula is not None:
                 ConceptoCobrable.objects.update_or_create(
-                    nombre="Matrícula 2026",
+                    nombre="Matrícula",
                     sucursal=branch,
                     carrera=career,
                     defaults={"tipo": ConceptoCobrable.Tipo.MATRICULA, "importe": career.importe_matricula, "activo": True},
                 )
             if persist and career.cuota_total is not None:
                 ConceptoCobrable.objects.update_or_create(
-                    nombre="Cuota mensual 2026",
+                    nombre="Cuota mensual",
                     sucursal=branch,
                     carrera=career,
                     defaults={"tipo": ConceptoCobrable.Tipo.CUOTA, "importe": career.cuota_total, "activo": True},
@@ -453,10 +453,23 @@ class IPACWorkbookImporter:
                 result.warn(f"Fila {source_row}: no se encontró la carrera/curso {career_name!r}; se importó sin carrera.")
             legajo = item.get("legajo", "").strip() or f"{branch_code}-IMPORT-{sequence:04d}"
             existing = None
+            matched_by_dni = False
             if dni:
                 existing = Alumno.objects.filter(dni=dni).first()
+                matched_by_dni = existing is not None
             if existing is None:
                 existing = Alumno.objects.filter(legajo=legajo).first()
+
+            target_branch = branch
+            target_career = career
+            if existing and matched_by_dni and existing.sucursal_id != branch.id:
+                result.warn(
+                    f"Fila {source_row}: DNI {dni} ya pertenece a la sucursal {existing.sucursal.codigo}; "
+                    f"se conservó esa sucursal. Los traslados deben realizarse explícitamente."
+                )
+                target_branch = existing.sucursal
+                target_career = existing.carrera
+
             values = {
                 "legajo": existing.legajo if existing else legajo,
                 "nombre": given or (existing.nombre if existing else "Sin nombre"),
@@ -467,8 +480,8 @@ class IPACWorkbookImporter:
                 "email": item.get("direccion de correo") or item.get("email") or (existing.email if existing else ""),
                 "telefono": clean_identifier(item.get("whatsapp") or item.get("telefono")) or (existing.telefono if existing else ""),
                 "domicilio": item.get("domicilio/chacra/barrio") or item.get("domicilio") or (existing.domicilio if existing else ""),
-                "sucursal": branch,
-                "carrera": career or (existing.carrera if existing else None),
+                "sucursal": target_branch,
+                "carrera": target_career or (existing.carrera if existing else None),
                 "estado": Alumno.Estado.ACTIVO,
             }
             if existing and dni and existing.dni == dni and any([existing.email and values["email"] and existing.email != values["email"], existing.cuil and values["cuil"] and existing.cuil != values["cuil"]]):
