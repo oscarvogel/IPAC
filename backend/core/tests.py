@@ -251,6 +251,13 @@ class ApiInicialTests(APITestCase):
             rol=PerfilUsuario.Rol.CONSULTA,
             sucursal=self.posadas,
         )
+        self.pending_user = User.objects.create_user("temporal", password="Temporal-IPAC-2026!")
+        PerfilUsuario.objects.create(
+            user=self.pending_user,
+            rol=PerfilUsuario.Rol.CONSULTA,
+            sucursal=self.posadas,
+            debe_cambiar_clave=True,
+        )
         Alumno.objects.create(
             legajo="P-001",
             nombre="Pedro",
@@ -286,6 +293,59 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(me.status_code, status.HTTP_200_OK)
         self.assertEqual(me.data["username"], "admin")
         self.assertEqual(me.data["perfil"]["rol"], PerfilUsuario.Rol.ADMINISTRACION)
+
+    def test_login_reports_password_change_required(self):
+        response = self.client.post(
+            "/api/auth/login/",
+            {"username": "temporal", "password": "Temporal-IPAC-2026!"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["debe_cambiar_clave"])
+
+    def test_pending_user_cannot_access_operational_endpoint(self):
+        self.client.force_authenticate(self.pending_user)
+
+        response = self.client.get("/api/alumnos/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "password_change_required")
+
+    def test_pending_user_can_change_password_and_is_unblocked(self):
+        self.client.force_authenticate(self.pending_user)
+
+        response = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "new_password": "Nueva-Clave-IPAC-2026!",
+                "new_password_confirmation": "Nueva-Clave-IPAC-2026!",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.pending_user.refresh_from_db()
+        self.pending_user.perfil.refresh_from_db()
+        self.assertTrue(self.pending_user.check_password("Nueva-Clave-IPAC-2026!"))
+        self.assertFalse(self.pending_user.perfil.debe_cambiar_clave)
+        self.assertEqual(self.client.get("/api/alumnos/").status_code, status.HTTP_200_OK)
+
+    def test_change_password_rejects_mismatch_and_short_password(self):
+        self.client.force_authenticate(self.pending_user)
+
+        mismatch = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "new_password": "Nueva-Clave-IPAC-2026!",
+                "new_password_confirmation": "Otra-Clave",
+            },
+        )
+        short = self.client.post(
+            "/api/auth/change-password/",
+            {"new_password": "123", "new_password_confirmation": "123"},
+        )
+
+        self.assertEqual(mismatch.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(short.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_admin_can_download_import_template(self):
         self.client.force_authenticate(self.admin)
@@ -560,6 +620,32 @@ class ApiInicialTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["perfil"]["rol"], PerfilUsuario.Rol.SUPERADMIN)
+
+    def test_user_creation_and_password_reset_require_first_login_change(self):
+        self.client.force_authenticate(user=self.admin)
+
+        created = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "nuevo-usuario",
+                "password": "Clave-Temporal-2026!",
+                "rol": PerfilUsuario.Rol.CONSULTA,
+                "sucursal": self.posadas.id,
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        created_user = User.objects.get(username="nuevo-usuario")
+        self.assertTrue(created_user.perfil.debe_cambiar_clave)
+
+        reset = self.client.patch(
+            f"/api/usuarios/{self.consulta.id}/",
+            {"password": "Clave-Temporal-2026!"},
+            format="json",
+        )
+        self.assertEqual(reset.status_code, status.HTTP_200_OK)
+        self.consulta.perfil.refresh_from_db()
+        self.assertTrue(self.consulta.perfil.debe_cambiar_clave)
 
     def test_user_without_global_access_only_sees_own_sucursal_students(self):
         self.client.force_authenticate(user=self.cajero)

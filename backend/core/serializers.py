@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -87,6 +88,7 @@ class UserSerializer(serializers.ModelSerializer):
         PerfilUsuario.objects.create(
             user=user, rol=rol, sucursal=sucursal,
             puede_ver_todas_las_sucursales=puede_ver_todas,
+            debe_cambiar_clave=bool(password),
         )
         return user
 
@@ -100,7 +102,7 @@ class UserSerializer(serializers.ModelSerializer):
         if password:
             instance.set_password(password)
         instance.save()
-        if rol is not None or sucursal is not None or puede_ver_todas is not None:
+        if rol is not None or sucursal is not None or puede_ver_todas is not None or password:
             perfil, _ = PerfilUsuario.objects.get_or_create(user=instance)
             if rol is not None:
                 perfil.rol = rol
@@ -108,6 +110,8 @@ class UserSerializer(serializers.ModelSerializer):
                 perfil.sucursal = sucursal
             if puede_ver_todas is not None:
                 perfil.puede_ver_todas_las_sucursales = puede_ver_todas
+            if password:
+                perfil.debe_cambiar_clave = True
             perfil.save()
         return instance
 
@@ -123,7 +127,7 @@ class PerfilUsuarioSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PerfilUsuario
-        fields = ["rol", "sucursal", "puede_ver_todas_las_sucursales"]
+        fields = ["rol", "sucursal", "puede_ver_todas_las_sucursales", "debe_cambiar_clave"]
 
 
 class CurrentUserSerializer(serializers.Serializer):
@@ -150,6 +154,17 @@ class LoginSerializer(serializers.Serializer):
         if not user.is_active:
             raise serializers.ValidationError("El usuario esta inactivo.")
         attrs["user"] = user
+        return attrs
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password_confirmation = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["new_password_confirmation"]:
+            raise serializers.ValidationError({"new_password_confirmation": "Las claves no coinciden."})
+        validate_password(attrs["new_password"], self.context["request"].user)
         return attrs
 
 

@@ -35,6 +35,7 @@ from .contexts.auditoria.infrastructure.django_auditoria_repository import Djang
 from .contexts.reportes.infrastructure.xlsx_exporter import XlsxReportExporter
 from .contexts.cobranzas.application.recalcular_recargos import RecalcularRecargos
 from .contexts.cobranzas.infrastructure.django_recargo_repository import DjangoRecargoRepository
+from .contexts.identidad.application.cambiar_clave import CambiarClave
 from .pagination import AlumnoPagination
 from .permissions import (
     AcademicManagementPermission,
@@ -57,6 +58,7 @@ from .serializers import (
     CarreraCursoSerializer,
     ConceptoCobrableSerializer,
     CobroSerializer,
+    ChangePasswordSerializer,
     CurrentUserSerializer,
     CuotaSerializer,
     DeudorSerializer,
@@ -125,7 +127,25 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         token, _ = Token.objects.get_or_create(user=serializer.validated_data["user"])
-        return Response({"key": token.key})
+        return Response({
+            "key": token.key,
+            "debe_cambiar_clave": serializer.validated_data["user"].perfil.debe_cambiar_clave,
+        })
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            CambiarClave().execute(
+                user=request.user,
+                profile=request.user.perfil,
+                new_password=serializer.validated_data["new_password"],
+            )
+        return Response({"debe_cambiar_clave": False})
 
 
 class CurrentUserView(APIView):

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { getToken } from '@/lib/api'
 import AppShell from '@/components/layout/AppShell.vue'
 import LoginView from '@/views/LoginView.vue'
+import ChangePasswordView from '@/views/ChangePasswordView.vue'
 import AlumnosView from '@/views/AlumnosView.vue'
 import DeudoresView from '@/views/DeudoresView.vue'
 import CajaView from '@/views/CajaView.vue'
@@ -27,6 +28,11 @@ const routes = [
     path: '/login',
     name: 'login',
     component: LoginView,
+  },
+  {
+    path: '/cambiar-clave',
+    name: 'change-password',
+    component: ChangePasswordView,
   },
   {
     path: '/',
@@ -136,12 +142,20 @@ router.beforeEach(async (to, from, next) => {
     return next({ path: '/login' })
   }
   if (to.path === '/login' && hasToken) {
-    return next({ path: '/dashboard' })
-  }
-  if (hasToken && to.meta.roles) {
     const auth = useAuth()
     if (!auth.user.value) await auth.fetchCurrentUser()
-    if (!canViewRoute(auth.user.value, to.meta.roles)) return next({ name: 'access-denied' })
+    return next({ path: auth.mustChangePassword.value ? '/cambiar-clave' : '/dashboard' })
+  }
+  if (hasToken) {
+    const auth = useAuth()
+    if (!auth.user.value) await auth.fetchCurrentUser()
+    if (auth.mustChangePassword.value && to.path !== '/cambiar-clave') {
+      return next({ name: 'change-password' })
+    }
+    if (!auth.mustChangePassword.value && to.path === '/cambiar-clave') {
+      return next({ name: 'dashboard' })
+    }
+    if (to.meta.roles && !canViewRoute(auth.user.value, to.meta.roles)) return next({ name: 'access-denied' })
   }
   return next()
 })

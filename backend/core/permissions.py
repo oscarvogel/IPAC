@@ -28,6 +28,8 @@ class RolePermission(BasePermission):
         profile = getattr(request.user, "perfil", None)
         if not profile:
             return False
+        if profile.debe_cambiar_clave:
+            return False
         action = getattr(view, "action", None)
         allowed_roles = self.action_roles.get(action)
         if allowed_roles is None:
