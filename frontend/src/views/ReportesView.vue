@@ -11,7 +11,7 @@
     <ReporteFiltros
       :filtros="filtros"
       :sucursales="sucursales"
-      :loading="loading"
+      :loading="loading || activeSectionLoading"
       :usuarios="cajeros"
       :show-user="activeTab === 'cobranzas'"
       @update:filtros="updateFiltros"
@@ -26,13 +26,21 @@
       </button>
     </nav>
 
-    <template v-if="activeTab === 'resumen'">
+    <AppPageState
+      v-if="activeSectionLoading || activeSectionError"
+      :loading="activeSectionLoading"
+      :error="activeSectionError"
+      label="el reporte seleccionado"
+      @retry="retryActiveSection"
+    />
+
+    <template v-else-if="activeTab === 'resumen'">
       <ReporteResumen :resumen="resumen" :show-distribution="false" />
     </template>
 
     <template v-else-if="activeTab === 'cobranzas'">
       <ReporteResumen :resumen="resumen" :show-metrics="false" />
-      <section class="report-category-card">
+      <section v-reveal-on-scroll class="report-category-card">
         <header><div><p class="eyebrow">Control diario</p><h2>Cobranzas por usuario</h2></div></header>
         <div class="reports-cobranzas-table-wrap">
           <table class="audit-table">
@@ -72,17 +80,17 @@
       <PagosListado :pagos="pagos" />
     </template>
 
-    <section v-else-if="activeTab === 'morosidad'" class="report-category-card report-category-callout">
+    <section v-else-if="activeTab === 'morosidad'" v-reveal-on-scroll class="report-category-card report-category-callout">
       <div><p class="eyebrow">Seguimiento de deuda</p><h2>Reporte de morosidad</h2><p>Consultá alumnos morosos, antigüedad, segmentos y datos de contacto.</p></div>
       <RouterLink to="/deudores">Abrir cartera de deudores</RouterLink>
     </section>
 
-    <section v-else-if="activeTab === 'alumnos'" class="report-category-card report-category-callout">
+    <section v-else-if="activeTab === 'alumnos'" v-reveal-on-scroll class="report-category-card report-category-callout">
       <div><p class="eyebrow">Administración académica</p><h2>Listado de alumnos</h2><p>Exportá el padrón visible por sucursal con datos de contacto y trayectoria actual.</p></div>
       <RouterLink to="/alumnos">Abrir directorio</RouterLink>
     </section>
 
-    <section v-else class="report-category-card">
+    <section v-else v-reveal-on-scroll class="report-category-card">
       <div><p class="eyebrow">Tesorería</p><h2>Cajas del período</h2><p>{{ resumen?.cajas?.cerradas || 0 }} cerradas · {{ resumen?.cajas?.abiertas || 0 }} abiertas · diferencia acumulada {{ money(resumen?.cajas?.diferencia_acumulada) }}</p></div>
       <RouterLink to="/caja">Ir a Caja</RouterLink>
     </section>
@@ -101,8 +109,9 @@ import ReporteFiltros from '@/components/reportes/ReporteFiltros.vue'
 import ReporteResumen from '@/components/reportes/ReporteResumen.vue'
 import PagosListado from '@/components/reportes/PagosListado.vue'
 import AppPageState from '@/components/ui/AppPageState.vue'
+import { vRevealOnScroll } from '@/directives/motion'
 
-const { sucursales, loadCatalogos } = useCatalogos()
+const { sucursales, loadCatalogo, loadCatalogos } = useCatalogos()
 const {
   resumen,
   pagos,
@@ -119,6 +128,10 @@ const route = useRoute()
 const router = useRouter()
 const pageReady = ref(false)
 const pageError = ref('')
+const activeSectionLoading = ref(false)
+const activeSectionError = ref('')
+const loadedResources = new Set()
+let sectionRequestId = 0
 const reportSections = ['resumen', 'cobranzas', 'morosidad', 'caja', 'alumnos']
 const activeTab = ref(reportSections.includes(route.query.seccion) ? route.query.seccion : 'resumen')
 const cajeros = ref([])
@@ -141,6 +154,11 @@ watch(
     if (section) router.replace({ path: route.path, query: { ...route.query, seccion: 'resumen' }, hash: route.hash })
   },
 )
+
+watch(activeTab, (section, previousSection) => {
+  if (!pageReady.value || section === previousSection) return
+  void fetchReportData().catch(() => {})
+})
 
 function selectTab(section) {
   if (!reportSections.includes(section)) return
@@ -175,15 +193,17 @@ async function loadPage() {
   pageError.value = ''
   Object.assign(filtros, rangoPorDefecto())
   try {
-    await loadCatalogos()
-    await fetchReportData()
+    await (loadCatalogo?.('sucursales') || loadCatalogos())
+    loadedResources.clear()
+    await fetchReportData({ force: true })
     pageReady.value = true
   } catch (err) {
     pageError.value = err.message || 'No se pudieron cargar los reportes.'
   }
 }
 
-async function fetchReportData() {
+async function fetchReportData({ force = false } = {}) {
+  const section = activeTab.value
   const payload = {
     desde: filtros.desde || undefined,
     hasta: filtros.hasta || undefined,
@@ -191,18 +211,51 @@ async function fetchReportData() {
     medio: filtros.medio || undefined,
     usuario: filtros.usuario || undefined,
   }
-  await Promise.all([loadResumen(payload), loadPagos(payload), loadCobranzasUsuarios(payload)])
-  const known = new Map(cajeros.value.map((item) => [String(item.id), item]))
-  for (const row of cobranzasUsuarios.value) {
-    if (row.usuario_id) known.set(String(row.usuario_id), { id: row.usuario_id, nombre: row.usuario })
+  const resourceLoaders = {
+    resumen: () => loadResumen(payload),
+    pagos: () => loadPagos(payload),
+    cobranzasUsuarios: () => loadCobranzasUsuarios(payload),
   }
-  cajeros.value = [...known.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-  if (reportesError.value) throw new Error(reportesError.value)
+  const requiredResources = section === 'cobranzas'
+    ? ['resumen', 'pagos', 'cobranzasUsuarios']
+    : section === 'resumen'
+      ? ['resumen']
+      : section === 'caja'
+        ? ['resumen']
+        : []
+  const pendingResources = requiredResources.filter((resource) => force || !loadedResources.has(resource))
+  const requestId = ++sectionRequestId
+  activeSectionLoading.value = true
+  activeSectionError.value = ''
+  try {
+    await Promise.all(pendingResources.map(async (resource) => {
+      await resourceLoaders[resource]()
+      loadedResources.add(resource)
+    }))
+    if (pendingResources.length && reportesError.value) throw new Error(reportesError.value)
+    if (section === 'cobranzas') {
+      const known = new Map(cajeros.value.map((item) => [String(item.id), item]))
+      for (const row of cobranzasUsuarios.value) {
+        if (row.usuario_id) known.set(String(row.usuario_id), { id: row.usuario_id, nombre: row.usuario })
+      }
+      cajeros.value = [...known.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    }
+  } catch (err) {
+    if (requestId === sectionRequestId) activeSectionError.value = err.message || 'No se pudo cargar el reporte seleccionado.'
+    throw err
+  } finally {
+    if (requestId === sectionRequestId) activeSectionLoading.value = false
+  }
+}
+
+function retryActiveSection() {
+  return fetchReportData({ force: true }).catch(() => {})
 }
 
 async function aplicarFiltros() {
   try {
-    await fetchReportData()
+    loadedResources.clear()
+    await fetchReportData({ force: true })
   } catch (err) {
     toast.error(err.message || 'No se pudieron actualizar los reportes.')
   }

@@ -70,7 +70,16 @@
             </label>
             <label>
               Tipo de descuento
-              <select v-model="form.tipo_descuento"><option value="">Sin descuento</option><option v-for="tipo in tiposFiltrados" :key="tipo.id" :value="tipo.id">{{ tipo.nombre }}</option></select>
+              <select
+                v-model="form.tipo_descuento"
+                :disabled="isDiscountCatalogLoading"
+                :aria-busy="isDiscountCatalogLoading"
+              >
+                <option value="">Sin descuento</option>
+                <option v-for="tipo in tiposFiltrados" :key="tipo.id" :value="tipo.id">{{ tipo.nombre }}</option>
+              </select>
+              <small v-if="isDiscountCatalogLoading" class="field-help" role="status">Cargando tipos de descuento...</small>
+              <small v-else-if="discountCatalogErrorMessage" class="field-help field-error" role="alert">{{ discountCatalogErrorMessage }}</small>
             </label>
             <label v-if="form.tipo_descuento">Descuento<input v-model="form.descuento" type="number" min="0" step="0.01" :readonly="selectedDiscount?.valor > 0" /></label>
             <label v-if="form.tipo_descuento">Motivo del descuento<input v-model.trim="form.motivo_descuento" required placeholder="Ej. Convenio vigente" /></label>
@@ -111,6 +120,10 @@
   color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.35;
+}
+
+.field-error {
+  color: var(--danger);
 }
 
 .massive-fee-summary {
@@ -163,12 +176,16 @@ const props = defineProps({
   sucursales: { type: Array, default: () => [] },
   carreras: { type: Array, default: () => [] },
   conceptos: { type: Array, default: () => [] },
+  tiposDescuentoLoading: { type: Boolean, default: false },
+  tiposDescuentoError: { type: String, default: '' },
 })
 
 const emit = defineEmits(['close', 'saved'])
 const toast = useToast()
 const { alumnosElegibles, alumnosEncontrados, omitidas, loading, error, evaluar, generar } = useCuotasMasivas()
 const { tiposDescuento } = useCatalogos()
+const isDiscountCatalogLoading = computed(() => props.tiposDescuentoLoading)
+const discountCatalogErrorMessage = computed(() => props.tiposDescuentoError)
 
 const form = reactive({
   sucursal: '',

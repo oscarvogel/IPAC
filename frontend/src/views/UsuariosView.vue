@@ -133,7 +133,7 @@ import UsuarioForm from '@/components/usuarios/UsuarioForm.vue'
 import UsuarioList from '@/components/usuarios/UsuarioList.vue'
 import AppPageState from '@/components/ui/AppPageState.vue'
 
-const { sucursales, loadCatalogos } = useCatalogos()
+const { sucursales, loadCatalogo, loadCatalogos } = useCatalogos()
 const { usuarios, error: usuariosError, loadUsuarios, deactivateUsuario } = useUsuarios()
 const toast = useToast()
 const auth = useAuth()
@@ -155,7 +155,10 @@ async function loadPage() {
   pageReady.value = false
   pageError.value = ''
   try {
-    await Promise.all([loadCatalogos(), loadUsuarios()])
+    await Promise.all([
+      loadCatalogo?.('sucursales') || loadCatalogos(),
+      loadUsuarios(),
+    ])
     if (usuariosError.value) throw new Error(usuariosError.value)
     pageReady.value = true
   } catch (err) {

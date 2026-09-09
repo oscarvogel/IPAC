@@ -101,6 +101,22 @@ describe('useAuth', () => {
     expect(auth.user.value).toEqual(sampleMe)
   })
 
+  it('expone el estado de inicializacion mientras hidrata la sesion', async () => {
+    api.getToken.mockReturnValue('tok-123')
+    let resolveRequest
+    api.apiRequest.mockReturnValue(new Promise((resolve) => {
+      resolveRequest = resolve
+    }))
+
+    const auth = useAuth()
+    const pending = auth.fetchCurrentUser()
+
+    expect(auth.initializing.value).toBe(true)
+    resolveRequest(sampleMe)
+    await pending
+    expect(auth.initializing.value).toBe(false)
+  })
+
   it('fetchCurrentUser() limpia el token si /auth/me/ falla', async () => {
     api.getToken.mockReturnValue('tok-123')
     api.apiRequest.mockRejectedValueOnce(new Error('Unauthorized'))

@@ -8,7 +8,7 @@
       @retry="loadPage"
     />
     <template v-else>
-    <div id="dashboard-indicators" class="stats-grid" :class="{ 'show-all-mobile-stats': showAllMobileStats }">
+    <div id="dashboard-indicators" v-reveal-on-scroll class="stats-grid" :class="{ 'show-all-mobile-stats': showAllMobileStats }">
       <component
         v-for="stat in stats"
         :key="stat.label"
@@ -42,8 +42,8 @@
       <ChevronDownIcon aria-hidden="true" />
     </button>
 
-    <div class="dashboard-grid">
-      <article class="panel cash-card border-border bg-surface">
+    <div v-reveal-on-scroll class="dashboard-grid">
+      <article class="panel cash-card border-border bg-surface" :aria-busy="cajaLoading">
         <div class="cash-card-head">
           <span class="section-icon section-icon-gold">
             <WalletIcon aria-hidden="true" />
@@ -59,7 +59,12 @@
           </div>
         </div>
 
-        <div class="dashboard-caja-body">
+        <div v-if="cajaLoading" class="dashboard-caja-loading" role="status">
+          <span class="skeleton-line" aria-hidden="true"></span>
+          <span class="skeleton-line skeleton-line-short" aria-hidden="true"></span>
+          <span>Cargando estado de caja...</span>
+        </div>
+        <div v-else class="dashboard-caja-body">
           <div class="cash-metric">
             <span>Total esperado</span>
             <strong>$ {{ formatMoney(cajaTotalEsperado, { fractionDigits: 2 }) }}</strong>
@@ -73,9 +78,10 @@
             <span>Ir a caja</span>
           </router-link>
         </div>
+        <p v-if="cajaError" class="dashboard-caja-error" role="alert">{{ cajaError }}</p>
       </article>
 
-      <article class="panel payments-card border-border bg-surface">
+      <article class="panel payments-card border-border bg-surface" :aria-busy="dashboardSecondaryLoading">
         <div class="payments-card-head">
           <div class="payments-title">
             <span class="section-icon section-icon-violet">
@@ -92,7 +98,13 @@
           </router-link>
         </div>
 
-        <DashboardRecentPayments :pagos="ultimosPagos" />
+        <div v-if="dashboardSecondaryLoading" class="dashboard-payments-loading" role="status">
+          <span class="skeleton-line" aria-hidden="true"></span>
+          <span class="skeleton-line skeleton-line-short" aria-hidden="true"></span>
+          <span>Cargando pagos recientes...</span>
+        </div>
+        <p v-else-if="dashboardSecondaryError" class="dashboard-caja-error" role="alert">{{ dashboardSecondaryError }}</p>
+        <DashboardRecentPayments v-else :pagos="ultimosPagos" />
       </article>
     </div>
     </template>
@@ -122,11 +134,12 @@ import { formatDate, formatMoney } from '@/lib/formatters'
 import { useToast } from '@/composables/useToast'
 import AppPageState from '@/components/ui/AppPageState.vue'
 import DashboardRecentPayments from '@/components/dashboard/DashboardRecentPayments.vue'
+import { vRevealOnScroll } from '@/directives/motion'
 
 const auth = useAuth()
 const caja = useCaja()
 const toast = useToast()
-const { sucursales, loadCatalogos } = useCatalogos()
+const { sucursales, loadCatalogo, loadCatalogos } = useCatalogos()
 const { selectedSucursalId } = useDashboardFilters()
 
 const alumnosCount = ref(0)
@@ -144,9 +157,17 @@ const cajasPeriodo = ref({ abiertas: 0, cerradas: 0, diferencia_acumulada: 0 })
 const pageReady = ref(false)
 const pageError = ref('')
 const showAllMobileStats = ref(false)
+const dashboardSecondaryLoading = ref(false)
+const dashboardSecondaryError = ref('')
 const ultimosPagos = computed(() => pagosMes.value.slice(0, 5))
 
-const { cajaHoy, cajaMovimientos, error: cajaError, loadCajaHoy } = caja
+const {
+  cajaHoy,
+  cajaMovimientos,
+  loading: cajaLoading,
+  error: cajaError,
+  loadCajaHoy,
+} = caja
 const cajaTotalEsperado = computed(() => Number(cajaHoy.value?.resumen?.efectivo_esperado || 0))
 
 const cajaTitle = computed(() => {
@@ -172,7 +193,7 @@ async function loadPage() {
   pageReady.value = false
   pageError.value = ''
   try {
-    await loadCatalogos()
+    await (loadCatalogo?.('sucursales') || loadCatalogos())
     if (!selectedSucursalId.value && sucursales.value.length) {
       const preferred = auth.user.value?.perfil?.sucursal?.id
       selectedSucursalId.value = String(
@@ -181,7 +202,6 @@ async function loadPage() {
       )
     }
     await cargarDashboard()
-    if (cajaError.value) throw new Error(cajaError.value)
     pageReady.value = true
   } catch (err) {
     pageError.value = err.message || 'No se pudo cargar el resumen del dashboard.'
@@ -199,27 +219,33 @@ async function refreshDashboard() {
 
 async function cargarDashboard() {
   const sucursalId = selectedSucursalId.value || null
-  await Promise.all([cargarResumen(sucursalId), loadCajaHoy(sucursalId)])
+  await cargarResumenPrincipal(sucursalId)
+  void Promise.all([
+    cargarResumenSecundario(sucursalId),
+    loadCajaHoy(sucursalId),
+  ]).catch((err) => {
+    toast.error(err.message || 'No se pudo completar la carga secundaria del dashboard.')
+  })
 }
 
-async function cargarResumen(sucursalId) {
+function dashboardDateQuery(sucursalId) {
   const hoy = new Date()
   const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
   const iso = (date) => date.toISOString().slice(0, 10)
-  const [alumnos, pagos, resumen, resumenInstitucion] = await Promise.all([
+  return {
+    desde: iso(primero),
+    hasta: iso(hoy),
+    sucursal: sucursalId,
+  }
+}
+
+async function cargarResumenPrincipal(sucursalId) {
+  const query = dashboardDateQuery(sucursalId)
+  const [alumnos, resumen] = await Promise.all([
     apiRequest('/alumnos/', { query: { sucursal: sucursalId } }),
-    apiRequest('/pagos/', {
-      query: { desde: iso(primero), hasta: iso(hoy), sucursal: sucursalId },
-    }),
-    apiRequest('/reportes/resumen/', {
-      query: { desde: iso(primero), hasta: iso(hoy), sucursal: sucursalId },
-    }),
-    apiRequest('/reportes/resumen/', {
-      query: { desde: iso(primero), hasta: iso(hoy) },
-    }),
+    apiRequest('/reportes/resumen/', { query }),
   ])
   alumnosCount.value = Number(alumnos.count || 0)
-  pagosMes.value = pagos.results || []
   pagosMesCount.value = Number(resumen.cobranzas?.cantidad_pagos || 0)
   totalCobradoMes.value = Number(resumen.cobranzas?.total || 0)
   cobradoHoy.value = Number(resumen.cobranzas?.hoy || 0)
@@ -228,8 +254,26 @@ async function cargarResumen(sucursalId) {
   alumnosConDeuda.value = Number(resumen.cuenta_corriente?.alumnos_con_deuda || 0)
   cuotasVencidas.value = Number(resumen.cuenta_corriente?.cuotas_vencidas || 0)
   cobrosPorMedio.value = resumen.cobranzas?.por_medio || {}
-  cobrosPorSucursal.value = resumenInstitucion.cobranzas?.por_sucursal || []
   cajasPeriodo.value = resumen.cajas || cajasPeriodo.value
+}
+
+async function cargarResumenSecundario(sucursalId) {
+  dashboardSecondaryLoading.value = true
+  dashboardSecondaryError.value = ''
+  const query = dashboardDateQuery(sucursalId)
+  try {
+    const [pagos, resumenInstitucion] = await Promise.all([
+      apiRequest('/pagos/', { query }),
+      apiRequest('/reportes/resumen/', { query: { ...query, sucursal: undefined } }),
+    ])
+    pagosMes.value = pagos.results || []
+    cobrosPorSucursal.value = resumenInstitucion.cobranzas?.por_sucursal || []
+  } catch (err) {
+    dashboardSecondaryError.value = err.message || 'No se pudieron cargar los pagos recientes.'
+    throw err
+  } finally {
+    dashboardSecondaryLoading.value = false
+  }
 }
 
 const medioPrincipal = computed(() => {
@@ -341,3 +385,52 @@ const stats = computed(() => [
 ])
 
 </script>
+
+<style scoped>
+.dashboard-caja-loading {
+  min-height: 204px;
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.dashboard-caja-loading .skeleton-line {
+  width: 78%;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--surface-soft);
+}
+
+.dashboard-caja-loading .skeleton-line-short {
+  width: 46%;
+}
+
+.dashboard-caja-error {
+  margin: 14px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.dashboard-payments-loading {
+  min-height: 204px;
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.dashboard-payments-loading .skeleton-line {
+  width: 82%;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--surface-soft);
+}
+
+.dashboard-payments-loading .skeleton-line-short {
+  width: 58%;
+}
+</style>

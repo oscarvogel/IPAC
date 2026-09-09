@@ -96,7 +96,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import AppPageState from '@/components/ui/AppPageState.vue'
 
 const { sucursales, error: sucursalesError, loadSucursales, updateSucursal } = useSucursales()
-const { carreras, loadCatalogos } = useCatalogos()
+const { carreras, loadCatalogo, loadCatalogos } = useCatalogos()
 const toast = useToast()
 const auth = useAuth()
 const canManageBranches = computed(() => auth.can('manage-branches'))
@@ -114,7 +114,10 @@ async function loadPage() {
   pageReady.value = false
   pageError.value = ''
   try {
-    await Promise.all([loadSucursales(true), loadCatalogos()])
+    await Promise.all([
+      loadSucursales(true),
+      loadCatalogo?.('carreras') || loadCatalogos(),
+    ])
     if (sucursalesError.value) throw new Error(sucursalesError.value)
     pageReady.value = true
   } catch (err) {

@@ -1,5 +1,10 @@
 <template>
-  <aside class="sidebar bg-primary text-primary-soft">
+  <aside
+    id="app-sidebar"
+    v-focus-trap="{ active: open }"
+    class="sidebar bg-primary text-primary-soft"
+    :data-open="open"
+  >
     <div class="brand-block">
       <img src="/logo-ipac.jpg" alt="IPAC" class="brand-logo" />
       <div class="brand-copy">
@@ -7,6 +12,7 @@
         <small>CRM administrativo</small>
       </div>
       <button
+        ref="closeButton"
         class="sidebar-close"
         type="button"
         aria-label="Cerrar navegación"
@@ -132,7 +138,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowRightIcon,
@@ -152,14 +158,20 @@ import {
   XMarkIcon,
 } from '@heroicons/vue/24/outline'
 import { useAuth } from '@/composables/useAuth'
+import { vFocusTrap } from '@/directives/accessibility'
 
 const emit = defineEmits(['close'])
+
+const props = defineProps({
+  open: { type: Boolean, default: false },
+})
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuth()
 const { user, logout } = auth
 const userArea = ref(null)
+const closeButton = ref(null)
 const userMenuOpen = ref(false)
 const expandedModule = ref(null)
 
@@ -300,6 +312,7 @@ function handleDocumentPointerDown(event) {
 
 function handleDocumentKeydown(event) {
   if (event.key !== 'Escape') return
+  if (props.open) emit('close')
   userMenuOpen.value = false
   expandedModule.value = null
 }
@@ -320,6 +333,15 @@ watch(
     userMenuOpen.value = false
     const activeModule = modules.value.find((module) => hasSubmenu(module) && isModuleActive(module))
     expandedModule.value = activeModule?.id || null
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.open,
+  (open, wasOpen) => {
+    if (!open || wasOpen) return
+    nextTick(() => closeButton.value?.focus())
   },
   { immediate: true },
 )

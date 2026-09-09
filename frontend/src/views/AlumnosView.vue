@@ -214,6 +214,8 @@
       :open="showGenerarCuota"
       :alumno="selectedAlumno"
       :conceptos="conceptos"
+      :tipos-descuento-loading="discountCatalogLoading"
+      :tipos-descuento-error="discountCatalogError"
       @close="showGenerarCuota = false"
       @saved="onCuotaGenerada"
     />
@@ -223,6 +225,8 @@
       :sucursales="sucursales"
       :carreras="carreras"
       :conceptos="conceptos"
+      :tipos-descuento-loading="discountCatalogLoading"
+      :tipos-descuento-error="discountCatalogError"
       @close="showGenerarCuotasMasivas = false"
       @saved="onCuotasMasivasSaved"
     />
@@ -291,7 +295,13 @@ const router = useRouter()
 const canManageAlumnos = computed(() => auth.can('manage-alumnos'))
 const canRegisterPayments = computed(() => auth.can('register-payments'))
 const canManageFees = computed(() => auth.can('manage-fees'))
-const { sucursales, carreras, conceptos, loadCatalogos } = useCatalogos()
+const {
+  sucursales,
+  carreras,
+  conceptos,
+  loadCatalogo,
+  loadCatalogos,
+} = useCatalogos()
 const { pagos, loadPagos } = usePagos()
 
 const searchQuery = ref('')
@@ -313,6 +323,8 @@ const pendingDeactivateAlumno = ref(null)
 const changingAlumnoStatus = ref(false)
 const pageReady = ref(false)
 const pageError = ref('')
+const discountCatalogLoading = ref(false)
+const discountCatalogError = ref('')
 
 onMounted(loadPage)
 
@@ -368,13 +380,18 @@ async function loadPage() {
   pageError.value = ''
   try {
     const query = studentQuery()
-    await Promise.all([loadCatalogos(), loadAlumnos(query), loadAlumnoStats(query)])
+    await Promise.all([loadBaseCatalogos(), loadAlumnos(query), loadAlumnoStats(query)])
     await loadPagos(selectedAlumno.value ? { alumno: selectedAlumno.value.id } : {})
     if (alumnosError.value) throw new Error(alumnosError.value)
     pageReady.value = true
   } catch (err) {
     pageError.value = err.message || 'No se pudo cargar el directorio de alumnos.'
   }
+}
+
+function loadBaseCatalogos() {
+  if (!loadCatalogo) return loadCatalogos()
+  return Promise.all(['sucursales', 'carreras', 'conceptos'].map((resource) => loadCatalogo(resource)))
 }
 
 async function onSelect(alumno) {
@@ -425,9 +442,24 @@ function closeEstadoCuenta() {
   showEstadoCuenta.value = false
 }
 
-function openGenerarCuota() {
+async function ensureDiscountCatalog() {
+  discountCatalogError.value = ''
+  discountCatalogLoading.value = true
+  try {
+    if (loadCatalogo) await loadCatalogo('tiposDescuento')
+    else await loadCatalogos()
+  } catch (err) {
+    discountCatalogError.value = err.message || 'No se pudieron cargar los tipos de descuento.'
+    toast.error(discountCatalogError.value)
+  } finally {
+    discountCatalogLoading.value = false
+  }
+}
+
+async function openGenerarCuota() {
   if (!canManageFees.value || !selectedAlumno.value) return
   showGenerarCuota.value = true
+  await ensureDiscountCatalog()
 }
 
 async function onMatriculaChanged() {
@@ -440,8 +472,10 @@ async function onCuotaGenerada() {
   await loadStudentsPage()
 }
 
-function openGenerarCuotasMasivas() {
-  if (canManageFees.value) showGenerarCuotasMasivas.value = true
+async function openGenerarCuotasMasivas() {
+  if (!canManageFees.value) return
+  showGenerarCuotasMasivas.value = true
+  await ensureDiscountCatalog()
 }
 
 function consumeRouteAction(accion) {

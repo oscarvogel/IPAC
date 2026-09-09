@@ -127,7 +127,7 @@ import ConceptoForm from '@/components/conceptos/ConceptoForm.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import AppPageState from '@/components/ui/AppPageState.vue'
 
-const { sucursales, loadCatalogos } = useCatalogos()
+const { sucursales, loadCatalogo, loadCatalogos } = useCatalogos()
 const { conceptos, error: conceptosError, loadConceptos, deactivateConcepto } = useConceptos()
 const toast = useToast()
 const auth = useAuth()
@@ -150,7 +150,11 @@ async function loadPage() {
   pageReady.value = false
   pageError.value = ''
   try {
-    await Promise.all([loadCatalogos(), loadConceptos()])
+    await Promise.all([
+      loadCatalogo?.('sucursales') || loadCatalogos(),
+      loadCatalogo?.('carreras') || loadCatalogos(),
+      loadConceptos(),
+    ])
     if (conceptosError.value) throw new Error(conceptosError.value)
     pageReady.value = true
   } catch (err) {

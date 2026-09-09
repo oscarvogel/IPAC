@@ -1,5 +1,5 @@
 import { createApp } from 'vue'
-import '@fontsource-variable/inter'
+import './assets/styles/inter-latin.css'
 import './style.css'
 import './assets/styles/print.css'
 import App from './App.vue'

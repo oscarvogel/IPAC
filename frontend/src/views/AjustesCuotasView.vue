@@ -7,7 +7,7 @@
       <div class="adjustment-grid">
         <section class="adjustment-card">
           <header><div><p class="eyebrow">Beneficios y excepciones</p><h2>Tipos de descuento</h2></div></header>
-          <form class="adjustment-form" @submit.prevent="createDiscount">
+          <form v-form-validation class="adjustment-form" @submit.prevent="createDiscount">
             <label>Nombre<input v-model.trim="discount.nombre" required placeholder="Ej. Beca" /></label>
             <label>Sucursal<select v-model="discount.sucursal" required><option value="">Seleccionar</option><option v-for="branch in sucursales" :key="branch.id" :value="branch.id">{{ branch.nombre }}</option></select></label>
             <label>Modalidad<select v-model="discount.modalidad"><option value="porcentaje">Porcentaje</option><option value="importe">Importe fijo</option></select></label>
@@ -19,7 +19,7 @@
 
         <section class="adjustment-card">
           <header><div><p class="eyebrow">Mora por vencimiento</p><h2>Reglas de recargo</h2></div></header>
-          <form class="adjustment-form" @submit.prevent="createRule">
+          <form v-form-validation class="adjustment-form" @submit.prevent="createRule">
             <label>Nombre<input v-model.trim="rule.nombre" required placeholder="Ej. Mora mensual" /></label>
             <label>Sucursal<select v-model="rule.sucursal" required><option value="">Seleccionar</option><option v-for="branch in sucursales" :key="branch.id" :value="branch.id">{{ branch.nombre }}</option></select></label>
             <label>Concepto<select v-model="rule.concepto"><option value="">Todos los conceptos</option><option v-for="concept in ruleConcepts" :key="concept.id" :value="concept.id">{{ concept.nombre }}</option></select></label>
@@ -42,8 +42,9 @@ import { apiRequest } from '@/lib/api'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useToast } from '@/composables/useToast'
 import AppPageState from '@/components/ui/AppPageState.vue'
+import { vFormValidation } from '@/directives/accessibility'
 
-const { sucursales, conceptos, loadCatalogos } = useCatalogos()
+const { sucursales, conceptos, loadCatalogo, loadCatalogos } = useCatalogos()
 const toast = useToast()
 const discounts = ref([])
 const rules = ref([])
@@ -56,7 +57,10 @@ const ruleConcepts = computed(() => conceptos.value.filter((item) => String(item
 async function load() {
   loading.value = true; error.value = ''
   try {
-    await loadCatalogos(true)
+    await Promise.all([
+      loadCatalogo?.('sucursales') || loadCatalogos(),
+      loadCatalogo?.('conceptos') || loadCatalogos(),
+    ])
     const [discountData, ruleData] = await Promise.all([apiRequest('/tipos-descuento/'), apiRequest('/reglas-recargo/')])
     discounts.value = discountData.results || []
     rules.value = ruleData.results || []

@@ -201,7 +201,13 @@ import { useToast } from '@/composables/useToast'
 import { formatDate, formatMoney } from '@/lib/formatters'
 import { useReportes } from '@/composables/useReportes'
 
-const { sucursales, carreras, conceptos, loadCatalogos } = useCatalogos()
+const {
+  sucursales,
+  carreras,
+  conceptos,
+  loadCatalogo,
+  loadCatalogos,
+} = useCatalogos()
 const { deudores, pagination, loading, error, loadDeudores } = useDeudores()
 const auth = useAuth()
 const toast = useToast()
@@ -261,11 +267,16 @@ async function loadPage() {
   pageReady.value = false
   pageError.value = ''
   try {
-    await Promise.all([loadCatalogos(), loadDeudores(buildQuery())])
+    await Promise.all([loadBaseCatalogos(), loadDeudores(buildQuery())])
     pageReady.value = true
   } catch (err) {
     pageError.value = err.message || 'No se pudo cargar la cartera de deudores.'
   }
+}
+
+function loadBaseCatalogos() {
+  if (!loadCatalogo) return loadCatalogos()
+  return Promise.all(['sucursales', 'carreras', 'conceptos'].map((resource) => loadCatalogo(resource)))
 }
 
 async function loadFilteredPage() {
