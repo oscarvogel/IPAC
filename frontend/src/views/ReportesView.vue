@@ -34,7 +34,7 @@
       <ReporteResumen :resumen="resumen" :show-metrics="false" />
       <section class="report-category-card">
         <header><div><p class="eyebrow">Control diario</p><h2>Cobranzas por usuario</h2></div></header>
-        <div class="audit-table-wrap">
+        <div class="reports-cobranzas-table-wrap">
           <table class="audit-table">
             <thead><tr><th>Usuario</th><th>Pagos</th><th>Efectivo</th><th>Transferencia</th><th>Mercado Pago</th><th>Tarjeta</th><th>Otros</th><th>Total</th><th>Diferencia caja</th></tr></thead>
             <tbody>
@@ -47,6 +47,27 @@
             </tbody>
           </table>
         </div>
+        <div v-if="cobranzasUsuarios.length" class="mobile-record-list reports-cobranzas-mobile-list" role="list">
+          <article v-for="row in cobranzasUsuarios" :key="`mobile-${row.usuario_id || row.usuario}`" class="mobile-record-card" role="listitem">
+            <header class="mobile-record-head">
+              <span class="mobile-record-icon info" aria-hidden="true"><BanknotesIcon /></span>
+              <span class="mobile-record-title">
+                <strong>{{ row.usuario }}</strong>
+                <small>{{ row.cantidad }} {{ row.cantidad === 1 ? 'pago' : 'pagos' }}</small>
+              </span>
+              <strong class="mobile-record-amount">{{ money(row.total) }}</strong>
+            </header>
+            <dl class="mobile-record-meta">
+              <div><dt>Efectivo</dt><dd>{{ money(row.efectivo) }}</dd></div>
+              <div><dt>Transferencia</dt><dd>{{ money(row.transferencia) }}</dd></div>
+              <div><dt>Mercado Pago</dt><dd>{{ money(row.mercado_pago) }}</dd></div>
+              <div><dt>Tarjeta</dt><dd>{{ money(row.tarjeta) }}</dd></div>
+              <div><dt>Otros</dt><dd>{{ money(row.otro) }}</dd></div>
+              <div><dt>Diferencia caja</dt><dd :class="{ 'report-difference': Number(row.diferencia_caja) !== 0 }">{{ money(row.diferencia_caja) }}</dd></div>
+            </dl>
+          </article>
+        </div>
+        <p v-if="!cobranzasUsuarios.length" class="reports-cobranzas-mobile-empty">No hay cobranzas en el período.</p>
       </section>
       <PagosListado :pagos="pagos" />
     </template>
@@ -72,6 +93,7 @@
 <script setup>
 import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { BanknotesIcon } from '@heroicons/vue/24/outline'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useReportes } from '@/composables/useReportes'
 import { useToast } from '@/composables/useToast'
@@ -218,10 +240,22 @@ function money(value) {
 .reports-tabs { display: flex; gap: .35rem; padding: .35rem; border: 1px solid var(--border); border-radius: .85rem; background: var(--surface); overflow-x: auto; }
 .reports-tabs button { min-height: 2.5rem; border: 0; border-radius: .65rem; padding: 0 1rem; background: transparent; color: var(--text-secondary); font-weight: 800; white-space: nowrap; }
 .reports-tabs button.active { background: var(--primary); color: var(--on-primary); }
+.reports-cobranzas-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
+.reports-cobranzas-table-wrap .audit-table { width: 100%; min-width: 850px; border-collapse: collapse; }
+.reports-cobranzas-table-wrap th, .reports-cobranzas-table-wrap td { padding: .8rem 1rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.reports-cobranzas-table-wrap th { color: var(--text-secondary); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+.reports-cobranzas-mobile-list, .reports-cobranzas-mobile-empty { display: none; }
 .report-category-card { padding: 1.1rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
 .report-category-card h2 { margin: .2rem 0; }
 .report-category-callout { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .report-category-card > a { display: inline-flex; padding: .7rem 1rem; border-radius: .7rem; background: var(--primary); color: var(--on-primary); text-decoration: none; font-weight: 800; }
 .report-difference { color: var(--danger); font-weight: 800; }
 @media (max-width: 700px) { .report-category-callout { align-items: stretch; flex-direction: column; } }
+@media (max-width: 760px) {
+  .reports-tabs { overflow: visible; flex-wrap: wrap; }
+  .reports-tabs button { flex: 1 1 calc(50% - .35rem); min-width: 0; }
+  .reports-cobranzas-table-wrap { display: none; }
+  .reports-cobranzas-mobile-list { display: grid; }
+  .reports-cobranzas-mobile-empty { display: block; margin: 0; padding: 1.25rem; border: 1px solid var(--border); border-radius: 1rem; color: var(--text-secondary); background: var(--surface); text-align: center; }
+}
 </style>

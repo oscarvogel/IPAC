@@ -28,6 +28,8 @@
             :to="module.to"
             class="nav-link"
             :class="{ active: isModuleActive(module) }"
+            :aria-label="`${module.label} · ${module.meta}`"
+            :title="`${module.label} · ${module.meta}`"
             @click="closeNavigation"
           >
             <component :is="module.icon" class="nav-icon" aria-hidden="true" />
