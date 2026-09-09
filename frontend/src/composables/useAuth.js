@@ -9,6 +9,8 @@ const user = ref(null)
 const loading = ref(false)
 const error = ref('')
 
+const mustChangePassword = computed(() => Boolean(user.value?.perfil?.debe_cambiar_clave))
+
 async function login(username, password, { remember = true } = {}) {
   loading.value = true
   error.value = ''
@@ -43,6 +45,27 @@ async function fetchCurrentUser() {
   }
 }
 
+async function changePassword(newPassword, confirmation) {
+  loading.value = true
+  error.value = ''
+  try {
+    await apiRequest('/auth/change-password/', {
+      method: 'POST',
+      body: {
+        new_password: newPassword,
+        new_password_confirmation: confirmation,
+      },
+    })
+    await fetchCurrentUser()
+    return true
+  } catch (err) {
+    error.value = err.message || 'No se pudo cambiar la clave.'
+    return false
+  } finally {
+    loading.value = false
+  }
+}
+
 function logout() {
   setToken(null)
   user.value = null
@@ -61,7 +84,9 @@ export function useAuth() {
     loading: readonly(loading),
     error: readonly(error),
     isAuthenticated: computed(() => Boolean(user.value && getToken())),
+    mustChangePassword,
     login,
+    changePassword,
     fetchCurrentUser,
     logout,
     clearError,

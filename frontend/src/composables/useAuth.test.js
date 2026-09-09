@@ -19,6 +19,11 @@ const sampleMe = {
   perfil: { rol: 'administracion', sucursal: { id: 1, nombre: 'Posadas' } },
 }
 
+const pendingMe = {
+  ...sampleMe,
+  perfil: { ...sampleMe.perfil, debe_cambiar_clave: true },
+}
+
 describe('useAuth', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -111,5 +116,26 @@ describe('useAuth', () => {
     expect(result).toBeNull()
     expect(auth.user.value).toBeNull()
     expect(api.setToken).toHaveBeenCalledWith(null)
+  })
+
+  it('changePassword() actualiza el usuario y libera la sesion', async () => {
+    api.getToken.mockReturnValue('tok-123')
+    api.apiRequest
+      .mockResolvedValueOnce({ debe_cambiar_clave: false })
+      .mockResolvedValueOnce(sampleMe)
+
+    const auth = useAuth()
+    const ok = await auth.changePassword('Nueva-Clave-IPAC-2026!', 'Nueva-Clave-IPAC-2026!')
+
+    expect(ok).toBe(true)
+    expect(api.apiRequest).toHaveBeenNthCalledWith(1, '/auth/change-password/', {
+      method: 'POST',
+      body: {
+        new_password: 'Nueva-Clave-IPAC-2026!',
+        new_password_confirmation: 'Nueva-Clave-IPAC-2026!',
+      },
+    })
+    expect(api.apiRequest).toHaveBeenNthCalledWith(2, '/auth/me/')
+    expect(auth.mustChangePassword.value).toBe(false)
   })
 })
