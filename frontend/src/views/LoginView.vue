@@ -24,7 +24,7 @@ import { useToast } from '@/composables/useToast'
 const MOBILE_QUERY = '(max-width: 767px)'
 
 const router = useRouter()
-const { login, loading, error: authError } = useAuth()
+const { login, user, loading, error: authError } = useAuth()
 const toast = useToast()
 const localError = ref('')
 const mediaQuery = window.matchMedia(MOBILE_QUERY)
@@ -47,7 +47,7 @@ async function handleSubmit({ username, password, remember }) {
   localError.value = ''
   const ok = await login(username, password, { remember })
   if (ok) {
-    router.replace('/dashboard')
+    router.replace(user.value?.perfil?.debe_cambiar_clave ? '/cambiar-clave' : '/dashboard')
     return
   }
 

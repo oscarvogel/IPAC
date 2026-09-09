@@ -1,5 +1,8 @@
+from decimal import Decimal
+
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -85,6 +88,7 @@ class UserSerializer(serializers.ModelSerializer):
         PerfilUsuario.objects.create(
             user=user, rol=rol, sucursal=sucursal,
             puede_ver_todas_las_sucursales=puede_ver_todas,
+            debe_cambiar_clave=bool(password),
         )
         return user
 
@@ -98,7 +102,7 @@ class UserSerializer(serializers.ModelSerializer):
         if password:
             instance.set_password(password)
         instance.save()
-        if rol is not None or sucursal is not None or puede_ver_todas is not None:
+        if rol is not None or sucursal is not None or puede_ver_todas is not None or password:
             perfil, _ = PerfilUsuario.objects.get_or_create(user=instance)
             if rol is not None:
                 perfil.rol = rol
@@ -106,6 +110,8 @@ class UserSerializer(serializers.ModelSerializer):
                 perfil.sucursal = sucursal
             if puede_ver_todas is not None:
                 perfil.puede_ver_todas_las_sucursales = puede_ver_todas
+            if password:
+                perfil.debe_cambiar_clave = True
             perfil.save()
         return instance
 
@@ -121,7 +127,7 @@ class PerfilUsuarioSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PerfilUsuario
-        fields = ["rol", "sucursal", "puede_ver_todas_las_sucursales"]
+        fields = ["rol", "sucursal", "puede_ver_todas_las_sucursales", "debe_cambiar_clave"]
 
 
 class CurrentUserSerializer(serializers.Serializer):
@@ -148,6 +154,17 @@ class LoginSerializer(serializers.Serializer):
         if not user.is_active:
             raise serializers.ValidationError("El usuario esta inactivo.")
         attrs["user"] = user
+        return attrs
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password_confirmation = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["new_password_confirmation"]:
+            raise serializers.ValidationError({"new_password_confirmation": "Las claves no coinciden."})
+        validate_password(attrs["new_password"], self.context["request"].user)
         return attrs
 
 
@@ -613,3 +630,128 @@ class EventoAuditoriaSerializer(serializers.ModelSerializer):
             "valores_anteriores", "valores_nuevos", "metadata",
         ]
         read_only_fields = fields
+
+
+class AplicacionCobroItemSerializer(serializers.Serializer):
+    """Item de aplicacion dentro del payload de cobro.
+
+    Acepta la cuota por id (`cuota_id`) o por objeto (`cuota`). El importe es
+    obligatorio y debe ser positivo.
+    """
+
+    cuota_id = serializers.IntegerField(required=False)
+    cuota = serializers.IntegerField(required=False)
+    importe = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
+
+    def validate(self, attrs):
+        if attrs.get("cuota_id") is None and attrs.get("cuota") is None:
+            raise serializers.ValidationError("Debe indicar la cuota a aplicar.")
+        return attrs
+
+    @property
+    def cuota_pk(self):
+        return self.validated_data.get("cuota_id") or self.validated_data.get("cuota")
+
+
+class CobroSerializer(serializers.Serializer):
+    """Input del endpoint `POST /api/pagos/cobrar/`.
+
+    Crea un pago, lo aplica a las cuotas indicadas (o automatico a las mas
+    antiguas) y registra el movimiento de caja del usuario, todo en una
+    unica transaccion.
+
+    Modos de aplicacion soportados:
+    - ``aplicaciones`` ausente o lista vacia: pago a cuenta (sin aplicaciones).
+    - ``aplicaciones = "auto"``: aplica a la cuota mas antigua primero hasta
+      agotar el importe; el excedente queda como saldo a favor.
+    - ``aplicaciones = [{cuota_id, importe}, ...]``: aplica exactamente esos
+      importes a esas cuotas.
+    """
+
+    MODO_AUTOMATICO = "auto"
+
+    alumno = serializers.PrimaryKeyRelatedField(queryset=Alumno.objects.all())
+    importe = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
+    medio = serializers.ChoiceField(choices=Pago.Medio.choices, default=Pago.Medio.EFECTIVO)
+    observacion = serializers.CharField(required=False, allow_blank=True, default="")
+    concepto = serializers.PrimaryKeyRelatedField(
+        queryset=ConceptoCobrable.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    aplicaciones = serializers.ListField(
+        child=AplicacionCobroItemSerializer(),
+        required=False,
+        allow_empty=True,
+    )
+    modo_automatico = serializers.BooleanField(required=False, default=False)
+
+    def validate_aplicaciones(self, value):
+        if not value:
+            return value
+        cuota_ids = []
+        for item in value:
+            if "cuota_id" in item and item["cuota_id"] is not None:
+                cuota_ids.append(item["cuota_id"])
+            elif "cuota" in item and item["cuota"] is not None:
+                cuota_ids.append(item["cuota"])
+        if len(cuota_ids) != len(set(cuota_ids)):
+            raise serializers.ValidationError("No se puede aplicar mas de una vez a la misma cuota.")
+        return value
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        perfil = getattr(user, "perfil", None)
+        alumno = attrs.get("alumno")
+        concepto = attrs.get("concepto")
+
+        if perfil and not perfil.puede_ver_todas_las_sucursales and alumno.sucursal_id != perfil.sucursal_id:
+            raise serializers.ValidationError({"alumno": "No puede registrar cobros de otra sucursal."})
+        if concepto and alumno.sucursal_id != concepto.sucursal_id:
+            raise serializers.ValidationError(
+                {"concepto": "El concepto debe pertenecer a la misma sucursal del alumno."}
+            )
+
+        # Validacion de importes contra saldo de cuotas cuando el modo es manual.
+        aplicaciones = attrs.get("aplicaciones") or []
+        if aplicaciones and not attrs.get("modo_automatico", False):
+            cuota_ids = []
+            importe_por_cuota = {}
+            for item in aplicaciones:
+                cid = item.get("cuota_id") or item.get("cuota")
+                if cid is None:
+                    continue
+                cuota_ids.append(cid)
+                importe_por_cuota[cid] = item["importe"]
+            cuotas = {
+                cuota.id: cuota
+                for cuota in Cuota.objects.filter(id__in=cuota_ids, alumno=alumno)
+            }
+            faltantes = set(cuota_ids) - set(cuotas.keys())
+            if faltantes:
+                raise serializers.ValidationError(
+                    {"aplicaciones": f"Cuotas inexistentes o de otro alumno: {sorted(faltantes)}."}
+                )
+            anuladas = [cuota_id for cuota_id, cuota in cuotas.items() if cuota.estado == Cuota.Estado.ANULADA]
+            if anuladas:
+                raise serializers.ValidationError(
+                    {"aplicaciones": f"No se puede aplicar a cuotas anuladas: {anuladas}."}
+                )
+            suma = sum(importe_por_cuota.values(), Decimal("0"))
+            if suma > attrs["importe"]:
+                raise serializers.ValidationError(
+                    {"aplicaciones": "La suma de aplicaciones supera el importe del pago."}
+                )
+            for cid, importe in importe_por_cuota.items():
+                cuota = cuotas[cid]
+                if importe > cuota.saldo:
+                    raise serializers.ValidationError(
+                        {
+                            "aplicaciones": (
+                                f"La aplicacion a la cuota {cuota.id} supera su saldo "
+                                f"({importe} > {cuota.saldo})."
+                            )
+                        }
+                    )
+        return attrs

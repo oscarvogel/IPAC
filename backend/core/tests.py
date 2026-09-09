@@ -251,6 +251,13 @@ class ApiInicialTests(APITestCase):
             rol=PerfilUsuario.Rol.CONSULTA,
             sucursal=self.posadas,
         )
+        self.pending_user = User.objects.create_user("temporal", password="Temporal-IPAC-2026!")
+        PerfilUsuario.objects.create(
+            user=self.pending_user,
+            rol=PerfilUsuario.Rol.CONSULTA,
+            sucursal=self.posadas,
+            debe_cambiar_clave=True,
+        )
         Alumno.objects.create(
             legajo="P-001",
             nombre="Pedro",
@@ -286,6 +293,59 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(me.status_code, status.HTTP_200_OK)
         self.assertEqual(me.data["username"], "admin")
         self.assertEqual(me.data["perfil"]["rol"], PerfilUsuario.Rol.ADMINISTRACION)
+
+    def test_login_reports_password_change_required(self):
+        response = self.client.post(
+            "/api/auth/login/",
+            {"username": "temporal", "password": "Temporal-IPAC-2026!"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["debe_cambiar_clave"])
+
+    def test_pending_user_cannot_access_operational_endpoint(self):
+        self.client.force_authenticate(self.pending_user)
+
+        response = self.client.get("/api/alumnos/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "password_change_required")
+
+    def test_pending_user_can_change_password_and_is_unblocked(self):
+        self.client.force_authenticate(self.pending_user)
+
+        response = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "new_password": "Nueva-Clave-IPAC-2026!",
+                "new_password_confirmation": "Nueva-Clave-IPAC-2026!",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.pending_user.refresh_from_db()
+        self.pending_user.perfil.refresh_from_db()
+        self.assertTrue(self.pending_user.check_password("Nueva-Clave-IPAC-2026!"))
+        self.assertFalse(self.pending_user.perfil.debe_cambiar_clave)
+        self.assertEqual(self.client.get("/api/alumnos/").status_code, status.HTTP_200_OK)
+
+    def test_change_password_rejects_mismatch_and_short_password(self):
+        self.client.force_authenticate(self.pending_user)
+
+        mismatch = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "new_password": "Nueva-Clave-IPAC-2026!",
+                "new_password_confirmation": "Otra-Clave",
+            },
+        )
+        short = self.client.post(
+            "/api/auth/change-password/",
+            {"new_password": "123", "new_password_confirmation": "123"},
+        )
+
+        self.assertEqual(mismatch.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(short.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_admin_can_download_import_template(self):
         self.client.force_authenticate(self.admin)
@@ -560,6 +620,32 @@ class ApiInicialTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["perfil"]["rol"], PerfilUsuario.Rol.SUPERADMIN)
+
+    def test_user_creation_and_password_reset_require_first_login_change(self):
+        self.client.force_authenticate(user=self.admin)
+
+        created = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "nuevo-usuario",
+                "password": "Clave-Temporal-2026!",
+                "rol": PerfilUsuario.Rol.CONSULTA,
+                "sucursal": self.posadas.id,
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        created_user = User.objects.get(username="nuevo-usuario")
+        self.assertTrue(created_user.perfil.debe_cambiar_clave)
+
+        reset = self.client.patch(
+            f"/api/usuarios/{self.consulta.id}/",
+            {"password": "Clave-Temporal-2026!"},
+            format="json",
+        )
+        self.assertEqual(reset.status_code, status.HTTP_200_OK)
+        self.consulta.perfil.refresh_from_db()
+        self.assertTrue(self.consulta.perfil.debe_cambiar_clave)
 
     def test_user_without_global_access_only_sees_own_sucursal_students(self):
         self.client.force_authenticate(user=self.cajero)
@@ -1831,10 +1917,283 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(overdue.recargo, Decimal("1000"))
         self.assertEqual(overdue.regla_recargo, rule)
         self.assertEqual(boundary.recargo, Decimal("0"))
+class CobroEndpointTests(APITestCase):
+    """Cubre POST /api/pagos/cobrar/ con aplicaciones manuales, automaticas, pago a cuenta, excedente y caja cerrada."""
+
+    def setUp(self):
+        self.posadas = Sucursal.objects.create(codigo="POS", nombre="Posadas")
+        self.eldorado = Sucursal.objects.create(codigo="ELD", nombre="Eldorado")
+        self.cajero = User.objects.create_user("cajero", password="cajero123")
+        PerfilUsuario.objects.create(
+            user=self.cajero,
+            rol=PerfilUsuario.Rol.CAJA,
+            sucursal=self.posadas,
+        )
+        self.alumno = Alumno.objects.create(
+            legajo="POS-100",
+            nombre="Lucia",
+            apellido="Ramirez",
+            dni="35111222",
+            sucursal=self.posadas,
+        )
+        self.concepto = ConceptoCobrable.objects.create(
+            nombre="Cuota mensual",
+            tipo=ConceptoCobrable.Tipo.CUOTA,
+            importe=10000,
+            sucursal=self.posadas,
+        )
+        hoy = timezone.localdate()
+        self.cuota_1 = Cuota.objects.create(
+            alumno=self.alumno,
+            concepto=self.concepto,
+            sucursal=self.posadas,
+            periodo="2026-07",
+            fecha_emision=hoy,
+            fecha_vencimiento=hoy,
+            importe="10000.00",
+        )
+        self.cuota_2 = Cuota.objects.create(
+            alumno=self.alumno,
+            concepto=self.concepto,
+            sucursal=self.posadas,
+            periodo="2026-08",
+            fecha_emision=hoy,
+            fecha_vencimiento=hoy,
+            importe="10000.00",
+        )
+
+    def _abrir_caja(self):
+        self.client.force_authenticate(user=self.cajero)
+        return self.client.get(f"/api/cajas/hoy/?sucursal={self.posadas.id}").data
+
+    def test_cobro_con_aplicaciones_manuales_genera_pago_y_aplicaciones(self):
+        caja = self._abrir_caja()
+        self.assertEqual(caja["estado"], CajaDiaria.Estado.ABIERTA)
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "15000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "observacion": "Cobro manual",
+                "aplicaciones": [
+                    {"cuota_id": self.cuota_1.id, "importe": "10000.00"},
+                    {"cuota_id": self.cuota_2.id, "importe": "5000.00"},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(Pago.objects.count(), 1)
+        self.assertEqual(AplicacionPago.objects.count(), 2)
+        self.assertEqual(MovimientoCaja.objects.count(), 1)
+
+        self.cuota_1.refresh_from_db()
+        self.cuota_2.refresh_from_db()
+        self.assertEqual(self.cuota_1.estado, Cuota.Estado.PAGADA)
+        self.assertEqual(self.cuota_2.estado, Cuota.Estado.PARCIAL)
+
+        self.assertEqual(str(response.data["importe_aplicado"]), "15000.00")
+        self.assertEqual(str(response.data["saldo_a_favor"]), "0.00")
+        self.assertEqual(len(response.data["aplicaciones"]), 2)
+        self.assertTrue(response.data["numero_recibo"].startswith("REC-"))
+
+    def test_cobro_modo_automatico_aplica_a_cuotas_mas_antiguas(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "12000.00",
+                "medio": Pago.Medio.TRANSFERENCIA,
+                "modo_automatico": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.cuota_1.refresh_from_db()
+        self.cuota_2.refresh_from_db()
+        self.assertEqual(self.cuota_1.estado, Cuota.Estado.PAGADA)
+        self.assertEqual(self.cuota_2.estado, Cuota.Estado.PARCIAL)
+        self.assertEqual(str(response.data["importe_aplicado"]), "12000.00")
+        self.assertEqual(str(response.data["saldo_a_favor"]), "0.00")
+        self.assertEqual(AplicacionPago.objects.filter(cuota=self.cuota_1).first().importe, Decimal("10000.00"))
+        self.assertEqual(AplicacionPago.objects.filter(cuota=self.cuota_2).first().importe, Decimal("2000.00"))
+
+    def test_cobro_pago_a_cuenta_sin_aplicaciones_genera_saldo_a_favor(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "5000.00",
+                "medio": Pago.Medio.EFECTIVO,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(AplicacionPago.objects.count(), 0)
+        self.assertEqual(str(response.data["saldo_a_favor"]), "5000.00")
+        self.assertEqual(str(response.data["importe_aplicado"]), "0.00")
+
+    def test_cobro_con_excedente_aplica_y_deja_saldo_a_favor(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "25000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "modo_automatico": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(str(response.data["importe_aplicado"]), "20000.00")
+        self.assertEqual(str(response.data["saldo_a_favor"]), "5000.00")
+        self.cuota_1.refresh_from_db()
+        self.cuota_2.refresh_from_db()
+        self.assertEqual(self.cuota_1.estado, Cuota.Estado.PAGADA)
+        self.assertEqual(self.cuota_2.estado, Cuota.Estado.PAGADA)
+
+    def test_cobro_rechaza_si_caja_esta_cerrada(self):
+        caja_data = self._abrir_caja()
+        self.client.post(
+            f"/api/cajas/{caja_data['id']}/cerrar/",
+            {"total_contado": "0.00"},
+            format="json",
+        )
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "10000.00",
+                "medio": Pago.Medio.EFECTIVO,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cerrada", response.data["detail"].lower())
+        self.assertEqual(Pago.objects.count(), 0)
+
+    def test_cobro_rechaza_aplicacion_que_supera_saldo_de_cuota(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "20000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "aplicaciones": [
+                    {"cuota_id": self.cuota_1.id, "importe": "15000.00"},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("aplicaciones", response.data)
+        self.assertEqual(Pago.objects.count(), 0)
+        self.assertEqual(AplicacionPago.objects.count(), 0)
+
+    def test_cobro_rechaza_si_suma_de_aplicaciones_supera_importe(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "10000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "aplicaciones": [
+                    {"cuota_id": self.cuota_1.id, "importe": "8000.00"},
+                    {"cuota_id": self.cuota_2.id, "importe": "5000.00"},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Pago.objects.count(), 0)
+
+    def test_cobro_rechaza_si_cuota_es_de_otro_alumno(self):
+        otro = Alumno.objects.create(
+            legajo="POS-200",
+            nombre="Mario",
+            apellido="Suarez",
+            dni="40111222",
+            sucursal=self.posadas,
+        )
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": otro.id,
+                "importe": "5000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "aplicaciones": [
+                    {"cuota_id": self.cuota_1.id, "importe": "5000.00"},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Pago.objects.count(), 0)
+
+    def test_cobro_atomico_si_falla_no_genera_pago(self):
+        self._abrir_caja()
+
+        # Cuota con saldo suficiente, pero el monto es negativo: el serializer debe rechazarlo.
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "-100.00",
+                "medio": Pago.Medio.EFECTIVO,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Pago.objects.count(), 0)
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
+
+    def test_cobro_actualiza_estado_cuenta_del_alumno(self):
+        self._abrir_caja()
+
+        response = self.client.post(
+            "/api/pagos/cobrar/",
+            {
+                "alumno": self.alumno.id,
+                "importe": "10000.00",
+                "medio": Pago.Medio.EFECTIVO,
+                "modo_automatico": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+
+        estado = self.client.get(f"/api/alumnos/{self.alumno.id}/estado-cuenta/")
+        self.assertEqual(estado.status_code, status.HTTP_200_OK)
+        self.assertEqual(str(estado.data["resumen"]["saldo_pendiente"]), "10000.00")
+        self.assertEqual(str(estado.data["resumen"]["saldo_a_favor"]), "0.00")
+        self.assertEqual(str(estado.data["resumen"]["saldo_neto"]), "10000.00")
 
 
 # Create your tests here.
-
 
 class AuditoriaApiTests(APITestCase):
     def setUp(self):
