@@ -1,5 +1,5 @@
 <template>
-  <header class="topbar text-text-primary">
+  <header class="topbar text-text-primary" :class="{ 'topbar--contextual': !showPageHeading }">
     <button
       ref="menuButton"
       class="mobile-menu-button"
@@ -12,7 +12,7 @@
       <Bars3Icon aria-hidden="true" />
     </button>
 
-    <Transition name="topbar-heading" mode="out-in">
+    <Transition v-if="showPageHeading" name="topbar-heading" mode="out-in">
       <div :key="route.path" class="topbar-heading">
         <p class="eyebrow">Panel de trabajo</p>
         <h1>{{ title }}</h1>
@@ -111,6 +111,7 @@ const titles = {
 }
 
 const title = computed(() => titles[route.path] || 'IPAC')
+const showPageHeading = computed(() => !route.meta.hideTopbarHeading)
 const actions = computed(() => providedActions.value || [])
 const isDashboard = computed(() => route.path === '/dashboard')
 const periodLabel = new Intl.DateTimeFormat('es-AR', {

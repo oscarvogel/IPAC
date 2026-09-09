@@ -92,13 +92,13 @@ const routes = [
         path: 'ajustes-cuotas',
         name: 'ajustes-cuotas',
         component: AjustesCuotasView,
-        meta: { roles: ['superadmin', 'administracion'] },
+        meta: { roles: ['superadmin', 'administracion'], hideTopbarHeading: true },
       },
       {
         path: 'auditoria',
         name: 'auditoria',
         component: AuditoriaView,
-        meta: { roles: ['superadmin', 'administracion'] },
+        meta: { roles: ['superadmin', 'administracion'], hideTopbarHeading: true },
       },
       {
         path: 'importaciones',

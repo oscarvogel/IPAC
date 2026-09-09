@@ -49,6 +49,10 @@
   --danger: #DC2626;
   --info: #0284C7;
 
+  --hero-text: #FFFFFF;
+  --hero-muted: #E8F1FC;
+  --hero-accent: #FFD7DD;
+
   --success-soft: color-mix(in srgb, var(--success) 11%, var(--surface));
   --warning-soft: color-mix(in srgb, var(--warning) 11%, var(--surface));
   --danger-soft: color-mix(in srgb, var(--danger) 11%, var(--surface));
@@ -1865,6 +1869,11 @@ body {
   min-width: 0;
 }
 
+.topbar--contextual .top-actions,
+.topbar--contextual .dashboard-context-actions {
+  margin-left: auto;
+}
+
 .topbar .eyebrow {
   color: var(--text-secondary);
   font-size: 12px;
@@ -2333,6 +2342,9 @@ body {
   --warning: #FBBF24;
   --danger: #F87171;
   --info: #38BDF8;
+  --hero-text: #FFFFFF;
+  --hero-muted: #E8F0FF;
+  --hero-accent: #FFD0D7;
   --nav: #071D3D;
   --nav-hover: #0D2A52;
   --nav-active: color-mix(in srgb, var(--primary) 16%, transparent);
@@ -2595,6 +2607,16 @@ body.sidebar-scroll-locked {
     align-items: center;
   }
 
+  .topbar.topbar--contextual {
+    min-height: 72px;
+    padding-top: 14px;
+    padding-bottom: 10px;
+  }
+
+  .topbar--contextual .top-actions {
+    grid-column: 3;
+  }
+
   .mobile-menu-button {
     display: grid;
     place-items: center;
@@ -2763,7 +2785,7 @@ body.sidebar-scroll-locked {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: clamp(28px, 5vh, 52px);
-  color: #ffffff;
+  color: var(--hero-text);
   background-color: var(--primary-hover);
   background-image: url("/login-ipac-background.png");
   background-image: image-set(url("/login-ipac-background.webp") type("image/webp"), url("/login-ipac-background.png") type("image/png"));
@@ -2793,14 +2815,14 @@ body.sidebar-scroll-locked {
 }
 
 .desktop-login-brand strong {
-  color: #ffffff;
+  color: var(--hero-text);
   font-size: 24px;
   font-weight: 760;
   letter-spacing: 0.09em;
 }
 
 .desktop-login-brand span {
-  color: var(--secondary-soft);
+  color: var(--hero-accent);
   font-size: 18px;
   line-height: 1;
 }
@@ -2811,7 +2833,7 @@ body.sidebar-scroll-locked {
 }
 
 .desktop-login-story-copy h1 {
-  color: #ffffff;
+  color: var(--hero-text);
   font-size: clamp(38px, 3.2vw, 54px);
   font-weight: 760;
   line-height: 1.18;
@@ -2821,7 +2843,7 @@ body.sidebar-scroll-locked {
 .desktop-login-story-copy p {
   max-width: 660px;
   margin-top: clamp(22px, 3vh, 34px);
-  color: var(--primary-soft);
+  color: var(--hero-muted);
   font-size: clamp(16px, 1.22vw, 20px);
   line-height: 1.65;
 }
@@ -2863,7 +2885,7 @@ body.sidebar-scroll-locked {
 }
 
 .desktop-feature-card h2 {
-  color: #ffffff;
+  color: var(--hero-text);
   font-size: 20px;
   font-weight: 720;
 }
@@ -3140,7 +3162,7 @@ body.sidebar-scroll-locked {
   padding: 26px 22px 68px;
   display: grid;
   align-content: space-between;
-  color: #ffffff;
+  color: var(--hero-text);
   background-color: var(--primary-hover);
   background-image: url("/login-ipac-background.png");
   background-image: image-set(url("/login-ipac-background.webp") type("image/webp"), url("/login-ipac-background.png") type("image/png"));
@@ -3169,19 +3191,19 @@ body.sidebar-scroll-locked {
 }
 
 .mobile-login-brand strong {
-  color: #ffffff;
+  color: var(--hero-text);
   font-size: 18px;
   font-weight: 760;
   letter-spacing: 0.06em;
 }
 
 .mobile-login-brand span {
-  color: var(--secondary-soft);
+  color: var(--hero-accent);
   font-size: 13px;
 }
 
 .mobile-intro-copy p {
-  color: #ffffff;
+  color: var(--hero-text);
   font-size: 26px;
   font-weight: 730;
   line-height: 1.2;
@@ -3192,7 +3214,7 @@ body.sidebar-scroll-locked {
   display: block;
   max-width: 310px;
   margin-top: 10px;
-  color: var(--primary-soft);
+  color: var(--hero-muted);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -3363,7 +3385,7 @@ body.sidebar-scroll-locked {
 }
 
 .login-theme-toggle:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  outline: 3px solid var(--info);
   outline-offset: 2px;
 }
 
@@ -3385,7 +3407,7 @@ body.sidebar-scroll-locked {
 .mobile-submit:focus-visible,
 .desktop-login-help a:focus-visible,
 .mobile-login-help a:focus-visible {
-  outline: 3px solid rgba(20, 103, 197, 0.2);
+  outline: 3px solid var(--info);
   outline-offset: 2px;
 }
 

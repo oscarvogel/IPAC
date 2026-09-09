@@ -34,12 +34,15 @@ vi.mock('@/composables/useTheme', async () => {
   }
 })
 
-async function mountTopbar() {
+async function mountTopbar(path = '/dashboard', meta = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/dashboard', component: { template: '<div />' } }],
+    routes: [
+      { path: '/dashboard', component: { template: '<div />' } },
+      { path: '/ajustes-cuotas', meta, component: { template: '<div />' } },
+    ],
   })
-  await router.push('/dashboard')
+  await router.push(path)
   await router.isReady()
   return mount(AppTopbar, { attachTo: document.body, global: { plugins: [router] } })
 }
@@ -61,6 +64,14 @@ describe('estado accesible del menu mobile', () => {
     await nextTick()
     await nextTick()
     expect(document.activeElement).toBe(menuButton.element)
+    wrapper.unmount()
+  })
+
+  it('oculta el encabezado global cuando la vista tiene encabezado contextual', async () => {
+    const wrapper = await mountTopbar('/ajustes-cuotas', { hideTopbarHeading: true })
+
+    expect(wrapper.find('.topbar-heading').exists()).toBe(false)
+    expect(wrapper.classes()).toContain('topbar--contextual')
     wrapper.unmount()
   })
 })
