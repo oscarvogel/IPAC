@@ -12,27 +12,75 @@ const tiposDescuento = ref([])
 const reglasRecargo = ref([])
 const loaded = ref(false)
 const loading = ref(false)
+let loadingPromise = null
+let activeLoads = 0
+const resourcePromises = new Map()
+const resourceLoaded = new Set()
 
-async function loadCatalogos(force = false) {
+const catalogResources = {
+  sucursales: {
+    path: '/sucursales/',
+    assign: (data) => { sucursales.value = data.results || [] },
+  },
+  carreras: {
+    path: '/carreras/',
+    assign: (data) => { carreras.value = data.results || [] },
+  },
+  conceptos: {
+    path: '/conceptos/',
+    assign: (data) => { conceptos.value = data.results || [] },
+  },
+  tiposDescuento: {
+    path: '/tipos-descuento/',
+    assign: (data) => { tiposDescuento.value = data.results || [] },
+  },
+  reglasRecargo: {
+    path: '/reglas-recargo/',
+    assign: (data) => { reglasRecargo.value = data.results || [] },
+  },
+}
+
+function setLoading(delta) {
+  activeLoads += delta
+  loading.value = activeLoads > 0
+}
+
+function loadCatalogo(resourceName, force = false) {
+  const resource = catalogResources[resourceName]
+  if (!resource) return Promise.reject(new Error(`Catálogo desconocido: ${resourceName}`))
+  if (resourceLoaded.has(resourceName) && !force) return Promise.resolve()
+  if (resourcePromises.has(resourceName)) return resourcePromises.get(resourceName)
+
+  setLoading(1)
+  const promise = apiRequest(resource.path)
+    .then((data) => {
+      resource.assign(data)
+      resourceLoaded.add(resourceName)
+    })
+    .finally(() => {
+      resourcePromises.delete(resourceName)
+      setLoading(-1)
+    })
+
+  resourcePromises.set(resourceName, promise)
+  return promise
+}
+
+function loadCatalogos(force = false) {
   if (loaded.value && !force) return
-  loading.value = true
-  try {
-    const [suc, car, con, discounts, surchargeRules] = await Promise.all([
-      apiRequest('/sucursales/'),
-      apiRequest('/carreras/'),
-      apiRequest('/conceptos/'),
-      apiRequest('/tipos-descuento/'),
-      apiRequest('/reglas-recargo/'),
-    ])
-    sucursales.value = suc.results || []
-    carreras.value = car.results || []
-    conceptos.value = con.results || []
-    tiposDescuento.value = discounts.results || []
-    reglasRecargo.value = surchargeRules.results || []
-    loaded.value = true
-  } finally {
-    loading.value = false
-  }
+  if (loadingPromise) return loadingPromise
+
+  loadingPromise = Promise.all(Object.keys(catalogResources).map((resourceName) => (
+    loadCatalogo(resourceName, force)
+  )))
+    .then(() => {
+      loaded.value = true
+    })
+    .finally(() => {
+      loadingPromise = null
+    })
+
+  return loadingPromise
 }
 
 export function useCatalogos() {
@@ -44,6 +92,7 @@ export function useCatalogos() {
     reglasRecargo: readonly(reglasRecargo),
     loaded: readonly(loaded),
     loading: readonly(loading),
+    loadCatalogo,
     loadCatalogos,
   }
 }

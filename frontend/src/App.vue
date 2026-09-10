@@ -1,22 +1,20 @@
 <template>
   <AppToaster />
   <AppTooltipLayer />
+  <AppLoadingScreen v-if="initializing" />
   <RouterView />
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import AppToaster from '@/components/ui/AppToaster.vue'
 import AppTooltipLayer from '@/components/ui/AppTooltipLayer.vue'
+import AppLoadingScreen from '@/components/ui/AppLoadingScreen.vue'
 
-const { fetchCurrentUser } = useAuth()
+const { fetchCurrentUser, initializing } = useAuth()
 
-// Si hay token en localStorage, intentamos hidratar el usuario.
-// Si el token es invalido, fetchCurrentUser lo limpia y el guard
-// redirige al login en la proxima navegacion.
-onMounted(() => {
-  fetchCurrentUser()
-})
+// Si hay token en localStorage, iniciamos la hidratacion antes del primer
+// render para que la pantalla global cubra ese breve estado de arranque.
+fetchCurrentUser()
 </script>

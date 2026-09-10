@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AppButtonContent from './AppButtonContent.vue'
+import AppLoadingScreen from './AppLoadingScreen.vue'
 import AppPageState from './AppPageState.vue'
 import AppToaster from './AppToaster.vue'
 import { useToast } from '@/composables/useToast'
@@ -63,5 +64,12 @@ describe('sistema global de feedback', () => {
 
     expect(wrapper.text()).toContain('Guardando…')
     expect(wrapper.find('svg.is-spinning').exists()).toBe(true)
+  })
+
+  it('muestra una pantalla accesible durante la hidratación inicial', () => {
+    const wrapper = mount(AppLoadingScreen)
+
+    expect(wrapper.get('[role="status"]').attributes('aria-busy')).toBe('true')
+    expect(wrapper.text()).toContain('Preparando tu sesión')
   })
 })

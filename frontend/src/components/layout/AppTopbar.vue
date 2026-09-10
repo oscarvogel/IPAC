@@ -1,15 +1,18 @@
 <template>
-  <header class="topbar text-text-primary">
+  <header class="topbar text-text-primary" :class="{ 'topbar--contextual': !showPageHeading }">
     <button
+      ref="menuButton"
       class="mobile-menu-button"
       type="button"
-      aria-label="Abrir navegación"
+      aria-controls="app-sidebar"
+      :aria-expanded="sidebarOpen"
+      :aria-label="sidebarOpen ? 'Cerrar navegación' : 'Abrir navegación'"
       @click="$emit('toggle-sidebar')"
     >
       <Bars3Icon aria-hidden="true" />
     </button>
 
-    <Transition name="topbar-heading" mode="out-in">
+    <Transition v-if="showPageHeading" name="topbar-heading" mode="out-in">
       <div :key="route.path" class="topbar-heading">
         <p class="eyebrow">Panel de trabajo</p>
         <h1>{{ title }}</h1>
@@ -64,7 +67,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Bars3Icon, CalendarDaysIcon, ChevronDownIcon, MoonIcon, SunIcon } from '@heroicons/vue/24/outline'
 import { useAuth } from '@/composables/useAuth'
@@ -75,13 +78,22 @@ import { useTheme } from '@/composables/useTheme'
 
 defineEmits(['toggle-sidebar'])
 
+const props = defineProps({
+  sidebarOpen: { type: Boolean, default: false },
+})
+
 const route = useRoute()
 const { user } = useAuth()
-const { sucursales, loadCatalogos } = useCatalogos()
+const { sucursales, loadCatalogo, loadCatalogos } = useCatalogos()
 const { selectedSucursalId } = useDashboardFilters()
 const { actions: providedActions } = useTopbarActions()
 const { isDark, toggleTheme } = useTheme()
+const menuButton = ref(null)
 const themeLabel = computed(() => isDark.value ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro')
+
+defineExpose({
+  focusMenuButton: () => menuButton.value?.focus(),
+})
 
 const titles = {
   '/dashboard': 'Dashboard',
@@ -99,6 +111,7 @@ const titles = {
 }
 
 const title = computed(() => titles[route.path] || 'IPAC')
+const showPageHeading = computed(() => !route.meta.hideTopbarHeading)
 const actions = computed(() => providedActions.value || [])
 const isDashboard = computed(() => route.path === '/dashboard')
 const periodLabel = new Intl.DateTimeFormat('es-AR', {
@@ -107,7 +120,7 @@ const periodLabel = new Intl.DateTimeFormat('es-AR', {
 }).format(new Date())
 
 onMounted(() => {
-  loadCatalogos()
+  loadCatalogo?.('sucursales') || loadCatalogos()
 })
 
 watch(
@@ -119,5 +132,13 @@ watch(
     selectedSucursalId.value = String(available?.id || sucursales.value[0].id)
   },
   { immediate: true },
+)
+
+watch(
+  () => props.sidebarOpen,
+  (open, wasOpen) => {
+    if (open || !wasOpen) return
+    nextTick(() => menuButton.value?.focus())
+  },
 )
 </script>

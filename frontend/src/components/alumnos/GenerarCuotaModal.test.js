@@ -45,4 +45,26 @@ describe('GenerarCuotaModal', () => {
       fecha_vencimiento: '2026-08-31',
     }))
   })
+
+  it('comunica la carga y el error del catalogo de descuentos', async () => {
+    const wrapper = mount(GenerarCuotaModal, {
+      props: {
+        open: true,
+        alumno,
+        conceptos,
+        tiposDescuentoLoading: true,
+      },
+      global: { stubs: { Teleport: true } },
+    })
+
+    const discountSelect = wrapper.findAll('select').at(1)
+    expect(discountSelect.element.disabled).toBe(true)
+    expect(discountSelect.attributes('aria-busy')).toBe('true')
+    expect(wrapper.get('[role="status"]').text()).toContain('Cargando tipos de descuento')
+
+    await wrapper.setProps({ tiposDescuentoLoading: false, tiposDescuentoError: 'No disponible' })
+
+    expect(wrapper.findAll('select').at(1).element.disabled).toBe(false)
+    expect(wrapper.get('[role="alert"]').text()).toBe('No disponible')
+  })
 })

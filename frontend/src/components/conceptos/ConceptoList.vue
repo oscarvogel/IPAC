@@ -30,7 +30,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="concepto in sortedConceptos" :key="concepto.id">
+          <tr v-for="concepto in paginatedConceptos" :key="concepto.id">
             <td>
               <div class="concepts-name-cell">
                 <span :class="['concepts-type-icon', `type-${concepto.tipo || 'otro'}`]">
@@ -99,7 +99,7 @@
 
       <div v-if="sortedConceptos.length" class="mobile-record-list concepts-mobile-list" role="list">
         <article
-          v-for="concepto in sortedConceptos"
+          v-for="concepto in paginatedConceptos"
           :key="`mobile-${concepto.id}`"
           class="mobile-record-card concept-mobile-card"
           role="listitem"
@@ -154,6 +154,18 @@
         </article>
       </div>
 
+      <nav v-if="sortedConceptos.length" class="catalog-pagination" aria-label="Paginación de conceptos">
+        <label class="catalog-page-size">
+          <span>Mostrar</span>
+          <select v-model="pageSize" aria-label="Conceptos por página">
+            <option v-for="size in pageSizes" :key="size" :value="size">{{ size }}</option>
+          </select>
+        </label>
+        <button type="button" :disabled="page <= 1" @click="goToPage(page - 1)">Anterior</button>
+        <span aria-live="polite">Página {{ page }} de {{ totalPages }} · {{ sortedConceptos.length }} conceptos</span>
+        <button type="button" :disabled="page >= totalPages" @click="goToPage(page + 1)">Siguiente</button>
+      </nav>
+
       <div v-if="!sortedConceptos.length" class="concepts-empty-state">
         <span><TagIcon aria-hidden="true" /></span>
         <strong>{{ filtered ? 'No encontramos conceptos' : 'Todavía no hay conceptos cargados' }}</strong>
@@ -178,6 +190,7 @@ import {
   TagIcon,
 } from '@heroicons/vue/24/outline'
 import { formatMoney } from '@/lib/formatters'
+import { useClientPagination } from '@/composables/useClientPagination'
 import MobileActionMenu from '@/components/ui/MobileActionMenu.vue'
 
 const props = defineProps({
@@ -194,6 +207,15 @@ const sortedConceptos = computed(() =>
     (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' }),
   ),
 )
+
+const {
+  page,
+  pageSize,
+  pageSizes,
+  totalPages,
+  paginatedItems: paginatedConceptos,
+  goToPage,
+} = useClientPagination(sortedConceptos)
 
 function typeLabel(type) {
   const labels = {

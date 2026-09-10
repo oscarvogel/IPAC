@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { vFocusTrap, vFormValidation } from './accessibility'
+import { focusFirstInvalidField, vFocusTrap, vFormValidation } from './accessibility'
 
 describe('directivas de accesibilidad', () => {
   beforeEach(() => {
@@ -72,5 +72,15 @@ describe('directivas de accesibilidad', () => {
     await input.setValue('persona@ipac.edu.ar')
     expect(input.attributes('aria-invalid')).toBeUndefined()
     expect(document.getElementById(feedbackId)).toBeNull()
+  })
+
+  it('enfoca el primer campo invalido al enviar el formulario', async () => {
+    const focus = vi.fn()
+    focusFirstInvalidField({
+      querySelector: () => ({ focus }),
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(focus).toHaveBeenCalledOnce()
   })
 })

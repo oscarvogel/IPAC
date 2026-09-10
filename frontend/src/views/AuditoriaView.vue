@@ -40,6 +40,27 @@
       </table>
     </div>
 
+      <div v-if="events.length" class="mobile-record-list audit-mobile-list" role="list">
+        <article v-for="event in events" :key="`mobile-${event.id}`" class="mobile-record-card audit-mobile-card" role="listitem">
+          <header class="mobile-record-head">
+            <span class="mobile-record-icon info" aria-hidden="true"><ClipboardDocumentCheckIcon /></span>
+            <span class="mobile-record-title">
+              <strong>{{ event.accion }}</strong>
+              <small>{{ formatDateTime(event.creado) }}</small>
+            </span>
+          </header>
+
+          <dl class="mobile-record-meta">
+            <div><dt>Usuario</dt><dd>{{ event.usuario_nombre || 'Sistema' }}</dd></div>
+            <div><dt>Módulo</dt><dd>{{ event.modulo }}</dd></div>
+            <div><dt>Entidad</dt><dd>{{ event.entidad }} #{{ event.entidad_id }}</dd></div>
+          </dl>
+
+          <p class="mobile-record-description">{{ event.descripcion || changeSummary(event) }}</p>
+        </article>
+      </div>
+      <p v-if="!events.length" class="audit-mobile-empty">No hay eventos para los filtros elegidos.</p>
+
     <nav class="students-pagination" aria-label="Paginación de auditoría">
       <button :disabled="page <= 1 || loading" @click="load(page - 1)">Anterior</button>
       <span>Página {{ page }} de {{ totalPages }} · {{ count }} eventos</span>
@@ -50,6 +71,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { ClipboardDocumentCheckIcon } from '@heroicons/vue/24/outline'
 import { apiRequest } from '@/lib/api'
 import AppPageState from '@/components/ui/AppPageState.vue'
 
@@ -105,6 +127,13 @@ onMounted(() => load())
 .audit-table th { color: var(--color-text-secondary); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
 .audit-module { border-radius: 999px; padding: .22rem .5rem; background: var(--primary-soft); color: var(--primary); font-size: .75rem; font-weight: 800; }
 .audit-empty { padding: 2rem !important; text-align: center !important; color: var(--color-text-secondary); }
+.audit-mobile-list, .audit-mobile-empty { display: none; }
 @media (max-width: 800px) { .audit-header { align-items: start; flex-direction: column; } .audit-filters { grid-template-columns: 1fr 1fr; } .audit-filters button { grid-column: 1 / -1; } }
 @media (max-width: 480px) { .audit-filters { grid-template-columns: 1fr; } .audit-filters button { grid-column: auto; } }
+@media (max-width: 760px) {
+  .audit-table-wrap { overflow: visible; }
+  .audit-table { display: none; }
+  .audit-mobile-list { display: grid; }
+  .audit-mobile-empty { display: block; margin: 0; padding: 1.25rem; border: 1px solid var(--color-border); border-radius: 1rem; background: var(--color-surface); color: var(--color-text-secondary); text-align: center; }
+}
 </style>

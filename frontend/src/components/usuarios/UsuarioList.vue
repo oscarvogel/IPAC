@@ -30,7 +30,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="usuario in sortedUsuarios" :key="usuario.id">
+          <tr v-for="usuario in paginatedUsuarios" :key="usuario.id">
             <td>
               <div class="users-identity-cell">
                 <span class="users-avatar">{{ avatarInitials(usuario) }}</span>
@@ -102,7 +102,7 @@
 
       <div v-if="sortedUsuarios.length" class="mobile-record-list users-mobile-list" role="list">
         <article
-          v-for="usuario in sortedUsuarios"
+          v-for="usuario in paginatedUsuarios"
           :key="`mobile-${usuario.id}`"
           class="mobile-record-card user-mobile-card"
           role="listitem"
@@ -173,6 +173,18 @@
         </article>
       </div>
 
+      <nav v-if="sortedUsuarios.length" class="catalog-pagination" aria-label="Paginación de usuarios">
+        <label class="catalog-page-size">
+          <span>Mostrar</span>
+          <select v-model="pageSize" aria-label="Usuarios por página">
+            <option v-for="size in pageSizes" :key="size" :value="size">{{ size }}</option>
+          </select>
+        </label>
+        <button type="button" :disabled="page <= 1" @click="goToPage(page - 1)">Anterior</button>
+        <span aria-live="polite">Página {{ page }} de {{ totalPages }} · {{ sortedUsuarios.length }} usuarios</span>
+        <button type="button" :disabled="page >= totalPages" @click="goToPage(page + 1)">Siguiente</button>
+      </nav>
+
       <div v-if="!sortedUsuarios.length" class="users-empty-state">
         <span><UserGroupIcon aria-hidden="true" /></span>
         <strong>{{ filtered ? 'No encontramos usuarios' : 'Todavía no hay usuarios cargados' }}</strong>
@@ -202,6 +214,7 @@ import {
   UserGroupIcon,
 } from '@heroicons/vue/24/outline'
 import MobileActionMenu from '@/components/ui/MobileActionMenu.vue'
+import { useClientPagination } from '@/composables/useClientPagination'
 
 const props = defineProps({
   usuarios: { type: Array, required: true },
@@ -219,6 +232,15 @@ const sortedUsuarios = computed(() =>
     return (a.username || '').localeCompare(b.username || '', 'es', { sensitivity: 'base' })
   }),
 )
+
+const {
+  page,
+  pageSize,
+  pageSizes,
+  totalPages,
+  paginatedItems: paginatedUsuarios,
+  goToPage,
+} = useClientPagination(sortedUsuarios)
 
 function fullName(usuario) {
   return [usuario.first_name, usuario.last_name].filter(Boolean).join(' ') || 'Sin nombre registrado'

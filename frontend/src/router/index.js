@@ -3,22 +3,23 @@ import { getToken } from '@/lib/api'
 import AppShell from '@/components/layout/AppShell.vue'
 import LoginView from '@/views/LoginView.vue'
 import ChangePasswordView from '@/views/ChangePasswordView.vue'
-import AlumnosView from '@/views/AlumnosView.vue'
-import DeudoresView from '@/views/DeudoresView.vue'
-import CajaView from '@/views/CajaView.vue'
-import ConceptosView from '@/views/ConceptosView.vue'
-import DashboardView from '@/views/DashboardView.vue'
-import ReportesView from '@/views/ReportesView.vue'
-import SucursalesView from '@/views/SucursalesView.vue'
-import UsuariosView from '@/views/UsuariosView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
-import ImportacionesView from '@/views/ImportacionesView.vue'
 import AccessDeniedView from '@/views/AccessDeniedView.vue'
-import ConfiguracionView from '@/views/ConfiguracionView.vue'
-import AuditoriaView from '@/views/AuditoriaView.vue'
-import AjustesCuotasView from '@/views/AjustesCuotasView.vue'
 import { canViewRoute } from '@/lib/permissions'
 import { useAuth } from '@/composables/useAuth'
+
+const DashboardView = () => import('@/views/DashboardView.vue')
+const AlumnosView = () => import('@/views/AlumnosView.vue')
+const DeudoresView = () => import('@/views/DeudoresView.vue')
+const CajaView = () => import('@/views/CajaView.vue')
+const ConceptosView = () => import('@/views/ConceptosView.vue')
+const ReportesView = () => import('@/views/ReportesView.vue')
+const SucursalesView = () => import('@/views/SucursalesView.vue')
+const UsuariosView = () => import('@/views/UsuariosView.vue')
+const ConfiguracionView = () => import('@/views/ConfiguracionView.vue')
+const ImportacionesView = () => import('@/views/ImportacionesView.vue')
+const AuditoriaView = () => import('@/views/AuditoriaView.vue')
+const AjustesCuotasView = () => import('@/views/AjustesCuotasView.vue')
 
 // Las rutas autenticadas viven como children de la ruta padre "/",
 // cuyo component es AppShell. Asi el shell envuelve automaticamente
@@ -97,13 +98,13 @@ const routes = [
         path: 'ajustes-cuotas',
         name: 'ajustes-cuotas',
         component: AjustesCuotasView,
-        meta: { roles: ['superadmin', 'administracion'] },
+        meta: { roles: ['superadmin', 'administracion'], hideTopbarHeading: true },
       },
       {
         path: 'auditoria',
         name: 'auditoria',
         component: AuditoriaView,
-        meta: { roles: ['superadmin', 'administracion'] },
+        meta: { roles: ['superadmin', 'administracion'], hideTopbarHeading: true },
       },
       {
         path: 'importaciones',

@@ -43,7 +43,15 @@ describe('navegación lateral contextual', () => {
 
   it('expande un único módulo, expone su estado y cierra con Escape', async () => {
     const router = await buildRouter('/dashboard')
-    const wrapper = mount(AppSidebar, { attachTo: document.body, global: { plugins: [router] } })
+    const wrapper = mount(AppSidebar, {
+      props: { open: true },
+      attachTo: document.body,
+      global: { plugins: [router] },
+    })
+    await nextTick()
+
+    expect(wrapper.get('.sidebar').attributes('id')).toBe('app-sidebar')
+    expect(document.activeElement).toBe(wrapper.get('.sidebar-close').element)
 
     const alumnosToggle = wrapper.get('[aria-controls="nav-submenu-alumnos"]')
     expect(alumnosToggle.attributes('aria-expanded')).toBe('false')
@@ -59,6 +67,30 @@ describe('navegación lateral contextual', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await nextTick()
     expect(wrapper.find('#nav-submenu-caja').exists()).toBe(false)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('mantiene el foco dentro del drawer mientras esta abierto', async () => {
+    const router = await buildRouter('/dashboard')
+    const wrapper = mount(AppSidebar, {
+      props: { open: true },
+      attachTo: document.body,
+      global: { plugins: [router] },
+    })
+    await nextTick()
+
+    const closeButton = wrapper.get('.sidebar-close').element
+    const focusable = wrapper.findAll('a[href], button:not([disabled])')
+    const lastFocusable = focusable.at(-1).element
+
+    lastFocusable.focus()
+    await wrapper.get('.sidebar').trigger('keydown', { key: 'Tab' })
+    expect(document.activeElement).toBe(closeButton)
+
+    closeButton.focus()
+    await wrapper.get('.sidebar').trigger('keydown', { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(lastFocusable)
     wrapper.unmount()
   })
 

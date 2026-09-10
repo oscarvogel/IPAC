@@ -25,6 +25,7 @@ export const vFocusTrap = {
     }
 
     state.keydown = (event) => {
+      if (state.value.active === false) return
       if (event.key === 'Escape') {
         if (!state.value.busy) state.value.close?.()
         return
@@ -52,6 +53,7 @@ export const vFocusTrap = {
     focusTrapState.set(element, state)
     element.addEventListener('keydown', state.keydown)
 
+    if (state.value.active === false) return
     requestAnimationFrame(() => {
       const initial = element.querySelector('[autofocus], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])')
         || visibleFocusableElements(element)[0]
@@ -136,11 +138,25 @@ function showValidation(control) {
   control.setAttribute('aria-describedby', [...describedBy].join(' '))
 }
 
+function focusAfterValidation(control) {
+  setTimeout(() => control.focus(), 0)
+}
+
+export function focusFirstInvalidField(form) {
+  const firstInvalid = form.querySelector(':invalid')
+  if (!firstInvalid) return
+  requestAnimationFrame(() => focusAfterValidation(firstInvalid))
+}
+
 export const vFormValidation = {
   mounted(form) {
     const onInvalid = (event) => {
       event.target.dataset.validationTouched = 'true'
       showValidation(event.target)
+
+      const firstInvalid = form.querySelector(':invalid')
+      if (firstInvalid !== event.target) return
+      focusFirstInvalidField(form)
     }
     const onFocusOut = (event) => {
       const control = event.target

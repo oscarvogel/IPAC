@@ -56,10 +56,16 @@
             </label>
             <label>
               Tipo de descuento
-              <select v-model="form.tipo_descuento">
+              <select
+                v-model="form.tipo_descuento"
+                :disabled="isDiscountCatalogLoading"
+                :aria-busy="isDiscountCatalogLoading"
+              >
                 <option value="">Sin descuento</option>
                 <option v-for="tipo in tiposFiltrados" :key="tipo.id" :value="tipo.id">{{ tipo.nombre }}</option>
               </select>
+              <small v-if="isDiscountCatalogLoading" class="field-help" role="status">Cargando tipos de descuento...</small>
+              <small v-else-if="discountCatalogErrorMessage" class="field-help field-error" role="alert">{{ discountCatalogErrorMessage }}</small>
               <small class="field-help">Identifica la autorización aplicada a esta cuota.</small>
             </label>
             <label v-if="form.tipo_descuento">
@@ -98,6 +104,10 @@
   font-size: 11px;
   line-height: 1.35;
 }
+
+.field-error {
+  color: var(--danger);
+}
 </style>
 
 <script setup>
@@ -113,6 +123,8 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   alumno: { type: Object, default: null },
   conceptos: { type: Array, default: () => [] },
+  tiposDescuentoLoading: { type: Boolean, default: false },
+  tiposDescuentoError: { type: String, default: '' },
 })
 
 const emit = defineEmits(['close', 'saved'])
@@ -120,6 +132,8 @@ const emit = defineEmits(['close', 'saved'])
 const { generarCuota } = usePagos()
 const toast = useToast()
 const { tiposDescuento } = useCatalogos()
+const isDiscountCatalogLoading = computed(() => props.tiposDescuentoLoading)
+const discountCatalogErrorMessage = computed(() => props.tiposDescuentoError)
 
 const form = reactive({
   concepto: '',

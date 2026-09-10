@@ -7,7 +7,9 @@ import { can as canPermission, roleOf } from '@/lib/permissions'
 
 const user = ref(null)
 const loading = ref(false)
+const initializing = ref(false)
 const error = ref('')
+let hydrationPromise = null
 
 const mustChangePassword = computed(() => Boolean(user.value?.perfil?.debe_cambiar_clave))
 
@@ -33,16 +35,28 @@ async function login(username, password, { remember = true } = {}) {
 async function fetchCurrentUser() {
   if (!getToken()) {
     user.value = null
+    initializing.value = false
     return null
   }
-  try {
-    user.value = await apiRequest('/auth/me/')
-    return user.value
-  } catch {
-    user.value = null
-    setToken(null)
-    return null
-  }
+  if (hydrationPromise) return hydrationPromise
+
+  initializing.value = true
+  hydrationPromise = apiRequest('/auth/me/')
+    .then((data) => {
+      user.value = data
+      return user.value
+    })
+    .catch(() => {
+      user.value = null
+      setToken(null)
+      return null
+    })
+    .finally(() => {
+      initializing.value = false
+      hydrationPromise = null
+    })
+
+  return hydrationPromise
 }
 
 async function changePassword(newPassword, confirmation) {
@@ -82,6 +96,7 @@ export function useAuth() {
     role: computed(() => roleOf(user.value)),
     can: (capability) => canPermission(user.value, capability),
     loading: readonly(loading),
+    initializing: readonly(initializing),
     error: readonly(error),
     isAuthenticated: computed(() => Boolean(user.value && getToken())),
     mustChangePassword,
