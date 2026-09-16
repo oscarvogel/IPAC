@@ -1651,6 +1651,84 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(response.data["omitidas"], 1)
         self.assertEqual(response.data["alumnos_elegibles"], [ana.id])
 
+    def test_student_directory_uses_applied_payments_for_split_total_balance(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        hoy = timezone.localdate()
+        cuota = Cuota.objects.create(
+            alumno=alumno,
+            concepto=concepto,
+            sucursal=self.posadas,
+            periodo="2026-11",
+            fecha_emision=hoy,
+            fecha_vencimiento=hoy,
+            importe="22000.00",
+        )
+
+        for importe, medio in (("10000.00", Pago.Medio.EFECTIVO), ("12000.00", Pago.Medio.TRANSFERENCIA)):
+            response = self.client.post(
+                "/api/pagos/",
+                {
+                    "alumno": alumno.id,
+                    "cuota": cuota.id,
+                    "importe": importe,
+                    "medio": medio,
+                },
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        directory = self.client.get("/api/alumnos/?search=P-001")
+        account = self.client.get(f"/api/alumnos/{alumno.id}/estado-cuenta/")
+        debtors = self.client.get("/api/deudores/?search=P-001")
+        report = self.client.get(f"/api/reportes/resumen/?desde={hoy}&hasta={hoy}")
+
+        self.assertEqual(directory.status_code, status.HTTP_200_OK)
+        self.assertEqual(directory.data["results"][0]["deuda_total"], "0.00")
+        self.assertEqual(account.status_code, status.HTTP_200_OK)
+        self.assertEqual(account.data["resumen"]["saldo_pendiente"], Decimal("0.00"))
+        self.assertEqual(account.data["resumen"]["saldo_neto"], Decimal("0.00"))
+        self.assertEqual(debtors.status_code, status.HTTP_200_OK)
+        self.assertEqual(debtors.data["count"], 0)
+        self.assertEqual(report.status_code, status.HTTP_200_OK)
+        self.assertEqual(report.data["cuenta_corriente"]["deuda"], Decimal("0.00"))
+
+    def test_student_directory_reports_remaining_partial_balance(self):
+        self.client.force_authenticate(user=self.admin)
+        alumno = Alumno.objects.get(legajo="P-001")
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        hoy = timezone.localdate()
+        cuota = Cuota.objects.create(
+            alumno=alumno,
+            concepto=concepto,
+            sucursal=self.posadas,
+            periodo="2026-12",
+            fecha_emision=hoy,
+            fecha_vencimiento=hoy,
+            importe="22000.00",
+        )
+
+        response = self.client.post(
+            "/api/pagos/",
+            {
+                "alumno": alumno.id,
+                "cuota": cuota.id,
+                "importe": "10000.00",
+                "medio": Pago.Medio.TRANSFERENCIA,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        directory = self.client.get("/api/alumnos/?search=P-001")
+        account = self.client.get(f"/api/alumnos/{alumno.id}/estado-cuenta/")
+
+        self.assertEqual(directory.status_code, status.HTTP_200_OK)
+        self.assertEqual(directory.data["results"][0]["deuda_total"], "12000.00")
+        self.assertEqual(account.status_code, status.HTTP_200_OK)
+        self.assertEqual(account.data["resumen"]["saldo_pendiente"], Decimal("12000.00"))
+
     def test_operational_report_respects_branch_and_date_range(self):
         self.client.force_authenticate(user=self.admin)
         alumno = Alumno.objects.get(legajo="P-001")

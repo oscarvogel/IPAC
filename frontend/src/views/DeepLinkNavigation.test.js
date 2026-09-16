@@ -139,6 +139,24 @@ describe('acciones profundas de Alumnos', () => {
     routeState.role = 'administracion'
   })
 
+  it('mantiene visible la búsqueda y su valor mientras se actualizan los filtros', async () => {
+    const { wrapper } = await mountAt(AlumnosView, '/alumnos')
+    const input = wrapper.get('input[type="search"]')
+
+    await input.setValue('vo')
+    await flushPromises()
+
+    expect(wrapper.get('input[type="search"]').element.value).toBe('vo')
+    expect(wrapper.get('input[type="search"]').isVisible()).toBe(true)
+    expect(wrapper.text()).toContain('Búsqueda: vo')
+
+    await input.setValue('')
+    await flushPromises()
+
+    expect(wrapper.get('input[type="search"]').element.value).toBe('')
+    expect(wrapper.text()).not.toContain('Búsqueda: vo')
+  })
+
   it('abre Nuevo alumno una vez y limpia accion de la URL', async () => {
     const { wrapper, router } = await mountAt(AlumnosView, '/alumnos?accion=nuevo')
 

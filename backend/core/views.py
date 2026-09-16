@@ -386,17 +386,33 @@ class AlumnoViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         money = DecimalField(max_digits=14, decimal_places=2)
+        aplicaciones_por_cuota = (
+            AplicacionPago.objects.filter(cuota_id=OuterRef("pk"), activa=True)
+            .values("cuota_id")
+            .annotate(total=Sum("importe"))
+            .values("total")[:1]
+        )
         deuda_por_alumno = (
             Cuota.objects.filter(alumno_id=OuterRef("pk"))
             .exclude(estado=Cuota.Estado.ANULADA)
-            .values("alumno_id")
             .annotate(
-                total=Sum(F("importe") - F("descuento") + F("recargo"), output_field=money)
-                - Coalesce(
-                    Sum("aplicaciones__importe", filter=Q(aplicaciones__activa=True)),
+                saldo_calculado=Greatest(
+                    ExpressionWrapper(
+                        F("importe") - F("descuento") + F("recargo") - Coalesce(
+                            Subquery(aplicaciones_por_cuota, output_field=money),
+                            Value(Decimal("0")),
+                            output_field=money,
+                        ),
+                        output_field=money,
+                    ),
                     Value(Decimal("0")),
                     output_field=money,
-                )
+                ),
+            )
+            .filter(saldo_calculado__gt=0)
+            .values("alumno_id")
+            .annotate(
+                total=Sum("saldo_calculado", output_field=money),
             )
             .values("total")[:1]
         )
