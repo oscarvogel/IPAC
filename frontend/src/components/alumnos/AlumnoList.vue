@@ -12,10 +12,11 @@
       </span>
     </header>
 
-    <div class="students-list">
+    <MotionList class="students-list" data-motion-list="alumnos">
       <button
         v-for="alumno in sortedAlumnos"
         :key="alumno.id"
+        data-motion-item
         :class="{ selected: selectedAlumno?.id === alumno.id }"
         :aria-pressed="selectedAlumno?.id === alumno.id"
         class="students-row"
@@ -55,12 +56,12 @@
         <ChevronRightIcon class="students-row-chevron" aria-hidden="true" />
       </button>
 
-      <div v-if="!sortedAlumnos.length" class="students-empty-state">
+      <div v-if="!sortedAlumnos.length" key="alumnos-empty" class="students-empty-state">
         <span><UserGroupIcon aria-hidden="true" /></span>
         <strong>{{ filtered ? 'No encontramos alumnos' : 'Todavía no hay alumnos cargados' }}</strong>
         <p>{{ filtered ? 'Probá cambiando la búsqueda o los filtros seleccionados.' : 'Creá el primer legajo para comenzar a gestionar alumnos.' }}</p>
       </div>
-    </div>
+    </MotionList>
   </section>
 </template>
 
@@ -74,6 +75,7 @@ import {
   PauseCircleIcon,
   UserGroupIcon,
 } from '@heroicons/vue/24/outline'
+import MotionList from '@/components/ui/MotionList.vue'
 
 const props = defineProps({
   alumnos: { type: Array, required: true },

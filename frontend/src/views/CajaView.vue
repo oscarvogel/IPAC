@@ -91,7 +91,7 @@
     />
 
     <MovimientoForm
-      v-if="showMovimiento"
+      :open="showMovimiento"
       :caja-hoy="cajaHoy"
       :loading="loading"
       :tipo-inicial="movimientoTipoInicial"
@@ -100,7 +100,7 @@
     />
 
     <CerrarCajaModal
-      v-if="showCerrar"
+      :open="showCerrar"
       :caja-hoy="cajaHoy"
       :total-esperado="cajaTotales.efectivoEsperado"
       :loading="loading"

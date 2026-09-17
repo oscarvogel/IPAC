@@ -139,6 +139,24 @@ describe('acciones profundas de Alumnos', () => {
     routeState.role = 'administracion'
   })
 
+  it('mantiene visible la búsqueda y su valor mientras se actualizan los filtros', async () => {
+    const { wrapper } = await mountAt(AlumnosView, '/alumnos')
+    const input = wrapper.get('input[type="search"]')
+
+    await input.setValue('vo')
+    await flushPromises()
+
+    expect(wrapper.get('input[type="search"]').element.value).toBe('vo')
+    expect(wrapper.get('input[type="search"]').isVisible()).toBe(true)
+    expect(wrapper.text()).toContain('Búsqueda: vo')
+
+    await input.setValue('')
+    await flushPromises()
+
+    expect(wrapper.get('input[type="search"]').element.value).toBe('')
+    expect(wrapper.text()).not.toContain('Búsqueda: vo')
+  })
+
   it('abre Nuevo alumno una vez y limpia accion de la URL', async () => {
     const { wrapper, router } = await mountAt(AlumnosView, '/alumnos?accion=nuevo')
 
@@ -179,13 +197,13 @@ describe('acciones profundas de Caja', () => {
   it('descarta acciones inválidas y avisa cuando la caja no está abierta', async () => {
     routeState.cashStatus = 'cerrada'
     const closed = await mountAt(CajaView, '/caja?accion=cerrar')
-    expect(closed.wrapper.findComponent({ name: 'CerrarCajaModal' }).exists()).toBe(false)
+    expect(closed.wrapper.getComponent({ name: 'CerrarCajaModal' }).props('open')).toBe(false)
     expect(routeState.toastErrors).toContain('La caja del día debe estar abierta para realizar esta operación.')
     expect(closed.router.currentRoute.value.query.accion).toBeUndefined()
 
     routeState.cashStatus = 'abierta'
     const invalid = await mountAt(CajaView, '/caja?accion=desconocida')
-    expect(invalid.wrapper.findComponent({ name: 'MovimientoForm' }).exists()).toBe(false)
+    expect(invalid.wrapper.getComponent({ name: 'MovimientoForm' }).props('open')).toBe(false)
     expect(invalid.router.currentRoute.value.query.accion).toBeUndefined()
   })
 })

@@ -94,6 +94,7 @@
       :can-edit="canManageUsers"
       :can-deactivate="canManageUsers"
       :can-manage-superadmins="auth.role.value === 'superadmin'"
+      :animate="listMotionEnabled"
       @edit="openEditForm"
       @deactivate="requestDeactivate"
     />
@@ -111,7 +112,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   BuildingStorefrontIcon,
   CheckCircleIcon,
@@ -148,8 +149,23 @@ const showUsuarioForm = ref(false)
 const editingUsuario = ref(null)
 const pageReady = ref(false)
 const pageError = ref('')
+const listMotionEnabled = ref(true)
+let searchMotionTimer = null
 
 onMounted(loadPage)
+
+watch(searchQuery, () => {
+  listMotionEnabled.value = false
+  if (searchMotionTimer) clearTimeout(searchMotionTimer)
+  searchMotionTimer = setTimeout(() => {
+    listMotionEnabled.value = true
+    searchMotionTimer = null
+  }, 280)
+})
+
+onBeforeUnmount(() => {
+  if (searchMotionTimer) clearTimeout(searchMotionTimer)
+})
 
 async function loadPage() {
   pageReady.value = false

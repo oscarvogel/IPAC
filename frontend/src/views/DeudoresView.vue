@@ -117,8 +117,8 @@
                 <th><span class="sr-only">Acciones</span></th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-for="deudor in deudores" :key="deudor.id">
+            <MotionList tag="tbody" data-motion-list="deudores-desktop">
+              <tr v-for="deudor in deudores" :key="deudor.id" data-motion-item>
                 <td>
                   <strong>{{ deudor.apellido }}, {{ deudor.nombre }}</strong>
                   <small>DNI {{ deudor.dni || 'sin informar' }} · Legajo {{ deudor.legajo || 'sin informar' }}</small>
@@ -142,16 +142,16 @@
                   </div>
                 </td>
               </tr>
-            </tbody>
+            </MotionList>
           </table>
         </div>
-        <div v-if="deudores.length" class="mobile-record-list debtors-mobile-list" role="list">
-          <article v-for="deudor in deudores" :key="`mobile-${deudor.id}`" class="mobile-record-card" role="listitem">
+        <MotionList v-if="deudores.length" class="mobile-record-list debtors-mobile-list" data-motion-list="deudores-mobile" role="list">
+          <article v-for="deudor in deudores" :key="`mobile-${deudor.id}`" data-motion-item class="mobile-record-card" role="listitem">
             <header class="mobile-record-head"><span class="mobile-record-title"><strong>{{ deudor.apellido }}, {{ deudor.nombre }}</strong><small>{{ deudor.legajo }} · {{ deudor.sucursal_nombre }}</small></span><strong class="debtors-debt">$ {{ formatMoney(deudor.deuda_total, { fractionDigits: 2 }) }}</strong></header>
             <dl class="mobile-record-meta"><div><dt>Cuotas</dt><dd>{{ deudor.cuotas_pendientes }} pendientes · {{ deudor.cuotas_vencidas }} vencidas</dd></div><div><dt>Antigüedad</dt><dd>{{ deudor.dias_mora ? `${deudor.dias_mora} días` : 'Sin vencidas' }}</dd></div><div><dt>Contacto</dt><dd>{{ deudor.telefono || deudor.email || 'Sin informar' }}</dd></div></dl>
             <footer class="mobile-record-footer debtors-mobile-actions"><button type="button" @click="openEstado(deudor)">Estado de cuenta</button><button v-if="canRegisterPayments" type="button" @click="openPago(deudor)">Registrar pago</button></footer>
           </article>
-        </div>
+        </MotionList>
       </section>
 
       <p v-if="error" class="students-inline-error" role="alert">{{ error }}</p>
@@ -194,6 +194,7 @@ import {
 import AppPageState from '@/components/ui/AppPageState.vue'
 import EstadoCuentaModal from '@/components/alumnos/EstadoCuentaModal.vue'
 import PagoForm from '@/components/alumnos/PagoForm.vue'
+import MotionList from '@/components/ui/MotionList.vue'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useDeudores } from '@/composables/useDeudores'
 import { useAuth } from '@/composables/useAuth'

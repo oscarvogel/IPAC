@@ -34,7 +34,9 @@
       @retry="retryActiveSection"
     />
 
-    <template v-else-if="activeTab === 'resumen'">
+    <Transition v-else :css="false" @enter="enterSection" @leave="leaveSection">
+      <div :key="activeTab" class="reports-section-motion">
+    <template v-if="activeTab === 'resumen'">
       <ReporteResumen :resumen="resumen" :show-distribution="false" />
     </template>
 
@@ -45,18 +47,18 @@
         <div class="reports-cobranzas-table-wrap">
           <table class="audit-table">
             <thead><tr><th>Usuario</th><th>Pagos</th><th>Efectivo</th><th>Transferencia</th><th>Mercado Pago</th><th>Tarjeta</th><th>Otros</th><th>Total</th><th>Diferencia caja</th></tr></thead>
-            <tbody>
-              <tr v-for="row in cobranzasUsuarios" :key="row.usuario_id || row.usuario">
+            <MotionList tag="tbody" data-motion-list="cobranzas-usuarios-desktop">
+              <tr v-for="row in cobranzasUsuarios" :key="row.usuario_id || row.usuario" data-motion-item>
                 <td><strong>{{ row.usuario }}</strong></td><td>{{ row.cantidad }}</td>
                 <td>{{ money(row.efectivo) }}</td><td>{{ money(row.transferencia) }}</td><td>{{ money(row.mercado_pago) }}</td><td>{{ money(row.tarjeta) }}</td><td>{{ money(row.otro) }}</td>
                 <td><strong>{{ money(row.total) }}</strong></td><td :class="{ 'report-difference': Number(row.diferencia_caja) !== 0 }">{{ money(row.diferencia_caja) }}</td>
               </tr>
-              <tr v-if="!cobranzasUsuarios.length"><td colspan="9">No hay cobranzas en el período.</td></tr>
-            </tbody>
+              <tr v-if="!cobranzasUsuarios.length" key="cobranzas-empty"><td colspan="9">No hay cobranzas en el período.</td></tr>
+            </MotionList>
           </table>
         </div>
-        <div v-if="cobranzasUsuarios.length" class="mobile-record-list reports-cobranzas-mobile-list" role="list">
-          <article v-for="row in cobranzasUsuarios" :key="`mobile-${row.usuario_id || row.usuario}`" class="mobile-record-card" role="listitem">
+        <MotionList v-if="cobranzasUsuarios.length" class="mobile-record-list reports-cobranzas-mobile-list" data-motion-list="cobranzas-usuarios-mobile" role="list">
+          <article v-for="row in cobranzasUsuarios" :key="`mobile-${row.usuario_id || row.usuario}`" data-motion-item class="mobile-record-card" role="listitem">
             <header class="mobile-record-head">
               <span class="mobile-record-icon info" aria-hidden="true"><BanknotesIcon /></span>
               <span class="mobile-record-title">
@@ -74,7 +76,7 @@
               <div><dt>Diferencia caja</dt><dd :class="{ 'report-difference': Number(row.diferencia_caja) !== 0 }">{{ money(row.diferencia_caja) }}</dd></div>
             </dl>
           </article>
-        </div>
+        </MotionList>
         <p v-if="!cobranzasUsuarios.length" class="reports-cobranzas-mobile-empty">No hay cobranzas en el período.</p>
       </section>
       <PagosListado :pagos="pagos" />
@@ -94,6 +96,8 @@
       <div><p class="eyebrow">Tesorería</p><h2>Cajas del período</h2><p>{{ resumen?.cajas?.cerradas || 0 }} cerradas · {{ resumen?.cajas?.abiertas || 0 }} abiertas · diferencia acumulada {{ money(resumen?.cajas?.diferencia_acumulada) }}</p></div>
       <RouterLink to="/caja">Ir a Caja</RouterLink>
     </section>
+      </div>
+    </Transition>
     </template>
   </section>
 </template>
@@ -109,6 +113,8 @@ import ReporteFiltros from '@/components/reportes/ReporteFiltros.vue'
 import ReporteResumen from '@/components/reportes/ReporteResumen.vue'
 import PagosListado from '@/components/reportes/PagosListado.vue'
 import AppPageState from '@/components/ui/AppPageState.vue'
+import MotionList from '@/components/ui/MotionList.vue'
+import { animateSectionEnter, animateSectionLeave } from '@/lib/motion'
 import { vRevealOnScroll } from '@/directives/motion'
 
 const { sucursales, loadCatalogo, loadCatalogos } = useCatalogos()
@@ -165,6 +171,14 @@ function selectTab(section) {
   activeTab.value = section
   if (route.query.seccion === section) return
   router.push({ path: route.path, query: { ...route.query, seccion: section }, hash: route.hash })
+}
+
+function enterSection(element, done) {
+  animateSectionEnter(element, done)
+}
+
+function leaveSection(element, done) {
+  animateSectionLeave(element, done)
 }
 
 const filtros = reactive({

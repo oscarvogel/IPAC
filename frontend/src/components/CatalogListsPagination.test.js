@@ -27,28 +27,38 @@ const usuarios = Array.from({ length: 30 }, (_, index) => ({
   },
 }))
 
+const waitForMotion = () => new Promise((resolve) => setTimeout(resolve, 240))
+
 describe('paginacion de catalogos', () => {
+  const mountList = (component, props) => mount(component, {
+    props,
+    global: { stubs: { TransitionGroup: false } },
+  })
+
   it('limita Conceptos a 25 registros, navega y reinicia al cambiar resultados', async () => {
-    const wrapper = mount(ConceptoList, { props: { conceptos } })
+    const wrapper = mountList(ConceptoList, { conceptos })
 
     expect(wrapper.findAll('tbody tr')).toHaveLength(25)
     expect(wrapper.findAll('.concepts-mobile-list .mobile-record-card')).toHaveLength(25)
 
     await wrapper.findAll('.catalog-pagination button')[1].trigger('click')
+    await waitForMotion()
     expect(wrapper.findAll('tbody tr')).toHaveLength(5)
 
     await wrapper.setProps({ conceptos: conceptos.slice(0, 3) })
+    await waitForMotion()
     expect(wrapper.findAll('tbody tr')).toHaveLength(3)
   })
 
   it('limita Usuarios a 25 registros y conserva el contador total', async () => {
-    const wrapper = mount(UsuarioList, { props: { usuarios } })
+    const wrapper = mountList(UsuarioList, { usuarios })
 
     expect(wrapper.find('.users-list-count').text()).toContain('30 usuarios')
     expect(wrapper.findAll('tbody tr')).toHaveLength(25)
     expect(wrapper.findAll('.users-mobile-list .mobile-record-card')).toHaveLength(25)
 
     await wrapper.findAll('.catalog-pagination button')[1].trigger('click')
+    await waitForMotion()
     expect(wrapper.findAll('tbody tr')).toHaveLength(5)
     expect(wrapper.get('.catalog-pagination').text()).toContain('Página 2 de 2')
   })
