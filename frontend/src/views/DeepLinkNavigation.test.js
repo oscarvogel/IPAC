@@ -197,13 +197,13 @@ describe('acciones profundas de Caja', () => {
   it('descarta acciones inválidas y avisa cuando la caja no está abierta', async () => {
     routeState.cashStatus = 'cerrada'
     const closed = await mountAt(CajaView, '/caja?accion=cerrar')
-    expect(closed.wrapper.findComponent({ name: 'CerrarCajaModal' }).exists()).toBe(false)
+    expect(closed.wrapper.getComponent({ name: 'CerrarCajaModal' }).props('open')).toBe(false)
     expect(routeState.toastErrors).toContain('La caja del día debe estar abierta para realizar esta operación.')
     expect(closed.router.currentRoute.value.query.accion).toBeUndefined()
 
     routeState.cashStatus = 'abierta'
     const invalid = await mountAt(CajaView, '/caja?accion=desconocida')
-    expect(invalid.wrapper.findComponent({ name: 'MovimientoForm' }).exists()).toBe(false)
+    expect(invalid.wrapper.getComponent({ name: 'MovimientoForm' }).props('open')).toBe(false)
     expect(invalid.router.currentRoute.value.query.accion).toBeUndefined()
   })
 })

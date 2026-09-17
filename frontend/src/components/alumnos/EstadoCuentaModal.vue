@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="requestClose">
+    <AppModalTransition :open="open">
+      <div class="modal-backdrop" @click.self="requestClose">
       <section
         v-focus-trap="{ close: requestClose, busy: Boolean(printingId) }"
         class="modal-card account-modal"
@@ -148,7 +149,8 @@
           <p class="empty-state flat">No se pudo cargar el estado de cuenta.</p>
         </section>
       </section>
-    </div>
+      </div>
+    </AppModalTransition>
 
     <ReciboPrintView :recibo="reciboData" />
   </Teleport>
@@ -162,6 +164,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useToast } from '@/composables/useToast'
 import { formatMoney, formatDate } from '@/lib/formatters'
 import { confirmAnularPago } from '@/lib/swal'
+import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import ReciboPrintView from '@/components/ui/ReciboPrintView.vue'
 import { vFocusTrap } from '@/directives/accessibility'
 

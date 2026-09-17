@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div class="modal-backdrop" @click.self="requestClose">
+    <AppModalTransition :open="open">
+      <div class="modal-backdrop" @click.self="requestClose">
       <form
         v-focus-trap="{ close: requestClose, busy: loading }"
         v-form-validation
@@ -71,7 +72,8 @@
           </button>
         </footer>
       </form>
-    </div>
+      </div>
+    </AppModalTransition>
   </Teleport>
 </template>
 
@@ -81,9 +83,11 @@ import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { formatDate, formatMoney } from '@/lib/formatters'
 import { confirmCierreCaja } from '@/lib/swal'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
+  open: { type: Boolean, default: false },
   totalEsperado: { type: Number, default: 0 },
   cajaHoy: { type: Object, default: null },
   loading: { type: Boolean, default: false },
@@ -111,6 +115,16 @@ const distribucionValida = computed(() => {
 function requestClose() {
   if (!props.loading) emit('close')
 }
+
+watch(
+  () => props.open,
+  (open) => {
+    if (!open) return
+    totalContado.value = Number(props.totalEsperado || 0).toFixed(2)
+    importeRetirado.value = Number(props.totalEsperado || 0).toFixed(2)
+    saldoArrastrable.value = '0.00'
+  },
+)
 
 watch(
   () => props.totalEsperado,

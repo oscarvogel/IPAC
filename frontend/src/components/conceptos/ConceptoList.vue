@@ -29,8 +29,8 @@
             <th><span class="sr-only">Acciones</span></th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-for="concepto in paginatedConceptos" :key="concepto.id">
+        <MotionList tag="tbody" data-motion-list="conceptos-desktop" :animate="animate">
+          <tr v-for="concepto in paginatedConceptos" :key="concepto.id" data-motion-item>
             <td>
               <div class="concepts-name-cell">
                 <span :class="['concepts-type-icon', `type-${concepto.tipo || 'otro'}`]">
@@ -94,13 +94,14 @@
               </div>
             </td>
           </tr>
-        </tbody>
+        </MotionList>
       </table>
 
-      <div v-if="sortedConceptos.length" class="mobile-record-list concepts-mobile-list" role="list">
+      <MotionList v-if="sortedConceptos.length" class="mobile-record-list concepts-mobile-list" data-motion-list="conceptos-mobile" role="list" :animate="animate">
         <article
           v-for="concepto in paginatedConceptos"
           :key="`mobile-${concepto.id}`"
+          data-motion-item
           class="mobile-record-card concept-mobile-card"
           role="listitem"
         >
@@ -152,7 +153,7 @@
             </span>
           </footer>
         </article>
-      </div>
+      </MotionList>
 
       <nav v-if="sortedConceptos.length" class="catalog-pagination" aria-label="Paginación de conceptos">
         <label class="catalog-page-size">
@@ -192,12 +193,14 @@ import {
 import { formatMoney } from '@/lib/formatters'
 import { useClientPagination } from '@/composables/useClientPagination'
 import MobileActionMenu from '@/components/ui/MobileActionMenu.vue'
+import MotionList from '@/components/ui/MotionList.vue'
 
 const props = defineProps({
   conceptos: { type: Array, required: true },
   filtered: { type: Boolean, default: false },
   canEdit: { type: Boolean, default: true },
   canDeactivate: { type: Boolean, default: true },
+  animate: { type: Boolean, default: true },
 })
 
 defineEmits(['edit', 'deactivate'])

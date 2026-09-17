@@ -1,10 +1,16 @@
 <template>
   <Teleport to="body">
-    <div class="app-toaster" aria-label="Notificaciones">
-      <TransitionGroup name="toast-stack">
+    <MotionList
+      class="app-toaster"
+      data-motion-list="toasts"
+      variant="toast"
+      role="region"
+      aria-label="Notificaciones"
+    >
         <article
           v-for="message in messages"
           :key="message.id"
+          data-motion-item
           :class="['toast-message', `toast-message-${message.type}`]"
           :role="message.type === 'error' ? 'alert' : 'status'"
           :aria-live="message.type === 'error' ? 'assertive' : 'polite'"
@@ -34,8 +40,7 @@
             aria-hidden="true"
           />
         </article>
-      </TransitionGroup>
-    </div>
+    </MotionList>
   </Teleport>
 </template>
 
@@ -48,6 +53,7 @@ import {
   XMarkIcon,
 } from '@heroicons/vue/24/outline'
 import { useToast } from '@/composables/useToast'
+import MotionList from '@/components/ui/MotionList.vue'
 
 const { messages, dismiss } = useToast()
 

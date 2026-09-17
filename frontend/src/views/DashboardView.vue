@@ -8,7 +8,7 @@
       @retry="loadPage"
     />
     <template v-else>
-    <div id="dashboard-indicators" v-reveal-on-scroll class="stats-grid" :class="{ 'show-all-mobile-stats': showAllMobileStats }">
+    <div ref="statsGrid" id="dashboard-indicators" v-reveal-on-scroll class="stats-grid" :class="{ 'show-all-mobile-stats': showAllMobileStats }">
       <component
         v-for="stat in stats"
         :key="stat.label"
@@ -22,7 +22,13 @@
         </span>
         <span class="stat-copy">
           <span class="stat-label">{{ stat.label }}</span>
-          <strong>{{ stat.value }}</strong>
+          <AnimatedMetricValue
+            v-if="stat.animated"
+            :value="stat.value"
+            :kind="stat.kind"
+            :prefix="stat.prefix"
+          />
+          <strong v-else>{{ stat.value }}</strong>
           <small>{{ stat.detail }}</small>
           <span v-if="stat.action" class="stat-action">
             <span>{{ stat.action }}</span>
@@ -112,7 +118,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   ArrowRightIcon,
   BanknotesIcon,
@@ -133,7 +139,9 @@ import { apiRequest } from '@/lib/api'
 import { formatDate, formatMoney } from '@/lib/formatters'
 import { useToast } from '@/composables/useToast'
 import AppPageState from '@/components/ui/AppPageState.vue'
+import AnimatedMetricValue from '@/components/ui/AnimatedMetricValue.vue'
 import DashboardRecentPayments from '@/components/dashboard/DashboardRecentPayments.vue'
+import { animateStaggerIn, createMotionContext } from '@/lib/motion'
 import { vRevealOnScroll } from '@/directives/motion'
 
 const auth = useAuth()
@@ -160,6 +168,8 @@ const showAllMobileStats = ref(false)
 const dashboardSecondaryLoading = ref(false)
 const dashboardSecondaryError = ref('')
 const ultimosPagos = computed(() => pagosMes.value.slice(0, 5))
+const statsGrid = ref(null)
+let cleanupStatsMotion = () => {}
 
 const {
   cajaHoy,
@@ -187,6 +197,19 @@ onMounted(loadPage)
 
 watch(selectedSucursalId, () => {
   if (pageReady.value) refreshDashboard()
+})
+
+watch(pageReady, async (ready) => {
+  if (!ready) return
+  await nextTick()
+  cleanupStatsMotion()
+  cleanupStatsMotion = createMotionContext(statsGrid.value, () => {
+    animateStaggerIn(statsGrid.value?.querySelectorAll('.stat-card'), { stagger: 0.05 })
+  })
+})
+
+onBeforeUnmount(() => {
+  cleanupStatsMotion()
 })
 
 async function loadPage() {
@@ -293,6 +316,7 @@ const stats = computed(() => [
     mobilePrimary: true,
     action: 'Ver alumnos',
     value: alumnosCount.value,
+    animated: true,
     detail: 'base cargada',
     tone: 'gold',
     icon: UserGroupIcon,
@@ -302,6 +326,7 @@ const stats = computed(() => [
     label: 'Sucursales',
     action: auth.can('manage-branches') ? 'Ver sucursales' : undefined,
     value: sucursales.value.length,
+    animated: true,
     detail: sucursales.value.map((sucursal) => sucursal.nombre).join(' y '),
     tone: 'blue',
     icon: BuildingStorefrontIcon,
@@ -311,7 +336,10 @@ const stats = computed(() => [
     label: 'Cobrado del mes',
     mobilePrimary: true,
     action: 'Ver cobranzas',
-    value: `$ ${formatMoney(totalCobradoMes.value, { fractionDigits: 2 })}`,
+    value: totalCobradoMes.value,
+    animated: true,
+    kind: 'money',
+    prefix: '$ ',
     detail: `${pagosMesCount.value} pagos`,
     tone: 'green',
     icon: BanknotesIcon,
@@ -321,6 +349,7 @@ const stats = computed(() => [
     label: 'Pagos del mes',
     action: 'Ver pagos',
     value: pagosMesCount.value,
+    animated: true,
     detail: 'filtrados por período actual',
     tone: 'violet',
     icon: CreditCardIcon,
@@ -330,7 +359,10 @@ const stats = computed(() => [
     label: 'Cobrado hoy',
     mobilePrimary: true,
     action: 'Ver cobranzas',
-    value: `$ ${formatMoney(cobradoHoy.value, { fractionDigits: 2 })}`,
+    value: cobradoHoy.value,
+    animated: true,
+    kind: 'money',
+    prefix: '$ ',
     detail: 'cobranzas del día',
     tone: 'green',
     icon: BanknotesIcon,
@@ -340,7 +372,10 @@ const stats = computed(() => [
     label: 'Deuda pendiente',
     mobilePrimary: true,
     action: 'Gestionar deuda',
-    value: `$ ${formatMoney(deudaTotal.value, { fractionDigits: 2 })}`,
+    value: deudaTotal.value,
+    animated: true,
+    kind: 'money',
+    prefix: '$ ',
     detail: `${alumnosConDeuda.value} alumnos · ${cuotasVencidas.value} cuotas vencidas`,
     tone: 'gold',
     icon: WalletIcon,
@@ -349,7 +384,10 @@ const stats = computed(() => [
   {
     label: 'Saldo a favor',
     action: 'Ver reportes',
-    value: `$ ${formatMoney(saldoFavor.value, { fractionDigits: 2 })}`,
+    value: saldoFavor.value,
+    animated: true,
+    kind: 'money',
+    prefix: '$ ',
     detail: 'crédito disponible de alumnos',
     tone: 'blue',
     icon: CreditCardIcon,

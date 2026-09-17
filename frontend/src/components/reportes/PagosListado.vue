@@ -30,8 +30,8 @@
             <th><span class="sr-only">Acciones</span></th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-for="pago in pagos" :key="pago.id">
+        <MotionList tag="tbody" data-motion-list="pagos-desktop">
+          <tr v-for="pago in pagos" :key="pago.id" data-motion-item>
             <td>
               <span class="reports-receipt-number">
                 <DocumentTextIcon aria-hidden="true" />
@@ -76,13 +76,14 @@
               </button>
             </td>
           </tr>
-        </tbody>
+        </MotionList>
       </table>
 
-      <div v-if="pagos.length" class="mobile-record-list reports-mobile-list" role="list">
+      <MotionList v-if="pagos.length" class="mobile-record-list reports-mobile-list" data-motion-list="pagos-mobile" role="list">
         <article
           v-for="pago in pagos"
           :key="`mobile-${pago.id}`"
+          data-motion-item
           class="mobile-record-card report-mobile-card"
           role="listitem"
         >
@@ -136,7 +137,7 @@
             </button>
           </footer>
         </article>
-      </div>
+      </MotionList>
 
       <div v-if="!pagos.length" class="reports-payments-empty">
         <span><DocumentMagnifyingGlassIcon aria-hidden="true" /></span>
@@ -168,6 +169,7 @@ import { usePagos } from '@/composables/usePagos'
 import { useToast } from '@/composables/useToast'
 import { formatDate, formatMoney } from '@/lib/formatters'
 import ReciboPrintView from '@/components/ui/ReciboPrintView.vue'
+import MotionList from '@/components/ui/MotionList.vue'
 
 defineProps({
   pagos: { type: Array, required: true },

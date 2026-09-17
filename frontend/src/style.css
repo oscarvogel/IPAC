@@ -2354,6 +2354,13 @@ body {
   --shadow-lg: 0 12px 30px rgba(0, 0, 0, .28);
 }
 
+:root.theme-transition-active,
+:root.theme-transition-active *,
+:root.theme-transition-active *::before,
+:root.theme-transition-active *::after {
+  transition: none !important;
+}
+
 :root[data-theme="dark"] .ipac-swal-popup { background: var(--surface); }
 :root[data-theme="dark"] input,
 :root[data-theme="dark"] select,
@@ -2485,6 +2492,13 @@ body {
 
 .sidebar-backdrop {
   display: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.sidebar-gsap-active .sidebar {
+  transition: none !important;
 }
 
 body.sidebar-scroll-locked {
@@ -2593,6 +2607,10 @@ body.sidebar-scroll-locked {
     display: block;
     border: 0;
     background: rgba(4, 18, 35, 0.55);
+  }
+
+  .sidebar-is-open .sidebar-backdrop {
+    pointer-events: auto;
   }
 
   .workspace {
