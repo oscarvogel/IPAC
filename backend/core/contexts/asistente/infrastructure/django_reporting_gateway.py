@@ -408,4 +408,4 @@ class DjangoReportingGateway:
                 data={"candidates": [self._candidate(student) for student in students]},
             )
 
-        return self._with_scope(context, None, execute)
+        return self._with_scope(context, execute)
