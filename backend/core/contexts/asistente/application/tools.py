@@ -13,6 +13,7 @@ class InvalidToolArguments(ValueError):
 
 TOOL_SPECS = {
     "resumen_deuda": {"allowed": {"sucursal_id", "sucursal"}},
+    "alumnos_con_deuda": {"allowed": {"sucursal_id", "sucursal", "limit"}},
     "estado_cuenta_alumno": {
         "required_any": {"alumno_id", "search"},
         "allowed": {"alumno_id", "search"},
