@@ -89,7 +89,7 @@ class ChatbotApiTests(APITestCase):
         ),
     )
     def test_total_debt_question_returns_live_data_through_api(self, _classify):
-        concept = ConceptoCobrable.objects.create
+        concept = ConceptoCobrable.objects.create(
             nombre="Cuota Chat Live",
             tipo=ConceptoCobrable.Tipo.CUOTA,
             importe=Decimal("1250"),
