@@ -162,7 +162,7 @@ Expected: FAIL because the three models do not exist.
 
 - [ ] **Step 3: Add the models with exact persistence semantics**
 
-Implement in `backend/core/models.py`:
+Implement in `backend/core/models.py` (adding `from datetime import time` to the imports):
 
 ```python
 class AsistenteKnowledgeArticle(TimeStampedModel):
@@ -275,7 +275,7 @@ class AsistenteConfig(TimeStampedModel):
 
 Generate `0017_asistente_fase2_schema.py` from the model changes and a separate `0018_seed_asistente_conocimiento.py` data migration.
 
-The data migration must freeze the current eight procedures from `core/chatbot/knowledge.py` as literal dictionaries and use `apps.get_model("core", "AsistenteKnowledgeArticle")`; it must not import runtime `PROCEDURES`.
+The data migration must freeze the current nine procedures from `core/chatbot/knowledge.py` as literal dictionaries and use `apps.get_model("core", "AsistenteKnowledgeArticle")`; it must not import runtime `PROCEDURES`.
 
 - [ ] **Step 5: Add migration tests**
 
