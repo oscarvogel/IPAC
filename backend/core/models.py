@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from decimal import Decimal
+from datetime import time
 
 
 class TimeStampedModel(models.Model):
@@ -571,3 +572,161 @@ class ChatbotMessage(TimeStampedModel):
 
     def __str__(self):
         return f"{self.role} - conversación {self.conversacion_id}"
+
+
+
+class AsistenteKnowledgeArticle(TimeStampedModel):
+    clave = models.SlugField(max_length=120, unique=True)
+    titulo = models.CharField(max_length=180)
+    modulo = models.CharField(max_length=80)
+    preguntas_equivalentes = models.JSONField(default=list, blank=True)
+    descripcion = models.TextField(blank=True)
+    pasos = models.JSONField(default=list, blank=True)
+    ruta = models.CharField(max_length=255, blank=True)
+    action_label = models.CharField(max_length=120, blank=True)
+    roles_permitidos = models.JSONField(default=list, blank=True)
+    notas = models.JSONField(default=list, blank=True)
+    activo = models.BooleanField(default=True)
+    orden = models.IntegerField(default=0)
+    creado_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="articulos_asistente_creados",
+        null=True,
+        blank=True,
+    )
+    actualizado_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="articulos_asistente_actualizados",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["orden", "titulo", "id"]
+        indexes = [
+            models.Index(fields=["activo", "modulo"]),
+            models.Index(fields=["clave"]),
+        ]
+        verbose_name = "artículo de conocimiento del asistente"
+        verbose_name_plural = "artículos de conocimiento del asistente"
+
+    def __str__(self):
+        return self.titulo
+
+
+class AsistenteConsultaNoResuelta(TimeStampedModel):
+    class Categoria(models.TextChoices):
+        NO_DOCUMENTADA = "no_documentada", "No documentada"
+        SIN_DATOS = "sin_datos", "Sin datos"
+        SIN_PERMISO = "sin_permiso", "Sin permiso"
+        FUERA_DE_ALCANCE = "fuera_de_alcance", "Fuera de alcance"
+        ERROR_IA = "error_ia", "Error IA"
+        ERROR_HERRAMIENTA = "error_herramienta", "Error de herramienta"
+
+    class Estado(models.TextChoices):
+        PENDIENTE = "pendiente", "Pendiente"
+        RESUELTA = "resuelta", "Resuelta"
+        IGNORADA = "ignorada", "Ignorada"
+
+    conversacion = models.ForeignKey(
+        ChatbotConversation,
+        on_delete=models.SET_NULL,
+        related_name="consultas_no_resueltas",
+        null=True,
+        blank=True,
+    )
+    mensaje = models.ForeignKey(
+        ChatbotMessage,
+        on_delete=models.SET_NULL,
+        related_name="consultas_no_resueltas",
+        null=True,
+        blank=True,
+    )
+    usuario = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="consultas_asistente_no_resueltas",
+    )
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.PROTECT,
+        related_name="consultas_asistente_no_resueltas",
+    )
+    pregunta = models.TextField()
+    pregunta_normalizada = models.TextField()
+    categoria = models.CharField(max_length=40, choices=Categoria.choices)
+    intencion = models.CharField(max_length=80, blank=True)
+    herramienta = models.CharField(max_length=80, blank=True)
+    respuesta = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.PENDIENTE)
+    articulo = models.ForeignKey(
+        AsistenteKnowledgeArticle,
+        on_delete=models.SET_NULL,
+        related_name="consultas_resueltas",
+        null=True,
+        blank=True,
+    )
+    resuelto_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="consultas_asistente_resueltas",
+        null=True,
+        blank=True,
+    )
+    resuelto_en = models.DateTimeField(null=True, blank=True)
+    notificado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-creado", "-id"]
+        indexes = [
+            models.Index(fields=["estado", "creado"]),
+            models.Index(fields=["categoria", "creado"]),
+            models.Index(fields=["usuario", "creado"]),
+            models.Index(fields=["sucursal", "creado"]),
+            models.Index(fields=["pregunta_normalizada"]),
+        ]
+        verbose_name = "consulta no resuelta del asistente"
+        verbose_name_plural = "consultas no resueltas del asistente"
+
+    def __str__(self):
+        return f"{self.categoria}: {self.pregunta[:80]}"
+
+
+class AsistenteConfig(TimeStampedModel):
+    class ModoEmail(models.TextChoices):
+        DESACTIVADO = "desactivado", "Desactivado"
+        INMEDIATO = "inmediato", "Inmediato"
+        DIARIO = "diario", "Resumen diario"
+
+    email_habilitado = models.BooleanField(default=False)
+    modo_email = models.CharField(
+        max_length=20,
+        choices=ModoEmail.choices,
+        default=ModoEmail.DESACTIVADO,
+    )
+    destinatarios = models.JSONField(default=list, blank=True)
+    incluir_fuera_de_alcance = models.BooleanField(default=False)
+    hora_resumen_diario = models.TimeField(default=time(18, 0))
+    ultimo_resumen_exitoso_en = models.DateTimeField(null=True, blank=True)
+    actualizado_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="config_asistente_actualizadas",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        verbose_name = "configuración del asistente"
+        verbose_name_plural = "configuración del asistente"
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "Configuración del Asistente IPAC"
