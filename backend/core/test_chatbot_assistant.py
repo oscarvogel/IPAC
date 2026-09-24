@@ -136,6 +136,98 @@ class ChatbotApiTests(APITestCase):
     )
     @patch(
         "core.contexts.asistente.infrastructure.minimax_provider.MiniMaxIntentClassifier.classify",
+        side_effect=[
+            Classification(ScopeKind.IPAC, IntentKind.READ_TOOL, "resumen_deuda", {}),
+            Classification(ScopeKind.IPAC, IntentKind.READ_TOOL, "alumnos_con_deuda", {}),
+            Classification(ScopeKind.IPAC, IntentKind.READ_TOOL, "alumnos_con_deuda", {}),
+        ],
+    )
+    def test_debt_conversation_can_continue_with_who_are_those_students(self, classify_mock):
+        student_model = __import__("core.models", fromlist=["Alumno"]).Alumno
+        concept = ConceptoCobrable.objects.create(
+            nombre="Cuota Conversación",
+            tipo=ConceptoCobrable.Tipo.CUOTA,
+            importe=Decimal("1000"),
+            sucursal=self.branch,
+        )
+        today = timezone.localdate()
+        for index, (name, surname, amount) in enumerate(
+            [
+                ("Juan", "Perez", Decimal("700")),
+                ("Ana", "Gomez", Decimal("500")),
+            ],
+            start=1,
+        ):
+            student = student_model.objects.create(
+                legajo=f"CHAT-CONT-{index}",
+                nombre=name,
+                apellido=surname,
+                sucursal=self.branch,
+            )
+            Cuota.objects.create(
+                alumno=student,
+                concepto=concept,
+                sucursal=self.branch,
+                periodo=f"2026-0{index}",
+                fecha_emision=today,
+                fecha_vencimiento=today,
+                importe=amount,
+            )
+
+        start = self.client.post("/api/chatbot/conversations/", {}, format="json")
+        conversation_id = start.data["conversation"]["id"]
+
+        first = self.client.post(
+            "/api/chatbot/messages/",
+            {"conversation_id": conversation_id, "content": "cuanto es la deuda total?"},
+            format="json",
+        )
+        second = self.client.post(
+            "/api/chatbot/messages/",
+            {
+                "conversation_id": conversation_id,
+                "content": "cuales son los alumnos con saldo pendiente?",
+            },
+            format="json",
+        )
+        third = self.client.post(
+            "/api/chatbot/messages/",
+            {
+                "conversation_id": conversation_id,
+                "content": "si pero quiero saber quienes son esos alumnos",
+            },
+            format="json",
+        )
+
+        self.assertEqual(first.data["source"], "tool")
+        self.assertIn("1.200,00", first.data["messages"][-1]["content"])
+        self.assertEqual(second.data["source"], "tool")
+        self.assertIn("Perez, Juan", second.data["messages"][-1]["content"])
+        self.assertIn("Gomez, Ana", second.data["messages"][-1]["content"])
+        self.assertEqual(third.data["source"], "tool")
+        self.assertIn("Perez, Juan", third.data["messages"][-1]["content"])
+
+        third_history = classify_mock.call_args_list[2].kwargs["history"]
+        self.assertTrue(
+            any(
+                item["role"] == "assistant"
+                and "Perez, Juan" in item["content"]
+                for item in third_history
+            )
+        )
+        self.assertNotIn(
+            "si pero quiero saber quienes son esos alumnos",
+            [item["content"] for item in third_history],
+        )
+
+    @override_settings(
+        IPAC_AI_ENABLED=True,
+        IPAC_AI_API_KEY="test",
+        IPAC_AI_MODEL="MiniMax-M3",
+        IPAC_AI_BASE_URL="https://example.invalid/v1/chat/completions",
+    )
+    @patch(
+        "core.contexts.asistente.infrastructure.minimax_provider.MiniMaxIntentClassifier.classify",
         return_value=Classification(ScopeKind.OUT_OF_SCOPE, IntentKind.UNKNOWN),
     )
     def test_api_rejects_general_health_question(self, _classify):
