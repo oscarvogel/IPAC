@@ -107,7 +107,9 @@ registrar consulta no resuelta
 notificar según configuración
 ```
 
-Las coincidencias determinísticas conocidas seguirán funcionando aun si MiniMax no está disponible.
+Con IA habilitada, MiniMax-M3 es el planner principal: recibe la pregunta, el historial conversacional, el catálogo de herramientas permitidas y el contexto de autorización; decide si la consulta requiere conocimiento, una herramienta read-only, aclaración, rechazo por fuera de alcance o registro como no resuelta. No se implementarán routers por palabras clave para decidir la intención.
+
+Si MiniMax no está disponible o la IA está deshabilitada, el sistema sólo puede degradar a artículos procedimentales determinísticos ya documentados; las consultas de datos vivos no se emulan mediante cadenas de `if` o palabras clave.
 
 ## 5. Contrato de clasificación
 
@@ -164,7 +166,17 @@ Resultado mínimo:
 }
 ```
 
-### 6.2 `estado_cuenta_alumno`
+### 6.2 `alumnos_con_deuda`
+
+Responde preguntas como:
+
+- “¿Cuáles son los alumnos con saldo pendiente?”
+- “¿Quiénes son esos alumnos?”
+- “Listame los deudores de Posadas.”
+
+La IA resuelve continuaciones como “esos alumnos” usando el historial de la conversación y selecciona esta herramienta. La herramienta devuelve nombre, legajo, sucursal, deuda total y deuda vencida, con límite controlado por backend.
+
+### 6.3 `estado_cuenta_alumno`
 
 Responde preguntas como:
 
@@ -187,7 +199,7 @@ Resultado mínimo:
 
 No se devolverán datos personales adicionales si no son necesarios para la respuesta.
 
-### 6.3 `resumen_cobranzas`
+### 6.4 `resumen_cobranzas`
 
 Responde:
 
@@ -205,7 +217,7 @@ Resultado:
 
 Sólo considera pagos activos, igual que los reportes actuales.
 
-### 6.4 `caja_hoy`
+### 6.5 `caja_hoy`
 
 Responde:
 
@@ -217,15 +229,15 @@ Reutiliza la semántica actual de caja: saldo inicial, efectivo esperado, contad
 
 Por defecto consulta la caja del usuario actual. Una consulta por otra sucursal sólo se acepta si el perfil tiene alcance global y la semántica del caso de uso permite esa consulta.
 
-### 6.5 `resumen_cuotas`
+### 6.6 `resumen_cuotas`
 
 Responde cantidades e importes de cuotas pendientes, vencidas, pagadas o anuladas por período/sucursal/carrera cuando los filtros estén permitidos.
 
-### 6.6 `resumen_alumnos`
+### 6.7 `resumen_alumnos`
 
 Responde conteos de alumnos por estado, sucursal o carrera/curso.
 
-### 6.7 `buscar_alumno`
+### 6.8 `buscar_alumno`
 
 Herramienta auxiliar para resolver referencias por nombre, apellido, DNI o legajo. Si encuentra múltiples coincidencias devuelve candidatos mínimos para que el usuario seleccione uno.
 
