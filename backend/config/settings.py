@@ -164,7 +164,7 @@ REST_FRAMEWORK = {
 IPAC_AI_ENABLED = os.getenv("IPAC_AI_ENABLED", "0").lower() in {"1", "true", "yes", "on"}
 IPAC_AI_PROVIDER = os.getenv("IPAC_AI_PROVIDER", "minimax").strip().lower()
 IPAC_AI_API_KEY = os.getenv("IPAC_AI_API_KEY", "")
-IPAC_AI_MODEL = os.getenv("IPAC_AI_MODEL", "").strip()
+IPAC_AI_MODEL = os.getenv("IPAC_AI_MODEL", "MiniMax-M3" if IPAC_AI_PROVIDER == "minimax" else "").strip()
 IPAC_AI_BASE_URL = os.getenv(
     "IPAC_AI_BASE_URL",
     (
