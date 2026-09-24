@@ -139,3 +139,14 @@ def can_manage_user(actor, target=None, proposed_role=None, global_access=None):
         if global_access is not None and bool(global_access) != actor_profile.puede_ver_todas_las_sucursales:
             return False, "No puede modificar su propio alcance de sucursales."
     return True, ""
+
+
+
+class AssistantKnowledgePermission(RolePermission):
+    read_roles = ADMIN_ROLES
+    write_roles = ADMIN_ROLES
+
+
+class AssistantConfigPermission(RolePermission):
+    read_roles = ADMIN_ROLES
+    write_roles = frozenset({SUPERADMIN})
