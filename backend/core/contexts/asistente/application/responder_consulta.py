@@ -240,7 +240,7 @@ class ResponderConsulta:
             return AssistantResponse(
                 content=(
                     "El componente de IA no está disponible en este momento. "
-                    "Puedo seguir respondiendo los procedimientos conocidos del sistema IPAC."
+                    "Puedo seguir respondiendo los procedimientos del sistema IPAC que ya están documentados."
                 ),
                 source="fallback",
             )
