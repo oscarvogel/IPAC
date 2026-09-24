@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from django.conf import settings
 
+from .knowledge import PROCEDURES
 from .tools import TOOL_CATALOG
 
 
@@ -23,6 +24,7 @@ class PlannerDecision:
     kind: str
     tool: str | None = None
     arguments: dict | None = None
+    knowledge_key: str | None = None
 
 
 SYSTEM_PROMPT = """Sos el planner del Asistente IPAC.
@@ -42,7 +44,7 @@ Reglas:
 - El historial no es fuente de verdad para datos actuales: cuando hagan falta datos reales elegí una herramienta.
 - No escribas SQL ni solicites ejecutar código.
 - Devolvé exclusivamente un objeto JSON válido con este esquema:
-  {"kind":"knowledge|tool|out_of_scope|unknown","tool":null|string,"arguments":{}}
+  {"kind":"knowledge|tool|out_of_scope|unknown","tool":null|string,"arguments":{},"knowledge_key":null|string}
 """
 
 
@@ -86,6 +88,21 @@ def _parse_json(text):
     return value
 
 
+def _knowledge_for_prompt():
+    return json.dumps(
+        {
+            key: {
+                "title": procedure["title"],
+                "steps": procedure["steps"],
+                "permission": procedure.get("permission", ""),
+            }
+            for key, procedure in PROCEDURES.items()
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
 def _catalog_for_prompt():
     return json.dumps(
         {
@@ -107,17 +124,30 @@ def _validate_decision(payload):
 
     tool = payload.get("tool")
     arguments = payload.get("arguments") or {}
+    knowledge_key = payload.get("knowledge_key")
     if not isinstance(arguments, dict):
         raise PlannerError("Los argumentos de la IA no son válidos.")
 
     if kind == "tool":
         if tool not in TOOL_CATALOG:
             raise PlannerError("La IA eligió una herramienta no permitida.")
+        knowledge_key = None
+    elif kind == "knowledge":
+        if knowledge_key not in PROCEDURES:
+            raise PlannerError("La IA eligió un procedimiento no permitido.")
+        tool = None
+        arguments = {}
     else:
         tool = None
         arguments = {}
+        knowledge_key = None
 
-    return PlannerDecision(kind=kind, tool=tool, arguments=arguments)
+    return PlannerDecision(
+        kind=kind,
+        tool=tool,
+        arguments=arguments,
+        knowledge_key=knowledge_key,
+    )
 
 
 class MiniMaxPlanner:
@@ -148,6 +178,8 @@ class MiniMaxPlanner:
                     + role_context
                     + "\n\nCatálogo de herramientas disponibles:\n"
                     + _catalog_for_prompt()
+                    + "\n\nProcedimientos documentados disponibles:\n"
+                    + _knowledge_for_prompt()
                 ),
             },
             *recent,
