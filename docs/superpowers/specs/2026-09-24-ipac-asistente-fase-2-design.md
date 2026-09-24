@@ -575,7 +575,7 @@ La Fase 2 agregará migraciones posteriores para:
 - `AsistenteConfig`;
 - relaciones e índices.
 
-Se incluirá una data migration que copie los procedimientos actuales de `PROCEDURES` a `AsistenteKnowledgeArticle`. Los valores se congelarán dentro de la migración; no se importará código mutable de runtime desde la migración.
+Se incluirá una data migration que copie los nueve procedimientos actuales de `PROCEDURES` a `AsistenteKnowledgeArticle`. Los valores se congelarán dentro de la migración; no se importará código mutable de runtime desde la migración.
 
 Después de completar esa migración, runtime consultará la base de conocimiento persistida y no el diccionario estático.
 
