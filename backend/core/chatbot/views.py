@@ -140,7 +140,7 @@ class ChatbotMessageView(APIView):
         )
         history.reverse()
 
-        result = answer_message(request.user, content, history)
+        result = answer_message(request.user, content, history, conversation, user_message)
         assistant_message = ChatbotMessage.objects.create(
             conversacion=conversation,
             role=ChatbotMessage.Role.ASSISTANT,
@@ -159,5 +159,6 @@ class ChatbotMessageView(APIView):
                 "source": result["source"],
                 "procedure": result["procedure"],
                 "action": result["action"],
+                "clarification": result.get("clarification"),
             }
         )
