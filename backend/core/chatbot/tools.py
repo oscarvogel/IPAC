@@ -62,6 +62,33 @@ class ReadToolRegistry:
     def catalog(self):
         return TOOL_CATALOG
 
+    def schemas(self):
+        schemas = []
+        for name, spec in TOOL_CATALOG.items():
+            properties = {}
+            required = []
+            for argument, description in spec["arguments"].items():
+                property_type = "integer" if argument == "limit" else "string"
+                properties[argument] = {
+                    "type": property_type,
+                    "description": description,
+                }
+            schemas.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "description": spec["description"],
+                        "parameters": {
+                            "type": "object",
+                            "properties": properties,
+                            "required": required,
+                        },
+                    },
+                }
+            )
+        return schemas
+
     def execute(self, name, arguments, context):
         if name not in TOOL_CATALOG:
             raise UnknownTool(name)
