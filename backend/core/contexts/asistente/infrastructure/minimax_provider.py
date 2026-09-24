@@ -35,6 +35,14 @@ Herramientas permitidas:
 - resumen_alumnos: conteo de alumnos; opcional sucursal_id o sucursal, estado, carrera_id
 - buscar_alumno: localizar alumno; requiere search
 
+Ejemplos de decisión:
+- "¿Cuánto es la deuda total?" → scope=ipac, intent=read_tool, tool=resumen_deuda.
+- "¿Cuáles son los alumnos con saldo pendiente?" → scope=ipac, intent=read_tool, tool=alumnos_con_deuda.
+- Después de informar una deuda: "quiero saber quiénes son esos alumnos" → scope=ipac, intent=read_tool, tool=alumnos_con_deuda.
+- "¿Cómo consulto el estado de cuenta de un alumno?" → scope=ipac, intent=knowledge.
+- "¿Cómo cierro la caja?" → scope=ipac, intent=knowledge.
+
+El historial sirve para resolver referencias, pero no es fuente de verdad para importes o estados actuales: esos datos deben obtenerse mediante herramientas.
 Una pregunta de salud, noticias, clima, política, entretenimiento o conocimiento general es out_of_scope.
 Una pregunta sobre IPAC que no puedas asociar de forma confiable es scope=ipac,intent=unknown.
 """
