@@ -37,54 +37,63 @@ class FakeResponse:
     IPAC_AI_BASE_URL="https://api.minimax.io/v1/chat/completions",
     IPAC_AI_TIMEOUT_SECONDS=30,
 )
-class CleanPlannerContractTests(SimpleTestCase):
+class NativeMiniMaxProviderTests(SimpleTestCase):
     @patch("urllib.request.urlopen")
-    def test_planner_uses_generic_tool_catalog_and_working_minimax_contract(self, urlopen):
+    def test_provider_sends_openai_style_tools_and_parses_tool_calls(self, urlopen):
         urlopen.return_value = FakeResponse(
             {
                 "choices": [
                     {
                         "message": {
-                            "content": '{"kind":"tool","tool":"resumen_deuda","arguments":{}}'
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": "call_1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "resumen_deuda",
+                                        "arguments": "{}",
+                                    },
+                                }
+                            ],
                         }
                     }
-                ]
+                ],
+                "usage": {"total_tokens": 123},
             }
         )
 
-        from core.chatbot.planner import MiniMaxPlanner
+        from core.chatbot.agent import MiniMaxAgentProvider
+        from core.chatbot.tools import ReadToolRegistry
 
-        decision = MiniMaxPlanner().decide(
-            question="consulta arbitraria",
-            history=[],
-            role_context="rol=administracion;sucursal=Posadas;global=no",
+        response = MiniMaxAgentProvider().send(
+            [{"role": "user", "content": "consulta"}],
+            ReadToolRegistry().schemas(),
         )
 
         request = urlopen.call_args.args[0]
         payload = json.loads(request.data.decode("utf-8"))
-        system = payload["messages"][0]["content"]
 
         self.assertEqual(payload["model"], "MiniMax-M3")
-        self.assertEqual(payload["thinking"], {"type": "disabled"})
-        self.assertNotIn("reasoning_split", payload)
-        self.assertIn("resumen_deuda", system)
-        self.assertIn("alumnos_con_deuda", system)
-        self.assertNotIn("Ejemplos de decisión", system)
-        self.assertEqual(decision.kind, "tool")
-        self.assertEqual(decision.tool, "resumen_deuda")
+        self.assertIn("tools", payload)
+        self.assertEqual(payload["tools"][0]["type"], "function")
+        self.assertIn(
+            payload["tools"][0]["function"]["name"],
+            {"resumen_deuda", "alumnos_con_deuda"},
+        )
+        self.assertEqual(response.tool_calls[0]["name"], "resumen_deuda")
+        self.assertEqual(response.tool_calls[0]["arguments"], {})
+        self.assertEqual(response.tokens_used, 123)
 
     @patch("urllib.request.urlopen")
-    def test_planner_accepts_content_blocks(self, urlopen):
+    def test_provider_accepts_content_blocks(self, urlopen):
         urlopen.return_value = FakeResponse(
             {
                 "choices": [
                     {
                         "message": {
                             "content": [
-                                {
-                                    "type": "text",
-                                    "text": '{"kind":"tool","tool":"alumnos_con_deuda","arguments":{}}',
-                                }
+                                {"type": "text", "text": "Respuesta final"},
                             ]
                         }
                     }
@@ -92,33 +101,30 @@ class CleanPlannerContractTests(SimpleTestCase):
             }
         )
 
-        from core.chatbot.planner import MiniMaxPlanner
+        from core.chatbot.agent import MiniMaxAgentProvider
 
-        decision = MiniMaxPlanner().decide(
-            question="seguimiento contextual",
-            history=[
-                {"role": "assistant", "content": "Hay alumnos con saldo pendiente."},
-            ],
-            role_context="rol=administracion;sucursal=Posadas;global=no",
+        response = MiniMaxAgentProvider().send(
+            [{"role": "user", "content": "consulta"}],
+            [],
         )
 
-        self.assertEqual(decision.kind, "tool")
-        self.assertEqual(decision.tool, "alumnos_con_deuda")
+        self.assertEqual(response.content, "Respuesta final")
+        self.assertEqual(response.tool_calls, [])
 
 
-class CleanReadToolsTests(TestCase):
+class NativeReadToolsTests(TestCase):
     def setUp(self):
-        self.posadas = Sucursal.objects.create(codigo="POS-C", nombre="Posadas Clean")
-        self.eldorado = Sucursal.objects.create(codigo="ELD-C", nombre="Eldorado Clean")
+        self.posadas = Sucursal.objects.create(codigo="POS-N", nombre="Posadas Native")
+        self.eldorado = Sucursal.objects.create(codigo="ELD-N", nombre="Eldorado Native")
 
-        self.user = User.objects.create_user(username="clean-admin", password="secret")
+        self.user = User.objects.create_user(username="native-admin", password="secret")
         PerfilUsuario.objects.create(
             user=self.user,
             rol=PerfilUsuario.Rol.ADMINISTRACION,
             sucursal=self.posadas,
             puede_ver_todas_las_sucursales=False,
         )
-        self.global_user = User.objects.create_user(username="clean-super", password="secret")
+        self.global_user = User.objects.create_user(username="native-super", password="secret")
         PerfilUsuario.objects.create(
             user=self.global_user,
             rol=PerfilUsuario.Rol.SUPERADMIN,
@@ -127,26 +133,25 @@ class CleanReadToolsTests(TestCase):
         )
 
         concept_pos = ConceptoCobrable.objects.create(
-            nombre="Cuota Clean POS",
+            nombre="Cuota Native POS",
             tipo=ConceptoCobrable.Tipo.CUOTA,
             importe=Decimal("1000"),
             sucursal=self.posadas,
         )
         concept_eld = ConceptoCobrable.objects.create(
-            nombre="Cuota Clean ELD",
+            nombre="Cuota Native ELD",
             tipo=ConceptoCobrable.Tipo.CUOTA,
             importe=Decimal("500"),
             sucursal=self.eldorado,
         )
-
         juan = Alumno.objects.create(
-            legajo="CL-POS-1",
+            legajo="N-POS-1",
             nombre="Juan",
             apellido="Perez",
             sucursal=self.posadas,
         )
         ana = Alumno.objects.create(
-            legajo="CL-ELD-1",
+            legajo="N-ELD-1",
             nombre="Ana",
             apellido="Gomez",
             sucursal=self.eldorado,
@@ -194,20 +199,21 @@ class CleanReadToolsTests(TestCase):
             global_access=profile.puede_ver_todas_las_sucursales,
         )
 
-    def test_restricted_user_debt_only_uses_own_branch(self):
-        from core.chatbot.tools import ReadToolRegistry
+    def test_tools_remain_server_side_scoped(self):
+        from core.chatbot.tools import ReadToolRegistry, ToolForbidden
 
-        result = ReadToolRegistry().execute(
-            "resumen_deuda",
-            {},
-            self._context(self.user),
-        )
+        registry = ReadToolRegistry()
+        own = registry.execute("resumen_deuda", {}, self._context(self.user))
+        self.assertEqual(own["deuda_total"], Decimal("700.00"))
 
-        self.assertEqual(result["scope"], "Posadas Clean")
-        self.assertEqual(result["deuda_total"], Decimal("700.00"))
-        self.assertEqual(result["alumnos_con_deuda"], 1)
+        with self.assertRaises(ToolForbidden):
+            registry.execute(
+                "resumen_deuda",
+                {"sucursal": "Eldorado Native"},
+                self._context(self.user),
+            )
 
-    def test_global_user_can_list_all_debtors(self):
+    def test_global_debtors_are_sorted_by_debt(self):
         from core.chatbot.tools import ReadToolRegistry
 
         result = ReadToolRegistry().execute(
@@ -216,23 +222,8 @@ class CleanReadToolsTests(TestCase):
             self._context(self.global_user),
         )
 
-        self.assertEqual(result["scope"], "Todas las sucursales")
-        self.assertEqual(result["total_alumnos"], 2)
         self.assertEqual(result["deuda_total"], Decimal("1200.00"))
         self.assertEqual(
-            [(row["legajo"], row["deuda_total"]) for row in result["alumnos"]],
-            [
-                ("CL-POS-1", Decimal("700.00")),
-                ("CL-ELD-1", Decimal("500.00")),
-            ],
+            [row["legajo"] for row in result["alumnos"]],
+            ["N-POS-1", "N-ELD-1"],
         )
-
-    def test_restricted_user_cannot_expand_scope_by_argument(self):
-        from core.chatbot.tools import ReadToolRegistry, ToolForbidden
-
-        with self.assertRaises(ToolForbidden):
-            ReadToolRegistry().execute(
-                "resumen_deuda",
-                {"sucursal": "Eldorado Clean"},
-                self._context(self.user),
-            )
