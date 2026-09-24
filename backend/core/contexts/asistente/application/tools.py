@@ -12,20 +12,20 @@ class InvalidToolArguments(ValueError):
 
 
 TOOL_SPECS = {
-    "resumen_deuda": {"allowed": {"sucursal_id"}},
+    "resumen_deuda": {"allowed": {"sucursal_id", "sucursal"}},
     "estado_cuenta_alumno": {
         "required_any": {"alumno_id", "search"},
         "allowed": {"alumno_id", "search"},
     },
     "resumen_cobranzas": {
-        "allowed": {"sucursal_id", "desde", "hasta", "medio"},
+        "allowed": {"sucursal_id", "sucursal", "desde", "hasta", "medio"},
     },
-    "caja_hoy": {"allowed": {"sucursal_id"}},
+    "caja_hoy": {"allowed": {"sucursal_id", "sucursal"}},
     "resumen_cuotas": {
-        "allowed": {"sucursal_id", "periodo", "estado"},
+        "allowed": {"sucursal_id", "sucursal", "periodo", "estado"},
     },
     "resumen_alumnos": {
-        "allowed": {"sucursal_id", "estado", "carrera_id"},
+        "allowed": {"sucursal_id", "sucursal", "estado", "carrera_id"},
     },
     "buscar_alumno": {
         "required": {"search"},
