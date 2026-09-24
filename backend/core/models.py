@@ -526,3 +526,48 @@ class EventoAuditoria(TimeStampedModel):
 
     def __str__(self):
         return f"{self.modulo}:{self.accion} {self.entidad}#{self.entidad_id}"
+
+
+class ChatbotConversation(TimeStampedModel):
+    usuario = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="conversaciones_chatbot",
+    )
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.PROTECT,
+        related_name="conversaciones_chatbot",
+    )
+    titulo = models.CharField(max_length=160, default="Asistente IPAC")
+
+    class Meta:
+        ordering = ["-actualizado", "-id"]
+        verbose_name = "conversación del asistente"
+        verbose_name_plural = "conversaciones del asistente"
+
+    def __str__(self):
+        return f"{self.usuario} - {self.titulo}"
+
+
+class ChatbotMessage(TimeStampedModel):
+    class Role(models.TextChoices):
+        USER = "user", "Usuario"
+        ASSISTANT = "assistant", "Asistente"
+
+    conversacion = models.ForeignKey(
+        ChatbotConversation,
+        on_delete=models.CASCADE,
+        related_name="mensajes",
+    )
+    role = models.CharField(max_length=20, choices=Role.choices)
+    content = models.TextField()
+    tokens_used = models.PositiveIntegerField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["creado", "id"]
+        verbose_name = "mensaje del asistente"
+        verbose_name_plural = "mensajes del asistente"
+
+    def __str__(self):
+        return f"{self.role} - conversación {self.conversacion_id}"

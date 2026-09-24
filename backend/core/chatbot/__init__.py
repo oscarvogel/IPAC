@@ -1,0 +1,1 @@
+"""Asistente operativo de IPAC."""
