@@ -20,6 +20,7 @@ const ConfiguracionView = () => import('@/views/ConfiguracionView.vue')
 const ImportacionesView = () => import('@/views/ImportacionesView.vue')
 const AuditoriaView = () => import('@/views/AuditoriaView.vue')
 const AjustesCuotasView = () => import('@/views/AjustesCuotasView.vue')
+const AsistenteConfigView = () => import('@/views/AsistenteConfigView.vue')
 
 // Las rutas autenticadas viven como children de la ruta padre "/",
 // cuyo component es AppShell. Asi el shell envuelve automaticamente
@@ -104,6 +105,12 @@ const routes = [
         path: 'auditoria',
         name: 'auditoria',
         component: AuditoriaView,
+        meta: { roles: ['superadmin', 'administracion'], hideTopbarHeading: true },
+      },
+      {
+        path: 'configuracion/asistente',
+        name: 'assistant-config',
+        component: AsistenteConfigView,
         meta: { roles: ['superadmin', 'administracion'], hideTopbarHeading: true },
       },
       {
