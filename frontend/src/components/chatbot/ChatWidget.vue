@@ -60,6 +60,21 @@
           {{ message.action.label }}
           <ArrowRightIcon aria-hidden="true" />
         </button>
+        <div
+          v-if="message.clarification?.candidates?.length"
+          class="ipac-chat-candidates"
+          aria-label="Seleccionar alumno"
+        >
+          <button
+            v-for="candidate in message.clarification.candidates"
+            :key="candidate.id"
+            type="button"
+            @click="sendCandidate(candidate)"
+          >
+            <strong>{{ candidate.nombre }}</strong>
+            <small>Legajo {{ candidate.legajo }} · {{ candidate.sucursal }}</small>
+          </button>
+        </div>
       </div>
 
       <div v-if="loading" class="ipac-chat-thinking" role="status">
@@ -228,7 +243,7 @@ async function startConversation() {
   }
 }
 
-async function sendMessage() {
+async function sendMessage(selectedAlumnoId = null) {
   const content = input.value.trim()
   if (!content || loading.value) return
 
@@ -253,6 +268,7 @@ async function sendMessage() {
       body: {
         conversation_id: conversationId.value,
         content,
+        selected_alumno_id: Number.isInteger(selectedAlumnoId) ? selectedAlumnoId : null,
       },
     })
     const assistant = (data.messages || []).find((message) => message.role === 'assistant')
@@ -261,6 +277,7 @@ async function sendMessage() {
         ...assistant,
         localId: ++localId,
         action: data.action || null,
+        clarification: data.clarification || null,
       })
     }
   } catch (err) {
@@ -274,6 +291,11 @@ async function sendMessage() {
 function sendSuggestion(suggestion) {
   input.value = suggestion
   sendMessage()
+}
+
+function sendCandidate(candidate) {
+  input.value = 'Consultar estado de cuenta de ' + candidate.nombre
+  sendMessage(candidate.id)
 }
 
 function openAction(path) {
@@ -450,6 +472,33 @@ function openAction(path) {
   color: var(--primary-foreground, #fff);
   font-weight: 700;
   cursor: pointer;
+}
+
+.ipac-chat-candidates {
+  display: grid;
+  gap: .4rem;
+  margin-top: .65rem;
+}
+
+.ipac-chat-candidates button {
+  display: grid;
+  gap: .15rem;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: .65rem;
+  padding: .5rem .6rem;
+  background: var(--surface);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ipac-chat-candidates button:hover {
+  border-color: var(--primary);
+}
+
+.ipac-chat-candidates small {
+  color: var(--text-secondary);
 }
 
 .ipac-chat-thinking {
