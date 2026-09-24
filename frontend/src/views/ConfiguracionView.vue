@@ -25,6 +25,7 @@ import {
   ChevronRightIcon,
   ClipboardDocumentCheckIcon,
   ReceiptPercentIcon,
+  SparklesIcon,
   TagIcon,
   UserGroupIcon,
 } from '@heroicons/vue/24/outline'
@@ -36,6 +37,7 @@ const items = [
   { to: '/usuarios', title: 'Usuarios y permisos', description: 'Roles, sucursales y acceso al sistema.', icon: UserGroupIcon },
   { to: '/importaciones', title: 'Importar datos', description: 'Plantillas y carga controlada desde Excel o CSV.', icon: ArrowUpTrayIcon },
   { to: '/auditoria', title: 'Auditoría', description: 'Historial de cambios administrativos y financieros.', icon: ClipboardDocumentCheckIcon },
+  { to: '/configuracion/asistente', title: 'Asistente IA', description: 'Base de conocimiento, consultas no resueltas y notificaciones.', icon: SparklesIcon },
 ]
 </script>
 
