@@ -36,6 +36,12 @@ services:
       IPAC_SEED_ADMIN_USERNAME: ${IPAC_SEED_ADMIN_USERNAME}
       IPAC_SEED_ADMIN_PASSWORD: ${IPAC_SEED_ADMIN_PASSWORD}
       IPAC_RUN_SEED: "0"
+      IPAC_AI_ENABLED: ${IPAC_AI_ENABLED:-0}
+      IPAC_AI_PROVIDER: ${IPAC_AI_PROVIDER:-minimax}
+      IPAC_AI_API_KEY: ${IPAC_AI_API_KEY:-}
+      IPAC_AI_MODEL: ${IPAC_AI_MODEL:-MiniMax-M3}
+      IPAC_AI_BASE_URL: ${IPAC_AI_BASE_URL:-https://api.minimax.io/v1/chat/completions}
+      IPAC_AI_TIMEOUT_SECONDS: ${IPAC_AI_TIMEOUT_SECONDS:-30}
     depends_on:
       db:
         condition: service_healthy
