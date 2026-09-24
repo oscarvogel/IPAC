@@ -110,6 +110,9 @@ class AsistenteConsultaNoResueltaViewSet(viewsets.ReadOnlyModelViewSet):
             "articulo",
             "resuelto_por",
         )
+        profile = getattr(self.request.user, "perfil", None)
+        if profile and not profile.puede_ver_todas_las_sucursales:
+            qs = qs.filter(sucursal_id=profile.sucursal_id)
         if state := self.request.query_params.get("estado"):
             qs = qs.filter(estado=state)
         if category := self.request.query_params.get("categoria"):
