@@ -55,30 +55,62 @@ class DjangoReportingGateway:
             or f"Sucursal {branch_id}"
         )
 
-    def _scope_branch_ids(self, context: ToolContext, requested_id=None):
+    def _scope_branch_ids(
+        self,
+        context: ToolContext,
+        requested_id=None,
+        requested_name=None,
+    ):
+        requested_name = str(requested_name or "").strip()
+
         if not context.global_access:
+            branch = Sucursal.objects.filter(pk=context.sucursal_id).first()
+            if not branch:
+                raise ToolNoData()
             if requested_id not in (None, "") and int(requested_id) != context.sucursal_id:
                 raise ToolForbidden()
-            return [context.sucursal_id], self._branch_name(context.sucursal_id)
+            if requested_name and requested_name.casefold() not in {
+                branch.nombre.casefold(),
+                branch.codigo.casefold(),
+            }:
+                raise ToolForbidden()
+            return [branch.id], branch.nombre
 
         if requested_id not in (None, ""):
-            branch = Sucursal.objects.filter(pk=requested_id, activa=True).first()
+            branch = Sucursal.objects.filter(pk=requested_id).first()
+            if not branch:
+                raise ToolNoData()
+            return [branch.id], branch.nombre
+
+        if requested_name:
+            branch = Sucursal.objects.filter(
+                Q(nombre__iexact=requested_name) | Q(codigo__iexact=requested_name)
+            ).first()
             if not branch:
                 raise ToolNoData()
             return [branch.id], branch.nombre
 
         ids = list(
-            Sucursal.objects.filter(activa=True)
-            .order_by("id")
-            .values_list("id", flat=True)
+            Sucursal.objects.order_by("id").values_list("id", flat=True)
         )
         if not ids:
             raise ToolNoData()
         return ids, "Todas las sucursales"
 
-    def _with_scope(self, context, requested_id, callback):
+    def _with_scope(
+        self,
+        context,
+        callback,
+        *,
+        requested_id=None,
+        requested_name=None,
+    ):
         try:
-            ids, label = self._scope_branch_ids(context, requested_id)
+            ids, label = self._scope_branch_ids(
+                context,
+                requested_id=requested_id,
+                requested_name=requested_name,
+            )
         except ToolForbidden:
             return self._result(status="forbidden", data={}, scope_label="Sin acceso")
         except ToolNoData:
@@ -116,7 +148,7 @@ class DjangoReportingGateway:
             )
         )
 
-    def resumen_deuda(self, *, context, sucursal_id=None):
+    def resumen_deuda(self, *, context, sucursal_id=None, sucursal=None):
         def execute(ids, label):
             fees = self._fees_with_balance(ids).filter(saldo_calculado__gt=0)
             today = timezone.localdate()
@@ -138,7 +170,7 @@ class DjangoReportingGateway:
                 },
             )
 
-        return self._with_scope(context, sucursal_id, execute)
+        return self._with_scope(context, execute, requested_id=sucursal_id, requested_name=sucursal)
 
     def _student_candidates(self, branch_ids, *, alumno_id=None, search=None):
         qs = Alumno.objects.filter(sucursal_id__in=branch_ids).select_related("sucursal")
@@ -214,13 +246,14 @@ class DjangoReportingGateway:
                 },
             )
 
-        return self._with_scope(context, None, execute)
+        return self._with_scope(context, execute)
 
     def resumen_cobranzas(
         self,
         *,
         context,
         sucursal_id=None,
+        sucursal=None,
         desde=None,
         hasta=None,
         medio=None,
@@ -267,9 +300,9 @@ class DjangoReportingGateway:
                 },
             )
 
-        return self._with_scope(context, sucursal_id, execute)
+        return self._with_scope(context, execute, requested_id=sucursal_id, requested_name=sucursal)
 
-    def caja_hoy(self, *, context, sucursal_id=None):
+    def caja_hoy(self, *, context, sucursal_id=None, sucursal=None):
         def execute(ids, label):
             requested_branch = ids[0] if len(ids) == 1 else context.sucursal_id
             if requested_branch not in ids:
@@ -300,13 +333,14 @@ class DjangoReportingGateway:
                 },
             )
 
-        return self._with_scope(context, sucursal_id, execute)
+        return self._with_scope(context, execute, requested_id=sucursal_id, requested_name=sucursal)
 
     def resumen_cuotas(
         self,
         *,
         context,
         sucursal_id=None,
+        sucursal=None,
         periodo=None,
         estado=None,
     ):
@@ -330,13 +364,14 @@ class DjangoReportingGateway:
                 },
             )
 
-        return self._with_scope(context, sucursal_id, execute)
+        return self._with_scope(context, execute, requested_id=sucursal_id, requested_name=sucursal)
 
     def resumen_alumnos(
         self,
         *,
         context,
         sucursal_id=None,
+        sucursal=None,
         estado=None,
         carrera_id=None,
     ):
@@ -360,7 +395,7 @@ class DjangoReportingGateway:
                 },
             )
 
-        return self._with_scope(context, sucursal_id, execute)
+        return self._with_scope(context, execute, requested_id=sucursal_id, requested_name=sucursal)
 
     def buscar_alumno(self, *, context, search):
         def execute(ids, label):
