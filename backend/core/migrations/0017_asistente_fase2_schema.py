@@ -89,30 +89,30 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="asistenteknowledgearticle",
-            index=models.Index(fields=["activo", "modulo"], name="core_asiste_activo_6ed773_idx"),
+            index=models.Index(fields=["activo", "modulo"], name="core_asiste_activo_f514c8_idx"),
         ),
         migrations.AddIndex(
             model_name="asistenteknowledgearticle",
-            index=models.Index(fields=["clave"], name="core_asiste_clave_03e915_idx"),
+            index=models.Index(fields=["clave"], name="core_asiste_clave_335cd9_idx"),
         ),
         migrations.AddIndex(
             model_name="asistenteconsultanoresuelta",
-            index=models.Index(fields=["estado", "creado"], name="core_asiste_estado_75ad17_idx"),
+            index=models.Index(fields=["estado", "creado"], name="core_asiste_estado_b2b403_idx"),
         ),
         migrations.AddIndex(
             model_name="asistenteconsultanoresuelta",
-            index=models.Index(fields=["categoria", "creado"], name="core_asiste_categor_b00d7b_idx"),
+            index=models.Index(fields=["categoria", "creado"], name="core_asiste_categor_312a62_idx"),
         ),
         migrations.AddIndex(
             model_name="asistenteconsultanoresuelta",
-            index=models.Index(fields=["usuario", "creado"], name="core_asiste_usuario_3f9e75_idx"),
+            index=models.Index(fields=["usuario", "creado"], name="core_asiste_usuario_debf82_idx"),
         ),
         migrations.AddIndex(
             model_name="asistenteconsultanoresuelta",
-            index=models.Index(fields=["sucursal", "creado"], name="core_asiste_sucursa_50ca99_idx"),
+            index=models.Index(fields=["sucursal", "creado"], name="core_asiste_sucursa_ea6f34_idx"),
         ),
         migrations.AddIndex(
             model_name="asistenteconsultanoresuelta",
-            index=models.Index(fields=["pregunta_normalizada"], name="core_asiste_pregunt_9481a2_idx"),
+            index=models.Index(fields=["pregunta_normalizada"], name="core_asiste_pregunt_3f419c_idx"),
         ),
     ]
