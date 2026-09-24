@@ -153,6 +153,40 @@ class AssistantReadToolsTests(TestCase):
         self.assertEqual(result.status, "forbidden")
         self.assertEqual(result.data, {})
 
+    def test_list_debtors_returns_real_students_and_balances(self):
+        result = self._registry().execute(
+            "alumnos_con_deuda",
+            {},
+            self._context(self.global_user),
+        )
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.scope_label, "Todas las sucursales")
+        self.assertEqual(result.data["total_alumnos"], 2)
+        self.assertEqual(result.data["deuda_total"], Decimal("1200.00"))
+        rows = result.data["alumnos"]
+        self.assertEqual(
+            [
+                (row["legajo"], row["deuda_total"])
+                for row in rows
+            ],
+            [
+                ("T-POS-1", Decimal("700.00")),
+                ("T-ELD-1", Decimal("500.00")),
+            ],
+        )
+        self.assertEqual(
+            set(rows[0]),
+            {
+                "id",
+                "nombre",
+                "legajo",
+                "sucursal",
+                "deuda_total",
+                "deuda_vencida",
+            },
+        )
+
     def test_multiple_students_same_name_returns_ambiguous(self):
         result = self._registry().execute(
             "estado_cuenta_alumno",
