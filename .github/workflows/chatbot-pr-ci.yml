@@ -31,6 +31,9 @@ jobs:
       - name: Migration consistency
         run: python backend/manage.py makemigrations --check --dry-run
 
+      - name: Clean chatbot tests
+        run: python backend/manage.py test core.test_chatbot_fase2_clean
+
       - name: Backend tests
         run: python backend/manage.py test core
 
