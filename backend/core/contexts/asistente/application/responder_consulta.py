@@ -183,7 +183,7 @@ class ResponderConsulta:
             metadata=metadata,
         )
 
-    def execute(self, user, content, history, conversation=None, user_message=None):
+    def execute(self, user, content, history, conversation=None, user_message=None, selected_alumno_id=None):
         profile = getattr(user, "perfil", None)
         if profile is None:
             return AssistantResponse(
@@ -204,7 +204,16 @@ class ResponderConsulta:
                 ),
             )
 
-        classification = _fast_classification(content)
+        classification = (
+            Classification(
+                ScopeKind.IPAC,
+                IntentKind.READ_TOOL,
+                "estado_cuenta_alumno",
+                {"alumno_id": selected_alumno_id},
+            )
+            if selected_alumno_id
+            else _fast_classification(content)
+        )
         if classification is None:
             if not getattr(settings, "IPAC_AI_ENABLED", False):
                 return AssistantResponse(
