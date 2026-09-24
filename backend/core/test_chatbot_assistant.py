@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from core.chatbot.knowledge import match_procedure
 from core.models import (
     ChatbotConversation,
+    ChatbotMessage,
     ConceptoCobrable,
     Cuota,
     PerfilUsuario,
@@ -139,6 +140,54 @@ class ChatbotApiTests(APITestCase):
         self.assertIn(
             "Mi función está limitada al sistema IPAC",
             response.data["messages"][-1]["content"],
+        )
+
+    @patch("core.chatbot.views.answer_message")
+    def test_planner_history_excludes_current_user_message(self, answer_mock):
+        conversation = ChatbotConversation.objects.create(
+            usuario=self.user,
+            sucursal=self.branch,
+            titulo="Contexto",
+        )
+        ChatbotMessage.objects.create(
+            conversacion=conversation,
+            role=ChatbotMessage.Role.ASSISTANT,
+            content="Hay 3 alumnos con saldo pendiente.",
+        )
+        ChatbotMessage.objects.create(
+            conversacion=conversation,
+            role=ChatbotMessage.Role.USER,
+            content="¿quiénes son?",
+        )
+        ChatbotMessage.objects.create(
+            conversacion=conversation,
+            role=ChatbotMessage.Role.ASSISTANT,
+            content="Decime si querés que los liste.",
+        )
+        answer_mock.return_value = {
+            "content": "Respuesta",
+            "tokens_used": None,
+            "source": "tool",
+            "procedure": None,
+            "action": None,
+            "clarification": None,
+        }
+
+        response = self.client.post(
+            "/api/chatbot/messages/",
+            {
+                "conversation_id": conversation.id,
+                "content": "sí, quiero saber quiénes son esos alumnos",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        history = answer_mock.call_args.args[2]
+        self.assertEqual(history[-1]["content"], "Decime si querés que los liste.")
+        self.assertNotIn(
+            "sí, quiero saber quiénes son esos alumnos",
+            [item["content"] for item in history],
         )
 
     def test_unknown_question_has_safe_fallback_when_ai_disabled(self):
