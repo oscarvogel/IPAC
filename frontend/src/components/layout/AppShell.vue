@@ -26,6 +26,7 @@
         </RouterView>
       </main>
     </section>
+    <ChatWidget />
   </div>
 </template>
 
@@ -36,6 +37,7 @@ import { useRoute } from 'vue-router'
 import AppSidebar from './AppSidebar.vue'
 import AppTopbar from './AppTopbar.vue'
 import AppPageState from '@/components/ui/AppPageState.vue'
+import ChatWidget from '@/components/chatbot/ChatWidget.vue'
 
 const route = useRoute()
 const sidebarOpen = ref(false)
