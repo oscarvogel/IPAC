@@ -130,8 +130,8 @@ def _fallback_without_ai(content):
         }
     return {
         "content": (
-            "La IA está deshabilitada. Puedo responder únicamente los procedimientos "
-            "documentados del sistema IPAC."
+            "La IA está deshabilitada. Puedo ayudarte con los procedimientos del sistema IPAC "
+            "que ya están documentados."
         ),
         "tokens_used": None,
         "source": "fallback",
