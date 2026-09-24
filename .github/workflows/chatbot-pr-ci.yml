@@ -34,6 +34,7 @@ jobs:
       - name: Phase 2 focused backend tests
         run: |
           python backend/manage.py test core.test_asistente_fase2_models
+          python backend/manage.py test core.test_chatbot_assistant
           if [ -f backend/core/test_asistente_tools.py ]; then python backend/manage.py test core.test_asistente_tools; fi
           if [ -f backend/core/test_asistente_orchestrator.py ]; then python backend/manage.py test core.test_asistente_orchestrator; fi
           if [ -f backend/core/test_asistente_admin_api.py ]; then python backend/manage.py test core.test_asistente_admin_api; fi
