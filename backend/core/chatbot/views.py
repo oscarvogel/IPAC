@@ -11,8 +11,8 @@ from .service import answer_message
 
 
 GREETING = (
-    "Hola, soy el Asistente IPAC. Puedo explicarte cómo usar el sistema: "
-    "alta de alumnos, matrículas, cuotas, pagos, estado de cuenta y caja."
+    "Hola, soy el Asistente IPAC. Puedo explicarte cómo usar el sistema y consultar "
+    "datos reales autorizados, como deuda, alumnos con saldo pendiente, cobranzas y caja."
 )
 
 
