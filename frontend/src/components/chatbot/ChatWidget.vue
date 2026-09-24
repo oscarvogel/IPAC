@@ -29,6 +29,14 @@
       <div class="ipac-chat-header-actions">
         <button
           type="button"
+          aria-label="Nueva conversación"
+          title="Nueva conversación"
+          @click="newConversation"
+        >
+          <ArrowPathIcon aria-hidden="true" />
+        </button>
+        <button
+          type="button"
           :aria-label="isMaximized ? 'Restaurar asistente' : 'Maximizar asistente'"
           :title="isMaximized ? 'Restaurar' : 'Maximizar'"
           @click="isMaximized = !isMaximized"
@@ -113,6 +121,7 @@
 import { nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
+  ArrowPathIcon,
   ArrowRightIcon,
   ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
@@ -122,7 +131,8 @@ import {
 } from '@heroicons/vue/24/outline'
 import { apiRequest } from '@/lib/api'
 
-const STORAGE_KEY = 'ipac.chatbot.conversation'
+const STORAGE_KEY = 'ipac.chatbot.conversation.native-tools-v1'
+const LEGACY_STORAGE_KEYS = ['ipac.chatbot.conversation']
 const router = useRouter()
 const isOpen = ref(false)
 const isMaximized = ref(false)
@@ -160,10 +170,21 @@ async function loadSuggestions() {
   }
 }
 
+function clearLegacyConversationKeys() {
+  try {
+    for (const key of LEGACY_STORAGE_KEYS) {
+      window.localStorage.removeItem(key)
+    }
+  } catch {
+    // El chat puede seguir funcionando sin localStorage.
+  }
+}
+
 async function openChat() {
   isOpen.value = true
   if (!initialized) {
     initialized = true
+    clearLegacyConversationKeys()
     await restoreOrStartConversation()
     loadSuggestions()
   }
@@ -226,6 +247,20 @@ async function startConversation() {
     loading.value = false
     scrollToBottom()
   }
+}
+
+async function newConversation() {
+  if (loading.value) return
+  try {
+    window.localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // no-op
+  }
+  conversationId.value = null
+  messages.value = []
+  input.value = ''
+  error.value = ''
+  await startConversation()
 }
 
 async function sendMessage() {

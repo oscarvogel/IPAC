@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/ipac-chatbot-operativo
+      - feat/ipac-chatbot-fase-2-clean
   pull_request:
     branches:
       - main
@@ -29,6 +30,9 @@ jobs:
 
       - name: Migration consistency
         run: python backend/manage.py makemigrations --check --dry-run
+
+      - name: Clean chatbot tests
+        run: python backend/manage.py test core.test_chatbot_fase2_clean core.test_chatbot_fase2_service
 
       - name: Backend tests
         run: python backend/manage.py test core

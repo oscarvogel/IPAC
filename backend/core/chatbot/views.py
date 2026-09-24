@@ -135,8 +135,9 @@ class ChatbotMessageView(APIView):
         )
 
         history = list(
-            conversation.mensajes.order_by("-creado", "-id")
-            .values("role", "content")[:13]
+            conversation.mensajes.exclude(pk=user_message.pk)
+            .order_by("-creado", "-id")
+            .values("role", "content")[:12]
         )
         history.reverse()
 
