@@ -71,6 +71,25 @@ def _json_from_text(text):
         return json.loads(cleaned[start : end + 1])
 
 
+def _content_from_response(payload):
+    try:
+        content = payload["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise AIProviderError("El proveedor IA devolvió un formato no compatible.") from exc
+
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                text = block.get("text")
+                if text:
+                    parts.append(str(text))
+        return "\n".join(parts)
+    return str(content or "")
+
+
 def parse_classification(payload):
     try:
         scope = ScopeKind(payload["scope"])
@@ -126,9 +145,9 @@ class MiniMaxIntentClassifier:
             {
                 "model": model,
                 "messages": messages,
+                "thinking": {"type": "disabled"},
                 "temperature": 0,
                 "max_completion_tokens": 500,
-                "reasoning_split": True,
             }
         ).encode("utf-8")
         request = urllib.request.Request(
@@ -147,12 +166,7 @@ class MiniMaxIntentClassifier:
                 timeout=getattr(settings, "IPAC_AI_TIMEOUT_SECONDS", 30),
             ) as response:
                 data = json.loads(response.read().decode("utf-8"))
-            choices = data.get("choices") or []
-            content = (
-                choices[0].get("message", {}).get("content", "")
-                if choices
-                else ""
-            )
+            content = _content_from_response(data)
             return parse_classification(_json_from_text(content))
         except (
             urllib.error.URLError,
