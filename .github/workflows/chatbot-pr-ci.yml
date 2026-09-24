@@ -32,7 +32,7 @@ jobs:
         run: python backend/manage.py makemigrations --check --dry-run
 
       - name: Clean chatbot tests
-        run: python backend/manage.py test core.test_chatbot_fase2_clean
+        run: python backend/manage.py test core.test_chatbot_fase2_clean core.test_chatbot_fase2_service
 
       - name: Backend tests
         run: python backend/manage.py test core
