@@ -13,6 +13,7 @@ def answer_message(
     history,
     conversation=None,
     user_message=None,
+    selected_alumno_id=None,
 ):
     responder = ResponderConsulta(
         knowledge_repository=DjangoKnowledgeRepository(),
@@ -27,6 +28,7 @@ def answer_message(
         history,
         conversation,
         user_message,
+        selected_alumno_id,
     )
     return {
         "content": result.content,
