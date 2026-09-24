@@ -31,6 +31,14 @@ jobs:
       - name: Migration consistency
         run: python backend/manage.py makemigrations --check --dry-run
 
+      - name: Phase 2 focused backend tests
+        run: |
+          python backend/manage.py test core.test_asistente_fase2_models
+          if [ -f backend/core/test_asistente_tools.py ]; then python backend/manage.py test core.test_asistente_tools; fi
+          if [ -f backend/core/test_asistente_orchestrator.py ]; then python backend/manage.py test core.test_asistente_orchestrator; fi
+          if [ -f backend/core/test_asistente_admin_api.py ]; then python backend/manage.py test core.test_asistente_admin_api; fi
+          if [ -f backend/core/test_asistente_notifications.py ]; then python backend/manage.py test core.test_asistente_notifications; fi
+
       - name: Backend tests
         run: python backend/manage.py test core
 
