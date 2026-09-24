@@ -64,7 +64,7 @@ class AssistantNotificationTests(TestCase):
         self.assertFalse(self._notifier().notify_immediate(event.id))
         self.assertEqual(len(mail.outbox), 0)
 
-    @mock.patch("django.core.mail.send_mail", side_effect=OSError("smtp down"))
+    @mock.patch("core.contexts.asistente.infrastructure.django_email_notifier.send_mail", side_effect=OSError("smtp down"))
     def test_smtp_failure_leaves_event_unnotified_and_does_not_raise(self, _send):
         event = self._event(AsistenteConsultaNoResuelta.Categoria.ERROR_IA)
         self.assertFalse(self._notifier().notify_immediate(event.id))
