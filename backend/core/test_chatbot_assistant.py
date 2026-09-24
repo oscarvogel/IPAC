@@ -73,8 +73,23 @@ class ChatbotApiTests(APITestCase):
         self.assertEqual(response.status_code, 404)
 
 
-    def test_total_debt_question_returns_live_data_through_api(self):
-        concept = ConceptoCobrable.objects.create(
+    @override_settings(
+        IPAC_AI_ENABLED=True,
+        IPAC_AI_API_KEY="test",
+        IPAC_AI_MODEL="MiniMax-M3",
+        IPAC_AI_BASE_URL="https://example.invalid/v1/chat/completions",
+    )
+    @patch(
+        "core.contexts.asistente.infrastructure.minimax_provider.MiniMaxIntentClassifier.classify",
+        return_value=Classification(
+            ScopeKind.IPAC,
+            IntentKind.READ_TOOL,
+            "resumen_deuda",
+            {},
+        ),
+    )
+    def test_total_debt_question_returns_live_data_through_api(self, _classify):
+        concept = ConceptoCobrable.objects.create
             nombre="Cuota Chat Live",
             tipo=ConceptoCobrable.Tipo.CUOTA,
             importe=Decimal("1250"),
