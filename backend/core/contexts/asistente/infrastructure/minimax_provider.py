@@ -23,12 +23,12 @@ Devolvé solamente JSON con:
 {"scope":"ipac|out_of_scope|uncertain","intent":"knowledge|read_tool|unknown","tool":null|string,"arguments":{}}
 
 Herramientas permitidas:
-- resumen_deuda: deuda total/vencida y cantidad de deudores; opcional sucursal_id
+- resumen_deuda: deuda total/vencida y cantidad de deudores; opcional sucursal_id o sucursal (nombre/código)
 - estado_cuenta_alumno: cuánto debe un alumno; alumno_id o search
-- resumen_cobranzas: cobrado por fecha/medio; opcional sucursal_id, desde, hasta, medio
-- caja_hoy: estado de la caja del usuario; opcional sucursal_id
-- resumen_cuotas: conteo/saldo de cuotas; opcional sucursal_id, periodo, estado
-- resumen_alumnos: conteo de alumnos; opcional sucursal_id, estado, carrera_id
+- resumen_cobranzas: cobrado por fecha/medio; opcional sucursal_id o sucursal, desde, hasta, medio
+- caja_hoy: estado de la caja del usuario; opcional sucursal_id o sucursal
+- resumen_cuotas: conteo/saldo de cuotas; opcional sucursal_id o sucursal, periodo, estado
+- resumen_alumnos: conteo de alumnos; opcional sucursal_id o sucursal, estado, carrera_id
 - buscar_alumno: localizar alumno; requiere search
 
 Una pregunta de salud, noticias, clima, política, entretenimiento o conocimiento general es out_of_scope.
