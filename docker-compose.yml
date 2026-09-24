@@ -42,6 +42,13 @@ services:
       IPAC_AI_MODEL: ${IPAC_AI_MODEL:-MiniMax-M3}
       IPAC_AI_BASE_URL: ${IPAC_AI_BASE_URL:-https://api.minimax.io/v1/chat/completions}
       IPAC_AI_TIMEOUT_SECONDS: ${IPAC_AI_TIMEOUT_SECONDS:-30}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-1}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-IPAC <no-reply@localhost>}
     depends_on:
       db:
         condition: service_healthy
