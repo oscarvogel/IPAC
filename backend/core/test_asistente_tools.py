@@ -126,6 +126,24 @@ class AssistantReadToolsTests(TestCase):
         self.assertEqual(result.scope_label, "Todas las sucursales")
         self.assertEqual(result.data["deuda_total"], Decimal("1200.00"))
 
+    def test_global_user_can_filter_debt_by_branch_name(self):
+        result = self._registry().execute(
+            "resumen_deuda",
+            {"sucursal": "Eldorado Tools"},
+            self._context(self.global_user),
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.scope_label, "Eldorado Tools")
+        self.assertEqual(result.data["deuda_total"], Decimal("500.00"))
+
+    def test_restricted_user_cannot_request_other_branch_by_name(self):
+        result = self._registry().execute(
+            "resumen_deuda",
+            {"sucursal": "Eldorado Tools"},
+            self._context(self.restricted),
+        )
+        self.assertEqual(result.status, "forbidden")
+
     def test_requested_forbidden_branch_is_denied(self):
         result = self._registry().execute(
             "resumen_deuda",
