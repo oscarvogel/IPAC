@@ -1,6 +1,13 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from .chatbot.views import (
+    ChatbotBriefingView,
+    ChatbotConversationView,
+    ChatbotHistoryView,
+    ChatbotMessageView,
+)
+
 from .views import (
     AplicacionPagoViewSet,
     AlumnoViewSet,
@@ -50,6 +57,10 @@ router.register("reglas-recargo", ReglaRecargoViewSet, basename="regla-recargo")
 
 urlpatterns = [
     path("health/", HealthView.as_view(), name="api-health"),
+    path("chatbot/briefing/", ChatbotBriefingView.as_view(), name="api-chatbot-briefing"),
+    path("chatbot/conversations/", ChatbotConversationView.as_view(), name="api-chatbot-conversations"),
+    path("chatbot/history/", ChatbotHistoryView.as_view(), name="api-chatbot-history"),
+    path("chatbot/messages/", ChatbotMessageView.as_view(), name="api-chatbot-messages"),
     path("auth/login/", LoginView.as_view(), name="api-login"),
     path("auth/me/", CurrentUserView.as_view(), name="api-current-user"),
     path("auth/change-password/", ChangePasswordView.as_view(), name="api-change-password"),
