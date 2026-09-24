@@ -64,18 +64,6 @@ def _tool_context(user):
     )
 
 
-def _fast_classification(question):
-    normalized = normalize_text(question)
-    tokens = set(normalized.split())
-    if "deuda" in tokens and "total" in tokens:
-        return Classification(ScopeKind.IPAC, IntentKind.READ_TOOL, "resumen_deuda", {})
-    if {"cuanto", "cobramos", "hoy"}.issubset(tokens) or {"cobrado", "hoy"}.issubset(tokens):
-        return Classification(ScopeKind.IPAC, IntentKind.READ_TOOL, "resumen_cobranzas", {})
-    if "caja" in tokens and ("mi" in tokens or "hoy" in tokens):
-        return Classification(ScopeKind.IPAC, IntentKind.READ_TOOL, "caja_hoy", {})
-    return None
-
-
 def _format_tool(name, result):
     data = result.data
     suffix = f"\n\nAlcance: {result.scope_label}. Datos al {result.as_of}."
@@ -89,6 +77,26 @@ def _format_tool(name, result):
             f"{data['cuotas_vencidas']} vencida(s)."
             + suffix
         )
+    if name == "alumnos_con_deuda":
+        rows = data.get("alumnos") or []
+        lines = [
+            f"Hay {data['total_alumnos']} alumno(s) con saldo pendiente por "
+            f"$ {_money(data['deuda_total'])}:"
+        ]
+        for row in rows:
+            line = (
+                f"- {row['nombre']} — Legajo {row['legajo']} — {row['sucursal']} — "
+                f"$ {_money(row['deuda_total'])} pendientes"
+            )
+            if Decimal(str(row.get("deuda_vencida") or 0)) > 0:
+                line += f" — $ {_money(row['deuda_vencida'])} vencidos"
+            lines.append(line)
+        if data.get("truncated"):
+            lines.append(
+                f"Mostrando {len(rows)} de {data['total_alumnos']} alumno(s). "
+                "Podés pedirme que acote la consulta por sucursal."
+            )
+        return "\n".join(lines) + suffix
     if name == "estado_cuenta_alumno":
         student = data["alumno"]
         return (
@@ -191,40 +199,14 @@ class ResponderConsulta:
                 source="fallback",
             )
 
-        article = self.knowledge_repository.find_match(content, profile.rol)
-        if article:
-            return AssistantResponse(
-                content=format_article(article),
-                source="procedure",
-                procedure=article.key,
-                action=(
-                    {"label": article.action_label, "path": article.route}
-                    if article.route and article.action_label
-                    else None
-                ),
-            )
-
-        classification = (
-            Classification(
+        if selected_alumno_id:
+            classification = Classification(
                 ScopeKind.IPAC,
                 IntentKind.READ_TOOL,
                 "estado_cuenta_alumno",
                 {"alumno_id": selected_alumno_id},
             )
-            if selected_alumno_id
-            else _fast_classification(content)
-        )
-        if classification is None:
-            if not getattr(settings, "IPAC_AI_ENABLED", False):
-                return AssistantResponse(
-                    content=(
-                        "Puedo ayudarte con los procedimientos del sistema IPAC. "
-                        "Probá, por ejemplo: “¿Cómo doy de alta un alumno?”, "
-                        "“¿Cómo genero cuotas?”, “¿Cómo registro un pago?” o "
-                        "“¿Cómo cierro la caja?”."
-                    ),
-                    source="fallback",
-                )
+        elif getattr(settings, "IPAC_AI_ENABLED", False):
             try:
                 classification = self.classifier.classify(
                     question=content,
@@ -242,6 +224,26 @@ class ResponderConsulta:
                     user_message=user_message,
                 )
                 return AssistantResponse(content=AI_ERROR_MESSAGE, source="unresolved")
+        else:
+            article = self.knowledge_repository.find_match(content, profile.rol)
+            if article:
+                return AssistantResponse(
+                    content=format_article(article),
+                    source="procedure",
+                    procedure=article.key,
+                    action=(
+                        {"label": article.action_label, "path": article.route}
+                        if article.route and article.action_label
+                        else None
+                    ),
+                )
+            return AssistantResponse(
+                content=(
+                    "El componente de IA no está disponible en este momento. "
+                    "Puedo seguir respondiendo los procedimientos conocidos del sistema IPAC."
+                ),
+                source="fallback",
+            )
 
         if classification.scope == ScopeKind.OUT_OF_SCOPE:
             self._record(
@@ -264,6 +266,30 @@ class ResponderConsulta:
                 user_message=user_message,
             )
             return AssistantResponse(content=UNCERTAIN_MESSAGE, source="unresolved")
+
+        if classification.intent == IntentKind.KNOWLEDGE:
+            article = self.knowledge_repository.find_match(content, profile.rol)
+            if article:
+                return AssistantResponse(
+                    content=format_article(article),
+                    source="procedure",
+                    procedure=article.key,
+                    action=(
+                        {"label": article.action_label, "path": article.route}
+                        if article.route and article.action_label
+                        else None
+                    ),
+                )
+            self._record(
+                user=user,
+                content=content,
+                category=AsistenteConsultaNoResuelta.Categoria.NO_DOCUMENTADA,
+                response=UNKNOWN_MESSAGE,
+                conversation=conversation,
+                user_message=user_message,
+                intent=classification.intent.value,
+            )
+            return AssistantResponse(content=UNKNOWN_MESSAGE, source="unresolved")
 
         if classification.intent == IntentKind.READ_TOOL and classification.tool:
             try:
