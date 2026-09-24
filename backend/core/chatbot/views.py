@@ -110,6 +110,15 @@ class ChatbotMessageView(APIView):
     def post(self, request):
         conversation_id = request.data.get("conversation_id")
         content = str(request.data.get("content") or "").strip()
+        selected_alumno_id = request.data.get("selected_alumno_id")
+        if selected_alumno_id not in (None, ""):
+            try:
+                selected_alumno_id = int(selected_alumno_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {"detail": "selected_alumno_id no es válido."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         if not conversation_id:
             return Response(
@@ -140,7 +149,14 @@ class ChatbotMessageView(APIView):
         )
         history.reverse()
 
-        result = answer_message(request.user, content, history, conversation, user_message)
+        result = answer_message(
+            request.user,
+            content,
+            history,
+            conversation,
+            user_message,
+            selected_alumno_id,
+        )
         assistant_message = ChatbotMessage.objects.create(
             conversacion=conversation,
             role=ChatbotMessage.Role.ASSISTANT,
