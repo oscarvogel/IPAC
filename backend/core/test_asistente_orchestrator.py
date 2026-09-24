@@ -92,6 +92,7 @@ class FakeClassifier:
 class FakeToolRegistry:
     names = (
         "resumen_deuda",
+        "alumnos_con_deuda",
         "estado_cuenta_alumno",
         "resumen_cobranzas",
         "caja_hoy",
@@ -229,6 +230,112 @@ class AssistantResponderTests(TestCase):
         self.assertEqual(tools.calls[0][0], "resumen_deuda")
         self.assertIn("Alcance: Knowledge", result.content)
         self.assertIn("700", result.content)
+
+    def test_ai_tool_decision_has_priority_over_procedural_match(self):
+        classifier = FakeClassifier(
+            Classification(
+                ScopeKind.IPAC,
+                IntentKind.READ_TOOL,
+                "alumnos_con_deuda",
+                {},
+            )
+        )
+        tools = FakeToolRegistry(
+            ToolResult(
+                status="ok",
+                data={
+                    "total_alumnos": 2,
+                    "deuda_total": Decimal("1200.00"),
+                    "alumnos": [
+                        {
+                            "id": 1,
+                            "nombre": "Perez, Juan",
+                            "legajo": "P-1",
+                            "sucursal": "Posadas",
+                            "deuda_total": Decimal("700.00"),
+                            "deuda_vencida": Decimal("500.00"),
+                        },
+                        {
+                            "id": 2,
+                            "nombre": "Gomez, Ana",
+                            "legajo": "E-2",
+                            "sucursal": "Eldorado",
+                            "deuda_total": Decimal("500.00"),
+                            "deuda_vencida": Decimal("500.00"),
+                        },
+                    ],
+                    "truncated": False,
+                },
+                scope_label="Todas las sucursales",
+                as_of="2026-09-24",
+            )
+        )
+
+        result = self._make_responder(classifier, tools).execute(
+            self.user,
+            "¿cuáles son los alumnos con saldo pendiente?",
+            [],
+            self.conversation,
+            self.user_message,
+        )
+
+        self.assertEqual(result.source, "tool")
+        self.assertEqual(classifier.calls[0]["question"], "¿cuáles son los alumnos con saldo pendiente?")
+        self.assertEqual(tools.calls[0][0], "alumnos_con_deuda")
+        self.assertIn("Perez, Juan", result.content)
+        self.assertNotIn("Entrá a Alumnos", result.content)
+
+    def test_follow_up_history_is_given_to_ai_planner(self):
+        classifier = FakeClassifier(
+            Classification(
+                ScopeKind.IPAC,
+                IntentKind.READ_TOOL,
+                "alumnos_con_deuda",
+                {},
+            )
+        )
+        tools = FakeToolRegistry(
+            ToolResult(
+                status="ok",
+                data={
+                    "total_alumnos": 1,
+                    "deuda_total": Decimal("700.00"),
+                    "alumnos": [
+                        {
+                            "id": 1,
+                            "nombre": "Perez, Juan",
+                            "legajo": "P-1",
+                            "sucursal": "Posadas",
+                            "deuda_total": Decimal("700.00"),
+                            "deuda_vencida": Decimal("500.00"),
+                        },
+                    ],
+                    "truncated": False,
+                },
+                scope_label="Posadas",
+                as_of="2026-09-24",
+            )
+        )
+        history = [
+            {"role": "user", "content": "¿cuánto es la deuda total?"},
+            {
+                "role": "assistant",
+                "content": "La deuda pendiente es de $ 700,00. Hay 1 alumno con saldo pendiente.",
+            },
+        ]
+
+        result = self._make_responder(classifier, tools).execute(
+            self.user,
+            "sí, pero quiero saber quiénes son esos alumnos",
+            history,
+            self.conversation,
+            self.user_message,
+        )
+
+        self.assertEqual(result.source, "tool")
+        self.assertEqual(classifier.calls[0]["history"], history)
+        self.assertEqual(tools.calls[0][0], "alumnos_con_deuda")
+        self.assertIn("Perez, Juan", result.content)
 
     def test_unknown_ipac_question_is_recorded(self):
         classifier = FakeClassifier(
