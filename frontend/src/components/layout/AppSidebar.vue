@@ -255,6 +255,7 @@ const modules = computed(() => {
         { id: 'configuracion-usuarios', label: 'Usuarios y permisos', to: '/usuarios' },
         { id: 'configuracion-importaciones', label: 'Importar datos', to: '/importaciones' },
         { id: 'configuracion-auditoria', label: 'Auditoría', to: '/auditoria' },
+        { id: 'configuracion-asistente', label: 'Asistente IA', to: '/configuracion/asistente' },
       ],
     })
   }
