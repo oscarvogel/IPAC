@@ -4,9 +4,9 @@ from difflib import SequenceMatcher
 
 
 QUICK_SUGGESTIONS = [
+    "¿Cuánto es la deuda total?",
+    "¿Cuáles son los alumnos con saldo pendiente?",
     "¿Cómo doy de alta un alumno?",
-    "¿Cómo genero cuotas?",
-    "¿Cómo registro un pago?",
     "¿Cómo cierro la caja?",
 ]
 
