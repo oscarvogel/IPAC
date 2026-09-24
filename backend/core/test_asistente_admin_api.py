@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 
-from core.models import EventoAuditoria, PerfilUsuario, Sucursal
+from core.models import AsistenteConsultaNoResuelta, EventoAuditoria, PerfilUsuario, Sucursal
 
 
 class AssistantAdminApiTests(APITestCase):
@@ -83,6 +83,30 @@ class AssistantAdminApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["email_habilitado"])
+
+    def test_restricted_admin_only_sees_unresolved_from_own_branch(self):
+        other_branch = Sucursal.objects.create(codigo="OTR-AI", nombre="Otra sede AI")
+        AsistenteConsultaNoResuelta.objects.create(
+            usuario=self.admin,
+            sucursal=self.branch,
+            pregunta="Pregunta propia",
+            pregunta_normalizada="pregunta propia",
+            categoria=AsistenteConsultaNoResuelta.Categoria.NO_DOCUMENTADA,
+        )
+        AsistenteConsultaNoResuelta.objects.create(
+            usuario=self.superadmin,
+            sucursal=other_branch,
+            pregunta="Pregunta de otra sede",
+            pregunta_normalizada="pregunta de otra sede",
+            categoria=AsistenteConsultaNoResuelta.Categoria.NO_DOCUMENTADA,
+        )
+
+        self.client.force_authenticate(self.admin)
+        response = self.client.get("/api/asistente/no-resueltas/")
+
+        self.assertEqual(response.status_code, 200)
+        rows = response.data["results"]
+        self.assertEqual([row["pregunta"] for row in rows], ["Pregunta propia"])
 
     def test_rejects_external_knowledge_route(self):
         self.client.force_authenticate(self.admin)
