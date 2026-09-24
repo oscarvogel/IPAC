@@ -7,6 +7,11 @@ from .chatbot.views import (
     ChatbotHistoryView,
     ChatbotMessageView,
 )
+from .contexts.asistente.presentation.views import (
+    AsistenteConfigView,
+    AsistenteConsultaNoResueltaViewSet,
+    AsistenteKnowledgeViewSet,
+)
 
 from .views import (
     AplicacionPagoViewSet,
@@ -54,6 +59,8 @@ router.register("movimientos-caja", MovimientoCajaViewSet, basename="movimiento-
 router.register("auditoria", EventoAuditoriaViewSet, basename="auditoria")
 router.register("tipos-descuento", TipoDescuentoViewSet, basename="tipo-descuento")
 router.register("reglas-recargo", ReglaRecargoViewSet, basename="regla-recargo")
+router.register("asistente/conocimiento", AsistenteKnowledgeViewSet, basename="asistente-conocimiento")
+router.register("asistente/no-resueltas", AsistenteConsultaNoResueltaViewSet, basename="asistente-no-resueltas")
 
 urlpatterns = [
     path("health/", HealthView.as_view(), name="api-health"),
@@ -61,6 +68,7 @@ urlpatterns = [
     path("chatbot/conversations/", ChatbotConversationView.as_view(), name="api-chatbot-conversations"),
     path("chatbot/history/", ChatbotHistoryView.as_view(), name="api-chatbot-history"),
     path("chatbot/messages/", ChatbotMessageView.as_view(), name="api-chatbot-messages"),
+    path("asistente/configuracion/", AsistenteConfigView.as_view(), name="api-asistente-configuracion"),
     path("auth/login/", LoginView.as_view(), name="api-login"),
     path("auth/me/", CurrentUserView.as_view(), name="api-current-user"),
     path("auth/change-password/", ChangePasswordView.as_view(), name="api-change-password"),
