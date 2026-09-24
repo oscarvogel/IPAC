@@ -106,7 +106,7 @@ def answer_message(user, content, history):
             "model": model,
             "messages": messages,
             "temperature": 0.2,
-            "max_tokens": 800,
+            "max_completion_tokens": 1200,\n            "reasoning_split": True,
         }
     ).encode("utf-8")
     request = urllib.request.Request(
