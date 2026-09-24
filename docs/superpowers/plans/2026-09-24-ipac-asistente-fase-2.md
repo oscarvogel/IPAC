@@ -428,7 +428,11 @@ class KnowledgeRepository(Protocol):
     def prompt_context(self, role: str) -> str: ...
 
 class AssistantRepository(Protocol):
-    def register_unresolved(self, **fields): ...
+    def register_unresolved(
+        self, *, user, question: str, category: str, response: str,
+        conversation=None, user_message=None, intent: str = "", tool: str = "",
+        metadata: dict | None = None,
+    ): ...
 
 class AssistantNotifier(Protocol):
     def notify_immediate(self, event_id: int) -> bool: ...
@@ -1432,7 +1436,7 @@ npm --prefix frontend test -- ChatWidget.test.js
 
 - [ ] **Step 4: Implement clarification rendering in the widget**
 
-Keep the current visual behavior. When the response includes `clarification: { candidates: [...] }`, render one button per candidate using `nombre`, `legajo` and `sucursal`. Clicking a candidate sends a follow-up body with `content` plus `selected_alumno_id` equal to the immutable candidate id. Do not encode the selected id inside free-form text.
+Keep the current visual behavior. When the response includes `clarification: { candidates: [{ id, nombre, legajo, sucursal }] }`, render one button per candidate using `nombre`, `legajo` and `sucursal`. Clicking a candidate sends a follow-up body with `content` plus `selected_alumno_id` equal to the immutable candidate id. Do not encode the selected id inside free-form text.
 
 Do not display internal tool names, classifier intent or technical metadata.
 
