@@ -404,6 +404,34 @@ class KnowledgeArticleData:
     action_label: str
     permission_roles: tuple[str, ...]
     notes: tuple[str, ...]
+
+@dataclass(frozen=True)
+class AssistantResponse:
+    content: str
+    source: str
+    procedure: str | None = None
+    action: dict[str, str] | None = None
+    clarification: dict[str, Any] | None = None
+    tokens_used: int | None = None
+```
+
+Define application ports in `application/ports.py`:
+
+```python
+from typing import Protocol
+
+class AIIntentClassifier(Protocol):
+    def classify(self, *, question: str, history: list[dict], tool_names: tuple[str, ...], role_context: str) -> Classification: ...
+
+class KnowledgeRepository(Protocol):
+    def find_match(self, message: str, role: str) -> KnowledgeArticleData | None: ...
+    def prompt_context(self, role: str) -> str: ...
+
+class AssistantRepository(Protocol):
+    def register_unresolved(self, **fields): ...
+
+class AssistantNotifier(Protocol):
+    def notify_immediate(self, event_id: int) -> bool: ...
 ```
 
 - [ ] **Step 4: Extract deterministic matching**
@@ -628,6 +656,15 @@ class FakeClassifier:
             "role_context": role_context,
         })
         return self.classification
+
+
+class FakeNotifier:
+    def __init__(self):
+        self.event_ids = []
+
+    def notify_immediate(self, event_id):
+        self.event_ids.append(event_id)
+        return True
 
 
 class FakeToolRegistry:
@@ -1100,7 +1137,23 @@ git commit -m "feat(asistente): notificar consultas no resueltas"
 
 - [ ] **Step 1: Write navigation/permission tests**
 
-Add to `AsistenteConfigView.test.js`:
+At the top of `AsistenteConfigView.test.js`, mock `useAuth` and `useAssistantAdmin`, then define:
+
+```javascript
+function mountView({ role }) {
+  mockAuthUser.value = {
+    username: 'tester',
+    perfil: { rol: role, sucursal: { id: 1, nombre: 'Posadas' }, puede_ver_todas_las_sucursales: false },
+  }
+  return mount(AsistenteConfigView, {
+    global: {
+      stubs: { RouterLink: { template: '<a><slot /></a>' } },
+    },
+  })
+}
+```
+
+Add:
 
 ```javascript
 it('shows the three assistant sections for admin', async () => {
@@ -1231,6 +1284,22 @@ it('emits a structured article payload', async () => {
 
 - [ ] **Step 7: Implement unresolved list tests**
 
+Define:
+
+```javascript
+const event = {
+  id: 1,
+  pregunta: '¿Cómo refinancio una cuota?',
+  categoria: 'no_documentada',
+  estado: 'pendiente',
+  usuario: 'admin',
+  sucursal: 'Posadas',
+  creado: '2026-09-24T14:00:00-03:00',
+}
+```
+
+Then add:
+
 ```javascript
 it('can create an article from an unresolved question', async () => {
   const wrapper = mount(UnresolvedList, { props: { items: [event] } })
@@ -1304,6 +1373,29 @@ def test_api_rejects_health_question(self):
 Use a fake classifier/provider in tests; do not call MiniMax over network.
 
 - [ ] **Step 2: Add widget tests**
+
+In `ChatWidget.test.js`, import `flushPromises` from `@vue/test-utils` and mock `@/lib/api` with a queue:
+
+```javascript
+const apiQueue = []
+vi.mock('@/lib/api', () => ({
+  apiRequest: vi.fn(async (path) => {
+    if (path === '/chatbot/conversations/') {
+      return { conversation: { id: 10 }, messages: [{ id: 1, role: 'assistant', content: 'Hola' }] }
+    }
+    if (path === '/chatbot/briefing/') return { suggestions: [] }
+    if (path === '/chatbot/messages/') return apiQueue.shift()
+    if (path === '/chatbot/history/') throw new Error('no stored conversation')
+    throw new Error(`unexpected path ${path}`)
+  }),
+}))
+
+function mockApiMessage(payload) {
+  apiQueue.push(payload)
+}
+```
+
+Then add:
 
 ```javascript
 it('renders a live-data answer without breaking actions', async () => {
