@@ -1,9 +1,10 @@
-from decimal import Decimal
+import json
+import logging
 
 from django.conf import settings
 
-from .knowledge import PROCEDURES, format_procedure, match_procedure
-from .planner import MiniMaxPlanner, PlannerError
+from .agent import AgentProviderError, MiniMaxAgentProvider
+from .knowledge import format_procedure, knowledge_for_prompt, match_procedure
 from .tools import (
     InvalidToolArguments,
     ReadToolRegistry,
@@ -13,19 +14,26 @@ from .tools import (
 )
 
 
-OUT_OF_SCOPE_MESSAGE = (
-    "Mi función está limitada al sistema IPAC. No puedo responder consultas generales "
-    "sobre temas ajenos al sistema."
-)
+logger = logging.getLogger(__name__)
 
-UNKNOWN_MESSAGE = (
-    "No tengo una capacidad disponible para responder esa consulta de IPAC de forma confiable."
-)
+MAX_TOOL_ROUNDS = 4
 
-AI_UNAVAILABLE_MESSAGE = (
-    "El componente de IA no está disponible en este momento. "
-    "Los procedimientos conocidos del sistema siguen disponibles."
-)
+SYSTEM_PROMPT = """Sos el Asistente IPAC.
+Tu alcance está estrictamente limitado al sistema IPAC y a la documentación/datos que el backend te proporciona.
+
+REGLAS:
+- Respondé siempre en español rioplatense, de forma breve y profesional.
+- Si el usuario pide datos actuales del sistema, usá las herramientas disponibles. No inventes importes, alumnos, cuotas, saldos ni estados.
+- Podés encadenar varias herramientas cuando haga falta para resolver una consulta.
+- Usá el historial para comprender referencias y continuaciones de la conversación.
+- Nunca amplíes permisos ni sucursales por tu cuenta; el backend valida el alcance real.
+- Nunca escribas SQL, nunca pidas credenciales y nunca inventes herramientas.
+- Si una herramienta devuelve un error o falta de acceso, explicalo claramente.
+- Para preguntas sobre cómo usar IPAC, respondé únicamente a partir de la documentación operativa incluida abajo.
+- Para preguntas ajenas a IPAC, respondé exactamente: "Esa consulta está fuera del alcance de este sistema. Puedo ayudarte únicamente con el sistema IPAC."
+
+DOCUMENTACIÓN OPERATIVA DE IPAC:
+"""
 
 
 def _role_context(user):
@@ -33,10 +41,9 @@ def _role_context(user):
     if profile is None:
         return "Usuario sin perfil operativo."
     return (
-        f"rol={profile.rol}; "
-        f"sucursal={profile.sucursal.nombre}; "
-        f"sucursal_id={profile.sucursal_id}; "
-        f"acceso_global={'si' if profile.puede_ver_todas_las_sucursales else 'no'}"
+        f"Rol: {profile.rol}. "
+        f"Sucursal base: {profile.sucursal.nombre} (id={profile.sucursal_id}). "
+        f"Acceso global: {'sí' if profile.puede_ver_todas_las_sucursales else 'no'}."
     )
 
 
@@ -51,155 +58,177 @@ def _tool_context(user):
     )
 
 
-def _money(value):
-    amount = Decimal(str(value or 0)).quantize(Decimal("0.01"))
-    return f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-def _format_tool_result(name, data):
-    scope = data.get("scope", "alcance autorizado")
-    as_of = data.get("as_of", "")
-
-    if name == "resumen_deuda":
-        body = (
-            f"La deuda pendiente es de $ {_money(data['deuda_total'])}. "
-            f"De ese total, $ {_money(data['deuda_vencida'])} está vencido. "
-            f"Hay {data['alumnos_con_deuda']} alumno(s) con saldo pendiente, "
-            f"{data['cuotas_pendientes']} cuota(s) pendientes y "
-            f"{data['cuotas_vencidas']} vencida(s)."
-        )
-    elif name == "alumnos_con_deuda":
-        rows = data.get("alumnos") or []
-        lines = [
-            f"Hay {data['total_alumnos']} alumno(s) con saldo pendiente por "
-            f"$ {_money(data['deuda_total'])}:"
-        ]
-        for row in rows:
-            line = (
-                f"- {row['nombre']} — Legajo {row['legajo']} — {row['sucursal']} — "
-                f"$ {_money(row['deuda_total'])} pendientes"
-            )
-            if Decimal(str(row.get("deuda_vencida") or 0)) > 0:
-                line += f" — $ {_money(row['deuda_vencida'])} vencidos"
-            lines.append(line)
-        if data.get("truncated"):
-            lines.append(
-                f"Mostrando {len(rows)} de {data['total_alumnos']} alumno(s)."
-            )
-        body = "\n".join(lines)
-    else:
-        raise UnknownTool(name)
-
-    suffix = f"\n\nAlcance: {scope}."
-    if as_of:
-        suffix += f" Datos al {as_of}."
-    return body + suffix
-
-
-def _procedure_response(key):
-    procedure = PROCEDURES[key]
+def _assistant_tool_call_message(response):
     return {
-        "content": format_procedure(procedure),
+        "role": "assistant",
+        "content": response.content or "",
+        "tool_calls": [
+            {
+                "id": call["id"],
+                "type": "function",
+                "function": {
+                    "name": call["name"],
+                    "arguments": json.dumps(
+                        call.get("arguments") or {},
+                        ensure_ascii=False,
+                    ),
+                },
+            }
+            for call in response.tool_calls
+        ],
+    }
+
+
+def _tool_result_message(call, payload):
+    return {
+        "role": "tool",
+        "tool_call_id": call["id"],
+        "name": call["name"],
+        "content": json.dumps(
+            payload,
+            ensure_ascii=False,
+            default=str,
+            separators=(",", ":"),
+        ),
+    }
+
+
+def _safe_execute_tool(registry, call, context):
+    try:
+        result = registry.execute(
+            call["name"],
+            call.get("arguments") or {},
+            context,
+        )
+        return {"success": True, "result": result}
+    except ToolForbidden as exc:
+        return {"success": False, "error": str(exc), "code": "forbidden"}
+    except (UnknownTool, InvalidToolArguments) as exc:
+        return {"success": False, "error": str(exc), "code": "invalid_tool"}
+    except Exception as exc:
+        logger.exception("Chatbot tool execution failed tool=%s", call.get("name"))
+        return {
+            "success": False,
+            "error": "No se pudo consultar ese dato en este momento.",
+            "code": type(exc).__name__,
+        }
+
+
+def _fallback_without_ai(content):
+    matched = match_procedure(content)
+    if matched:
+        key, procedure = matched
+        return {
+            "content": format_procedure(procedure),
+            "tokens_used": None,
+            "source": "procedure",
+            "procedure": key,
+            "action": {
+                "label": procedure["action_label"],
+                "path": procedure["route"],
+            },
+        }
+    return {
+        "content": (
+            "La IA está deshabilitada. Puedo responder únicamente los procedimientos "
+            "documentados del sistema IPAC."
+        ),
         "tokens_used": None,
-        "source": "procedure",
-        "procedure": key,
-        "action": {
-            "label": procedure["action_label"],
-            "path": procedure["route"],
-        },
+        "source": "fallback",
+        "procedure": None,
+        "action": None,
     }
 
 
 def answer_message(user, content, history):
     if not getattr(settings, "IPAC_AI_ENABLED", False):
-        matched = match_procedure(content)
-        if matched:
-            key, _ = matched
-            return _procedure_response(key)
-        return {
+        return _fallback_without_ai(content)
+
+    registry = ReadToolRegistry()
+    provider = MiniMaxAgentProvider()
+    messages = [
+        {
+            "role": "system",
             "content": (
-                "Puedo ayudarte con los procedimientos del sistema IPAC. "
-                "La IA para consultas abiertas está deshabilitada."
+                SYSTEM_PROMPT
+                + "\n"
+                + knowledge_for_prompt()
+                + "\n\nCONTEXTO DE AUTORIZACIÓN DEL USUARIO:\n"
+                + _role_context(user)
             ),
-            "tokens_used": None,
-            "source": "fallback",
-            "procedure": None,
-            "action": None,
-        }
+        },
+        *[
+            {
+                "role": item["role"],
+                "content": item["content"],
+            }
+            for item in history
+            if item.get("role") in {"user", "assistant"}
+            and str(item.get("content") or "").strip()
+        ],
+        {"role": "user", "content": content},
+    ]
+
+    used_tool = False
+    tokens_used = 0
 
     try:
-        decision = MiniMaxPlanner().decide(
-            question=content,
-            history=history,
-            role_context=_role_context(user),
-        )
-    except PlannerError:
+        response = provider.send(messages, registry.schemas())
+
+        for round_number in range(MAX_TOOL_ROUNDS):
+            if not response.tool_calls:
+                if not response.content:
+                    raise AgentProviderError("La IA devolvió una respuesta vacía.")
+                if response.tokens_used:
+                    tokens_used += response.tokens_used
+                return {
+                    "content": response.content,
+                    "tokens_used": tokens_used or None,
+                    "source": "tool" if used_tool else "ai",
+                    "procedure": None,
+                    "action": None,
+                }
+
+            used_tool = True
+            if response.tokens_used:
+                tokens_used += response.tokens_used
+
+            normalized_calls = []
+            for index, call in enumerate(response.tool_calls, start=1):
+                normalized_calls.append(
+                    {
+                        "id": call.get("id") or f"call_{round_number + 1}_{index}",
+                        "name": call["name"],
+                        "arguments": call.get("arguments") or {},
+                    }
+                )
+
+            response = type(response)(
+                content=response.content,
+                tool_calls=normalized_calls,
+                tokens_used=response.tokens_used,
+            )
+
+            messages.append(_assistant_tool_call_message(response))
+
+            context = _tool_context(user)
+            for call in normalized_calls:
+                result = _safe_execute_tool(registry, call, context)
+                messages.append(_tool_result_message(call, result))
+
+            response = provider.send(messages, registry.schemas())
+
+        raise AgentProviderError("Se alcanzó el límite de pasos de herramientas.")
+
+    except AgentProviderError as exc:
+        logger.error("Chatbot AI provider error: %s", exc)
         return {
-            "content": AI_UNAVAILABLE_MESSAGE,
-            "tokens_used": None,
+            "content": (
+                "El componente de IA no está disponible en este momento. "
+                "Intentá nuevamente en unos instantes."
+            ),
+            "tokens_used": tokens_used or None,
             "source": "fallback",
             "procedure": None,
             "action": None,
         }
-
-    if decision.kind == "out_of_scope":
-        return {
-            "content": OUT_OF_SCOPE_MESSAGE,
-            "tokens_used": None,
-            "source": "out_of_scope",
-            "procedure": None,
-            "action": None,
-        }
-
-    if decision.kind == "unknown":
-        return {
-            "content": UNKNOWN_MESSAGE,
-            "tokens_used": None,
-            "source": "unknown",
-            "procedure": None,
-            "action": None,
-        }
-
-    if decision.kind == "knowledge":
-        if decision.knowledge_key not in PROCEDURES:
-            return {
-                "content": UNKNOWN_MESSAGE,
-                "tokens_used": None,
-                "source": "unknown",
-                "procedure": None,
-                "action": None,
-            }
-        return _procedure_response(decision.knowledge_key)
-
-    if decision.kind == "tool":
-        try:
-            result = ReadToolRegistry().execute(
-                decision.tool,
-                decision.arguments or {},
-                _tool_context(user),
-            )
-            text = _format_tool_result(decision.tool, result)
-        except ToolForbidden:
-            text = "Tu usuario no tiene acceso al alcance solicitado."
-            source = "forbidden"
-        except (UnknownTool, InvalidToolArguments, KeyError, TypeError, ValueError):
-            text = UNKNOWN_MESSAGE
-            source = "unknown"
-        else:
-            source = "tool"
-
-        return {
-            "content": text,
-            "tokens_used": None,
-            "source": source,
-            "procedure": None,
-            "action": None,
-        }
-
-    return {
-        "content": UNKNOWN_MESSAGE,
-        "tokens_used": None,
-        "source": "unknown",
-        "procedure": None,
-        "action": None,
-    }
