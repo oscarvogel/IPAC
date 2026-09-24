@@ -131,6 +131,8 @@ Valores permitidos:
 
 - `scope`: `ipac`, `out_of_scope`, `uncertain`.
 - `intent`: `knowledge`, `read_tool`, `unknown`.
+
+Si `scope=uncertain`, el asistente no intentará responder con conocimiento general: pedirá reformular la consulta y la registrará como `no_documentada` para revisión.
 - `tool`: solamente nombres registrados en el catálogo interno.
 
 El backend validará siempre el resultado antes de ejecutar una herramienta. Un nombre de herramienta o argumento no autorizado se tratará como consulta no resuelta/error de clasificación, nunca como una instrucción ejecutable.
@@ -298,6 +300,8 @@ Guardar un artículo tendrá efecto inmediato en las siguientes conversaciones. 
 
 Superadmin y Administración podrán administrar artículos. Los demás roles sólo consumirán el conocimiento aplicable a su rol.
 
+`roles_permitidos` controla la visibilidad del artículo, no concede permisos de negocio: un artículo nunca habilita una acción o dato que el usuario no pueda utilizar por las reglas reales del sistema.
+
 ## 9. Consultas no resueltas
 
 ### 9.1 Modelo `AsistenteConsultaNoResuelta`
@@ -390,9 +394,11 @@ Se implementará un comando de gestión idempotente, por ejemplo:
 
 `python manage.py enviar_resumen_asistente`
 
-El deployment programará ese comando en Coolify a la hora definida. El comando enviará los eventos pendientes de notificación desde el último resumen exitoso y, tras un envío correcto, marcará `notificado_en`.
+Coolify ejecutará ese comando una vez por hora. El comando consultará `hora_resumen_diario` usando la zona horaria de IPAC y sólo enviará cuando corresponda a la hora configurada y todavía no exista un resumen exitoso para esa ventana. De este modo, cambiar la hora desde la interfaz no requiere editar el cron de Coolify.
 
-Si no hay eventos relevantes, no envía correo.
+El comando enviará los eventos pendientes de notificación desde el último resumen exitoso y, tras un envío correcto, marcará `notificado_en`.
+
+Si no hay eventos relevantes, no envía correo, pero registra la ventana como evaluada para evitar ejecuciones duplicadas dentro de la misma hora.
 
 ## 11. Arquitectura propuesta
 
