@@ -172,6 +172,77 @@ class DjangoReportingGateway:
 
         return self._with_scope(context, execute, requested_id=sucursal_id, requested_name=sucursal)
 
+    def alumnos_con_deuda(
+        self,
+        *,
+        context,
+        sucursal_id=None,
+        sucursal=None,
+        limit=20,
+    ):
+        def execute(ids, label):
+            try:
+                row_limit = int(limit or 20)
+            except (TypeError, ValueError):
+                return self._result(status="invalid", data={}, scope_label=label)
+            if row_limit < 1 or row_limit > 50:
+                return self._result(status="invalid", data={}, scope_label=label)
+
+            fees = self._fees_with_balance(ids).filter(saldo_calculado__gt=0)
+            today = timezone.localdate()
+
+            debt_rows = list(
+                fees.values(
+                    "alumno_id",
+                    "alumno__apellido",
+                    "alumno__nombre",
+                    "alumno__legajo",
+                    "sucursal__nombre",
+                )
+                .annotate(deuda_total=Sum("saldo_calculado"))
+                .order_by("-deuda_total", "alumno__apellido", "alumno__nombre", "alumno_id")
+            )
+            if not debt_rows:
+                return self._result(status="no_data", data={}, scope_label=label)
+
+            overdue_map = {
+                row["alumno_id"]: row["deuda_vencida"]
+                for row in (
+                    fees.filter(fecha_vencimiento__lt=today)
+                    .values("alumno_id")
+                    .annotate(deuda_vencida=Sum("saldo_calculado"))
+                )
+            }
+            alumnos = [
+                {
+                    "id": row["alumno_id"],
+                    "nombre": f"{row['alumno__apellido']}, {row['alumno__nombre']}",
+                    "legajo": row["alumno__legajo"],
+                    "sucursal": row["sucursal__nombre"],
+                    "deuda_total": row["deuda_total"],
+                    "deuda_vencida": overdue_map.get(row["alumno_id"], Decimal("0")),
+                }
+                for row in debt_rows[:row_limit]
+            ]
+            total = sum((row["deuda_total"] for row in debt_rows), Decimal("0"))
+            return self._result(
+                status="ok",
+                scope_label=label,
+                data={
+                    "total_alumnos": len(debt_rows),
+                    "deuda_total": total,
+                    "alumnos": alumnos,
+                    "truncated": len(debt_rows) > row_limit,
+                },
+            )
+
+        return self._with_scope(
+            context,
+            execute,
+            requested_id=sucursal_id,
+            requested_name=sucursal,
+        )
+
     def _student_candidates(self, branch_ids, *, alumno_id=None, search=None):
         qs = Alumno.objects.filter(sucursal_id__in=branch_ids).select_related("sucursal")
         if alumno_id not in (None, ""):
