@@ -9,6 +9,9 @@ const routeState = vi.hoisted(() => ({
   role: 'administracion',
   cashStatus: 'abierta',
   toastErrors: [],
+  alumnosRef: null,
+  selectedAlumnoRef: null,
+  paginationRef: null,
 }))
 
 vi.mock('@/composables/useAuth', async () => {
@@ -38,6 +41,9 @@ vi.mock('@/composables/useAlumnos', async () => {
   const selectedAlumno = ref(null)
   const pagination = ref({ count: 0, page: 1, pageSize: 10 })
   const alumnoStats = ref({ activos: 0, inactivos: 0 })
+  routeState.alumnosRef = alumnos
+  routeState.selectedAlumnoRef = selectedAlumno
+  routeState.paginationRef = pagination
   return {
     useAlumnos: () => ({
       alumnos,
@@ -46,8 +52,12 @@ vi.mock('@/composables/useAlumnos', async () => {
       alumnoStats,
       loading: ref(false),
       error: ref(''),
-      setSelected: vi.fn(),
-      loadAlumnos: vi.fn(async () => {}),
+      setSelected: vi.fn((id) => {
+        selectedAlumno.value = alumnos.value.find((alumno) => String(alumno.id) === String(id)) || null
+      }),
+      loadAlumnos: vi.fn(async (query) => {
+        pagination.value.page = Number(query?.page || 1)
+      }),
       loadAlumnoStats: vi.fn(async () => {}),
       deactivateAlumno: vi.fn(),
       reactivateAlumno: vi.fn(),
@@ -126,7 +136,7 @@ vi.mock('@/composables/useReportes', async () => {
   }
 })
 
-async function mountAt(component, path) {
+async function mountAt(component, path, stubs = {}, attachTo = null) {
   const routePath = path.split('?')[0]
   const router = createRouter({
     history: createMemoryHistory(),
@@ -134,7 +144,9 @@ async function mountAt(component, path) {
   })
   await router.push(path)
   await router.isReady()
-  const wrapper = shallowMount(component, { global: { plugins: [router] } })
+  const mountOptions = { global: { plugins: [router], stubs } }
+  if (attachTo) mountOptions.attachTo = attachTo
+  const wrapper = shallowMount(component, mountOptions)
   await flushPromises()
   return { wrapper, router }
 }
@@ -142,6 +154,9 @@ async function mountAt(component, path) {
 describe('acciones profundas de Alumnos', () => {
   beforeEach(() => {
     routeState.role = 'administracion'
+    if (routeState.alumnosRef) routeState.alumnosRef.value = []
+    if (routeState.selectedAlumnoRef) routeState.selectedAlumnoRef.value = null
+    if (routeState.paginationRef) routeState.paginationRef.value = { count: 0, page: 1, pageSize: 10 }
   })
 
   it('mantiene visible la búsqueda y su valor mientras se actualizan los filtros', async () => {
@@ -183,6 +198,47 @@ describe('acciones profundas de Alumnos', () => {
     expect(invalid.wrapper.getComponent({ name: 'AlumnoForm' }).props('open')).toBe(false)
     expect(invalid.router.currentRoute.value.query.accion).toBeUndefined()
   })
+
+  it('abre la ficha en móvil y al volver conserva filtros, página, desplazamiento y foco', async () => {
+    document.body.innerHTML = ''
+    const alumno = { id: 41, nombre: 'Ana', apellido: 'Gómez', legajo: 'P-041', estado: 'inactivo' }
+    routeState.alumnosRef.value = [alumno]
+    routeState.paginationRef.value = { count: 25, page: 1, pageSize: 10 }
+    const scrollTo = vi.fn()
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    vi.stubGlobal('scrollTo', scrollTo)
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 640 })
+    const listStub = {
+      props: ['alumnos'],
+      emits: ['select'],
+      template: '<div><button v-for="alumno in alumnos" :key="alumno.id" class="students-row" :data-alumno-id="alumno.id" @click="$emit(\'select\', alumno)">{{ alumno.nombre }}</button></div>',
+    }
+    const { wrapper } = await mountAt(AlumnosView, '/alumnos', { AlumnoList: listStub }, document.body)
+
+    await wrapper.get('input[type="search"]').setValue('Ana')
+    await wrapper.findAll('.students-filters select')[2].setValue('inactivo')
+    await new Promise((resolve) => setTimeout(resolve, 280))
+    await flushPromises()
+    await wrapper.get('.students-pagination button:last-child').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Página 2 de 3')
+
+    await wrapper.get('.students-row').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('section.students-screen').classes()).toContain('students-screen--mobile-detail')
+    expect(wrapper.get('.students-mobile-back').text()).toContain('Volver al directorio')
+
+    await wrapper.get('.students-mobile-back').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('input[type="search"]').element.value).toBe('Ana')
+    expect(wrapper.findAll('.students-filters select')[2].element.value).toBe('inactivo')
+    expect(wrapper.text()).toContain('Página 2 de 3')
+    expect(scrollTo).toHaveBeenLastCalledWith(0, 640)
+    expect(document.activeElement.dataset.alumnoId).toBe('41')
+
+    wrapper.unmount()
+    vi.unstubAllGlobals()
+  })
 })
 
 describe('acciones profundas de Caja', () => {
@@ -219,6 +275,7 @@ describe('secciones profundas de Reportes', () => {
     const tab = (label) => wrapper.findAll('.reports-tabs button').find((button) => button.text() === label)
 
     expect(tab('Caja').classes()).toContain('active')
+    expect(tab('Caja').attributes('aria-current')).toBe('page')
     await tab('Alumnos').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.seccion).toBe('alumnos')

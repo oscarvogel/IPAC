@@ -22,7 +22,7 @@
     />
 
     <nav class="reports-tabs" aria-label="Categorías de reportes">
-      <button v-for="tab in tabs" :key="tab.id" type="button" :class="{ active: activeTab === tab.id }" @click="selectTab(tab.id)">
+      <button v-for="tab in tabs" :key="tab.id" type="button" :class="{ active: activeTab === tab.id }" :aria-current="activeTab === tab.id ? 'page' : undefined" @click="selectTab(tab.id)">
         {{ tab.label }}
       </button>
     </nav>
@@ -460,10 +460,11 @@ function money(value) {
 .reports-tabs { display: flex; gap: .35rem; padding: .35rem; border: 1px solid var(--border); border-radius: .85rem; background: var(--surface); overflow-x: auto; }
 .reports-tabs button { min-height: 2.5rem; border: 0; border-radius: .65rem; padding: 0 1rem; background: transparent; color: var(--text-secondary); font-weight: 800; white-space: nowrap; }
 .reports-tabs button.active { background: var(--primary); color: var(--on-primary); }
+.reports-tabs button:focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 55%, transparent); outline-offset: 2px; }
 .reports-cobranzas-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
 .reports-cobranzas-table-wrap .audit-table { width: 100%; min-width: 850px; border-collapse: collapse; }
 .reports-cobranzas-table-wrap th, .reports-cobranzas-table-wrap td { padding: .8rem 1rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
-.reports-cobranzas-table-wrap th { color: var(--text-secondary); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+.reports-cobranzas-table-wrap th { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .reports-cobranzas-mobile-list, .reports-cobranzas-mobile-empty { display: none; }
 .report-category-card { padding: 1.1rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
 .report-category-card h2 { margin: .2rem 0; }
@@ -498,8 +499,8 @@ function money(value) {
 .cash-history-empty { padding: 1.2rem; border: 1px dashed var(--border); border-radius: .75rem; color: var(--text-secondary); text-align: center; }
 @media (max-width: 700px) { .report-category-callout { align-items: stretch; flex-direction: column; } }
 @media (max-width: 760px) {
-  .reports-tabs { overflow: visible; flex-wrap: wrap; }
-  .reports-tabs button { flex: 1 1 calc(50% - .35rem); min-width: 0; }
+  .reports-tabs { overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scroll-snap-type: x proximity; scrollbar-width: thin; }
+  .reports-tabs button { flex: 0 0 auto; min-width: max-content; scroll-snap-align: start; }
   .reports-cobranzas-table-wrap { display: none; }
   .reports-cobranzas-mobile-list { display: grid; }
   .reports-cobranzas-mobile-empty { display: block; margin: 0; padding: 1.25rem; border: 1px solid var(--border); border-radius: 1rem; color: var(--text-secondary); background: var(--surface); text-align: center; }

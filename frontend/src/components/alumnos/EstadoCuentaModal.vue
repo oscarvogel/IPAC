@@ -370,7 +370,7 @@ async function loadAccount(id = props.alumno?.id) {
 
 .account-balance span {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -385,7 +385,7 @@ async function loadAccount(id = props.alumno?.id) {
 
 .payment-applications-title {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;

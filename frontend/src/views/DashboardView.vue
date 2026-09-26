@@ -8,7 +8,7 @@
       @retry="loadPage"
     />
     <template v-else>
-    <div ref="statsGrid" id="dashboard-indicators" v-reveal-on-scroll class="stats-grid" :class="{ 'show-all-mobile-stats': showAllMobileStats }">
+    <div ref="statsGrid" id="dashboard-indicators" v-reveal-on-scroll class="stats-grid" :class="{ 'show-all-indicators': showAllIndicators }">
       <component
         v-for="stat in stats"
         :key="stat.label"
@@ -41,10 +41,10 @@
       type="button"
       class="dashboard-stats-toggle"
       aria-controls="dashboard-indicators"
-      :aria-expanded="showAllMobileStats"
-      @click="showAllMobileStats = !showAllMobileStats"
+      :aria-expanded="showAllIndicators"
+      @click="showAllIndicators = !showAllIndicators"
     >
-      <span>{{ showAllMobileStats ? 'Ver menos indicadores' : 'Ver más indicadores' }}</span>
+      <span>{{ showAllIndicators ? 'Ver menos indicadores' : 'Ver más indicadores' }}</span>
       <ChevronDownIcon aria-hidden="true" />
     </button>
 
@@ -164,7 +164,7 @@ const cobrosPorSucursal = ref([])
 const cajasPeriodo = ref({ abiertas: 0, cerradas: 0, diferencia_acumulada: 0 })
 const pageReady = ref(false)
 const pageError = ref('')
-const showAllMobileStats = ref(false)
+const showAllIndicators = ref(false)
 const dashboardSecondaryLoading = ref(false)
 const dashboardSecondaryError = ref('')
 const ultimosPagos = computed(() => pagosMes.value.slice(0, 5))

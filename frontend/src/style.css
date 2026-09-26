@@ -38,8 +38,8 @@
   --surface-soft: #EBFCFF;
 
   --text-primary: #172033;
-  --text-secondary: #64748B;
-  --text-muted: #94A3B8;
+  --text-secondary: #626F84;
+  --text-muted: #667085;
 
   --border: #E2E8F0;
   --row-hover: #F1F5F9;
@@ -312,7 +312,7 @@ h3 {
 .brand-block small,
 .sidebar-footer small {
   color: var(--nav-text);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.03em;
 }
 
@@ -342,8 +342,8 @@ h3 {
 
 .main-nav a small {
   color: var(--nav-text);
-  font-size: 11px;
-  opacity: 0.6;
+  font-size: 12px;
+  opacity: 0.7;
 }
 
 .main-nav a:hover {
@@ -414,7 +414,7 @@ h3 {
 
 .topbar .eyebrow {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -518,7 +518,7 @@ h3 {
 
 .stat-card span {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -596,7 +596,7 @@ h3 {
   border-radius: 6px;
   background: var(--surface-soft);
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -708,7 +708,7 @@ h3 {
   border-radius: 999px;
   color: var(--success);
   background: color-mix(in srgb, var(--success) 12%, var(--surface));
-  font-size: 11px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 850;
 }
@@ -764,7 +764,7 @@ h3 {
 
 .detail-data dt {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -813,7 +813,7 @@ h3 {
 .account-summary span {
   display: block;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 850;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1039,7 +1039,7 @@ thead th {
   padding: 10px 18px;
   background: var(--surface-soft);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1071,7 +1071,7 @@ td {
 
 th {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -1142,7 +1142,7 @@ th {
 
 .modal-section h3 {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1245,7 +1245,7 @@ th {
 .account-totals span {
   display: block;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 850;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1335,7 +1335,7 @@ th {
   margin-top: 3px;
   padding: 3px 9px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -1782,7 +1782,7 @@ body {
 
 .sidebar-user-copy small {
   color: var(--nav-text);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0;
 }
 
@@ -1797,7 +1797,7 @@ body {
 .sidebar-user-menu {
   width: 18px;
   height: 18px;
-  color: var(--text-muted);
+  color: var(--nav-text);
 }
 
 .sidebar-footer-divider {
@@ -1908,6 +1908,31 @@ body {
   color: var(--text-primary);
   background: color-mix(in srgb, var(--surface) 90%, transparent);
   box-shadow: var(--shadow);
+}
+
+.dashboard-period-label {
+  min-height: 42px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dashboard-period-label svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.dashboard-period-label strong {
+  color: var(--text-primary);
+  font-weight: 750;
 }
 
 .icon-button {
@@ -2062,6 +2087,10 @@ body {
   white-space: nowrap;
 }
 
+.dashboard-screen .stats-grid:not(.show-all-indicators) .stat-card-secondary {
+  display: none;
+}
+
 .dashboard-screen .stat-card {
   transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
@@ -2077,7 +2106,7 @@ body {
   align-items: center;
   gap: 5px;
   color: var(--primary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.01em;
   text-transform: none;
@@ -2305,7 +2334,28 @@ body {
 }
 
 .dashboard-stats-toggle {
-  display: none;
+  width: max-content;
+  min-height: 44px;
+  padding: 0 14px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--primary);
+  background: var(--surface);
+  font-weight: 750;
+}
+
+.dashboard-stats-toggle svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.16s ease;
+}
+
+.dashboard-stats-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
 }
 
 :root[data-theme="dark"] {
@@ -2322,7 +2372,7 @@ body {
   --surface-soft: #16243A;
   --text-primary: #F3F7FC;
   --text-secondary: #A8B5C7;
-  --text-muted: #7C8CA3;
+  --text-muted: #A1AEC0;
   --border: #24344D;
   --row-hover: #18263A;
   --success: #4ADE80;
@@ -2370,7 +2420,7 @@ body {
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
   background: var(--background);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 720;
   letter-spacing: 0.025em;
   text-transform: uppercase;
@@ -2400,7 +2450,7 @@ body {
   border-radius: 8px;
   color: var(--success);
   background: color-mix(in srgb, var(--success) 12%, var(--surface));
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 620;
   text-transform: lowercase;
 }
@@ -2474,7 +2524,7 @@ body {
 
 .dashboard-empty-state p {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .sidebar-backdrop {
@@ -2643,7 +2693,7 @@ body.sidebar-scroll-locked {
     gap: 14px;
   }
 
-  .dashboard-screen .stats-grid:not(.show-all-mobile-stats) .stat-card-secondary {
+  .dashboard-screen .stats-grid:not(.show-all-indicators) .stat-card-secondary {
     display: none;
   }
 
@@ -2713,6 +2763,8 @@ body.sidebar-scroll-locked {
     padding: 0 12px;
     gap: 7px;
   }
+
+  .dashboard-period-label > span { display: none; }
 
   .payments-card .payments-table-wrap {
     display: none;
@@ -3131,7 +3183,7 @@ body.sidebar-scroll-locked {
 
 .desktop-help-copy span {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .desktop-login-help a {
@@ -3633,7 +3685,7 @@ body.sidebar-scroll-locked {
 .students-stat-copy > span {
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 740;
   letter-spacing: 0.065em;
   text-overflow: ellipsis;
@@ -3697,7 +3749,7 @@ body.sidebar-scroll-locked {
 .students-panel-head .eyebrow,
 .students-detail-panel .eyebrow {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.085em;
   text-transform: uppercase;
@@ -3877,6 +3929,8 @@ body.sidebar-scroll-locked {
   gap: 18px;
   align-items: start;
 }
+
+.students-mobile-back { display: none; }
 
 .students-pagination,
 .catalog-pagination {
@@ -4082,7 +4136,7 @@ body.sidebar-scroll-locked {
   gap: 5px;
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4115,7 +4169,7 @@ body.sidebar-scroll-locked {
   align-items: center;
   gap: 5px;
   border-radius: 7px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 680;
   line-height: 1;
@@ -4231,7 +4285,7 @@ body.sidebar-scroll-locked {
   margin-top: 4px;
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4275,7 +4329,7 @@ body.sidebar-scroll-locked {
 .students-detail-status-row > span:last-child {
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4298,7 +4352,7 @@ body.sidebar-scroll-locked {
   border-radius: 10px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 660;
 }
 
@@ -4351,7 +4405,7 @@ body.sidebar-scroll-locked {
   border-radius: 7px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -4375,7 +4429,7 @@ body.sidebar-scroll-locked {
   align-items: center;
   gap: 5px;
   color: var(--text-secondary);
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 690;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -4390,7 +4444,7 @@ body.sidebar-scroll-locked {
   margin: 5px 0 0;
   overflow: hidden;
   color: var(--text-primary);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 610;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4410,7 +4464,7 @@ body.sidebar-scroll-locked {
   gap: 10px;
   border-top: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .students-concept-row:first-of-type {
@@ -4446,7 +4500,7 @@ body.sidebar-scroll-locked {
   border-radius: 9px;
   color: var(--text-secondary);
   background: var(--background);
-  font-size: 11.5px;
+  font-size: 12px;
   text-align: center;
 }
 
@@ -4467,7 +4521,7 @@ body.sidebar-scroll-locked {
 .students-account-summary > div span {
   display: block;
   color: var(--text-secondary);
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 680;
   letter-spacing: 0.055em;
   text-transform: uppercase;
@@ -4495,7 +4549,7 @@ body.sidebar-scroll-locked {
   border-radius: 10px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 670;
 }
 
@@ -4519,7 +4573,7 @@ body.sidebar-scroll-locked {
   gap: 7px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 650;
 }
 
@@ -4707,7 +4761,7 @@ body.sidebar-scroll-locked {
   }
 
   .students-stat-copy > span {
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: .035em;
   }
 
@@ -4772,6 +4826,36 @@ body.sidebar-scroll-locked {
     height: 50px;
     flex-basis: 50px;
   }
+
+  .students-screen--mobile-detail .students-stats,
+  .students-screen--mobile-detail .students-toolbar,
+  .students-screen--mobile-detail .students-list-panel,
+  .students-screen--mobile-detail .students-pagination,
+  .students-screen--mobile-detail > .students-inline-error {
+    display: none;
+  }
+
+  .students-screen--mobile-detail .students-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .students-mobile-back {
+    min-height: 44px;
+    width: max-content;
+    max-width: 100%;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--primary);
+    background: var(--surface);
+    font-weight: 750;
+  }
+
+  .students-mobile-back svg { width: 18px; height: 18px; }
+  .students-mobile-back:focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 55%, transparent); outline-offset: 2px; }
 }
 
 /* Debtors workspace */
@@ -4971,7 +5055,7 @@ body.sidebar-scroll-locked {
   margin-top: 4px;
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 10.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -5031,7 +5115,7 @@ table.debtors-table tbody td {
   height: auto;
   padding: 0 10px;
   display: inline-flex;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 680;
   white-space: nowrap;
 }
@@ -5065,7 +5149,7 @@ table.debtors-table tbody td {
   border-radius: 9px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 680;
 }
 
@@ -5160,7 +5244,7 @@ table.debtors-table tbody td {
 .cash-operation-heading .eyebrow,
 .cash-movements-head .eyebrow {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.085em;
   text-transform: uppercase;
@@ -5180,7 +5264,7 @@ table.debtors-table tbody td {
   align-items: center;
   gap: 9px;
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .cash-operation-meta > span:first-child,
@@ -5201,7 +5285,7 @@ table.debtors-table tbody td {
   border-radius: 7px;
   color: var(--success);
   background: color-mix(in srgb, var(--success) 10%, var(--surface));
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 680;
   text-transform: capitalize;
 }
@@ -5232,7 +5316,7 @@ table.debtors-table tbody td {
   border-radius: 11px;
   color: var(--text-secondary);
   background: var(--background);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .cash-closed-summary strong {
@@ -5262,7 +5346,7 @@ table.debtors-table tbody td {
   border-radius: 10px;
   color: var(--text-primary);
   background: var(--surface);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 660;
   white-space: nowrap;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.15s ease;
@@ -5457,7 +5541,7 @@ table.debtors-table tbody td {
 .cash-metric-copy > span {
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 740;
   letter-spacing: 0.065em;
   text-overflow: ellipsis;
@@ -5547,7 +5631,7 @@ table.debtors-table tbody td {
   border-radius: 8px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 680;
   white-space: nowrap;
 }
@@ -5569,7 +5653,7 @@ table.debtors-table tbody td {
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
   background: var(--background);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 720;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -5602,7 +5686,7 @@ table.debtors-table tbody td {
   align-items: center;
   gap: 6px;
   border-radius: 8px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -5802,7 +5886,7 @@ table.debtors-table tbody td {
 
   .cash-movements-count {
     padding: 0 8px;
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 
@@ -5891,7 +5975,7 @@ table.debtors-table tbody td {
 .concepts-metric-copy > span {
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 740;
   letter-spacing: 0.065em;
   text-overflow: ellipsis;
@@ -5957,7 +6041,7 @@ table.debtors-table tbody td {
 .concepts-toolbar .eyebrow,
 .concepts-list-head .eyebrow {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.085em;
   text-transform: uppercase;
@@ -6193,7 +6277,7 @@ table.debtors-table tbody td {
   border-radius: 8px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 680;
   white-space: nowrap;
 }
@@ -6215,7 +6299,7 @@ table.debtors-table tbody td {
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
   background: var(--background);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 720;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -6268,7 +6352,7 @@ table.debtors-table tbody td {
   max-width: 180px;
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 .concepts-type-icon {
@@ -6314,7 +6398,7 @@ table.debtors-table tbody td {
   align-items: center;
   gap: 5px;
   border-radius: 8px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -6536,7 +6620,7 @@ table.debtors-table tbody td {
 
   .concepts-list-count {
     padding: 0 8px;
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 
@@ -6608,7 +6692,7 @@ table.debtors-table tbody td {
 .reports-distribution-card .eyebrow,
 .reports-payments-card .eyebrow {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.085em;
   text-transform: uppercase;
@@ -6652,7 +6736,7 @@ table.debtors-table tbody td {
   align-items: center;
   gap: 5px;
   color: var(--text-secondary);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 690;
   letter-spacing: 0.035em;
   text-transform: uppercase;
@@ -6731,7 +6815,7 @@ table.debtors-table tbody td {
   justify-content: center;
   gap: 7px;
   border-radius: 10px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 670;
   white-space: nowrap;
 }
@@ -6822,7 +6906,7 @@ table.debtors-table tbody td {
   border-radius: 8px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 680;
   white-space: nowrap;
 }
@@ -6878,7 +6962,7 @@ table.debtors-table tbody td {
 .reports-method-copy strong {
   overflow: hidden;
   color: var(--text-primary);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 660;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6886,7 +6970,7 @@ table.debtors-table tbody td {
 
 .reports-method-copy small {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 660;
 }
 
@@ -6950,7 +7034,7 @@ table.debtors-table tbody td {
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
   background: var(--background);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 720;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -6963,7 +7047,7 @@ table.debtors-table tbody td {
   border-bottom: 1px solid var(--border);
   color: var(--text-primary);
   background: var(--surface);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .reports-payments-table tbody tr:last-child td {
@@ -7026,7 +7110,7 @@ table.debtors-table tbody td {
   border-radius: 8px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 640;
 }
 
@@ -7161,7 +7245,7 @@ table.debtors-table tbody td {
   .reports-distribution-total,
   .reports-payments-count {
     padding: 0 8px;
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 
@@ -7233,7 +7317,7 @@ table.debtors-table tbody td {
 .branches-toolbar .eyebrow,
 .branches-directory .eyebrow {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.085em;
   text-transform: uppercase;
@@ -7307,7 +7391,7 @@ table.debtors-table tbody td {
   border-radius: 8px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 680;
   white-space: nowrap;
 }
@@ -7386,7 +7470,7 @@ table.debtors-table tbody td {
   align-items: center;
   gap: 5px;
   border-radius: 8px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 660;
 }
 
@@ -7411,7 +7495,7 @@ table.debtors-table tbody td {
 
 .branch-code {
   color: var(--primary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.085em;
   text-transform: uppercase;
@@ -7431,7 +7515,7 @@ table.debtors-table tbody td {
 .branch-card-copy p {
   margin-top: 6px;
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -7473,13 +7557,13 @@ table.debtors-table tbody td {
 
 .branch-card-meta small {
   color: var(--text-secondary);
-  font-size: 9.5px;
+  font-size: 12px;
 }
 
 .branch-card-meta strong {
   margin-top: 3px;
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 680;
 }
 
@@ -7501,7 +7585,7 @@ table.debtors-table tbody td {
   border-radius: 9px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 660;
 }
 
@@ -7595,7 +7679,7 @@ table.debtors-table tbody td {
 
   .branches-directory-count {
     padding: 0 8px;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .branches-card-grid {
@@ -7674,7 +7758,7 @@ table.debtors-table tbody td {
 .users-toolbar .eyebrow,
 .users-list-card .eyebrow {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.085em;
   text-transform: uppercase;
@@ -7871,7 +7955,7 @@ table.debtors-table tbody td {
   border-radius: 8px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 680;
   white-space: nowrap;
 }
@@ -7893,7 +7977,7 @@ table.debtors-table tbody td {
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
   background: var(--background);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 720;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -7906,7 +7990,7 @@ table.debtors-table tbody td {
   border-bottom: 1px solid var(--border);
   color: var(--text-primary);
   background: var(--surface);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .users-table tbody tr:last-child td {
@@ -7934,7 +8018,7 @@ table.debtors-table tbody td {
   border-radius: 12px;
   color: var(--primary);
   background: var(--primary-soft);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 760;
 }
 
@@ -7960,7 +8044,7 @@ table.debtors-table tbody td {
   max-width: 155px;
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 .users-email,
@@ -7996,7 +8080,7 @@ table.debtors-table tbody td {
   align-items: center;
   gap: 5px;
   border-radius: 8px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -8181,7 +8265,7 @@ table.debtors-table tbody td {
 
   .users-list-count {
     padding: 0 8px;
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 
@@ -8438,7 +8522,7 @@ a[href]:active {
 .modal-section h3 {
   margin-bottom: 16px;
   color: var(--text-secondary);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.065em;
 }
@@ -8520,7 +8604,7 @@ a[href]:active {
 .field-validation-message {
   display: block;
   color: var(--danger);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -8580,7 +8664,7 @@ a[href]:active {
   color: var(--text-primary);
   background: var(--surface);
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.22);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 620;
   line-height: 1.3;
   pointer-events: none;
@@ -8835,7 +8919,7 @@ a[href]:active {
   .mobile-record-title small {
     overflow: hidden;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -8875,7 +8959,7 @@ a[href]:active {
 
   .mobile-record-meta dt {
     color: var(--text-muted);
-    font-size: 9.5px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -8889,7 +8973,7 @@ a[href]:active {
     gap: 6px;
     overflow: hidden;
     color: var(--text-primary);
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 620;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -8908,7 +8992,7 @@ a[href]:active {
     color: var(--text-secondary);
     background: var(--background);
     border-radius: 10px;
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.5;
   }
 
@@ -8941,7 +9025,7 @@ a[href]:active {
 
   .report-mobile-student small {
     color: var(--text-muted);
-    font-size: 9.5px;
+    font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
   }
@@ -8961,7 +9045,7 @@ a[href]:active {
     border-radius: 9px;
     color: var(--primary);
     background: var(--primary-soft);
-    font-size: 10.5px;
+    font-size: 12px;
     font-weight: 680;
   }
 
@@ -8982,7 +9066,7 @@ a[href]:active {
     gap: 7px;
     overflow: hidden;
     color: var(--primary);
-    font-size: 11.5px;
+    font-size: 12px;
     text-decoration: none;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -9502,7 +9586,7 @@ a[href]:active {
   align-items: center;
   gap: 5px;
   color: color-mix(in srgb, var(--nav-text) 78%, transparent);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .sidebar-session-menu dt svg {
@@ -9514,7 +9598,7 @@ a[href]:active {
   margin: 0;
   overflow: hidden;
   color: var(--surface);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
   text-align: right;
   text-overflow: ellipsis;
@@ -9535,7 +9619,7 @@ a[href]:active {
   border-radius: 9px;
   color: var(--surface);
   background: color-mix(in srgb, var(--surface) 10%, transparent);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 670;
   text-align: left;
   transition: border-color 0.14s ease, background 0.14s ease;
@@ -9613,7 +9697,7 @@ a[href]:active {
 
 .confirm-dialog-copy .eyebrow {
   color: var(--danger);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.085em;
   text-transform: uppercase;
@@ -9794,7 +9878,7 @@ a[href]:active {
   }
 
   .brand-block small {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.2;
     white-space: normal;
   }
@@ -9824,7 +9908,7 @@ a[href]:active {
   }
 
   .main-nav a .nav-copy small {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .sidebar-footer {
@@ -9848,7 +9932,7 @@ a[href]:active {
   }
 
   .sidebar-user-copy small {
-    font-size: 9px;
+    font-size: 12px;
   }
 
   .sidebar-user-copy strong {
@@ -9878,7 +9962,7 @@ a[href]:active {
   align-items: center;
   border-radius: 999px;
   padding: 0.22rem 0.52rem;
-  font-size: 0.68rem;
+  font-size: 12px;
   font-style: normal;
   font-weight: 800;
   white-space: nowrap;

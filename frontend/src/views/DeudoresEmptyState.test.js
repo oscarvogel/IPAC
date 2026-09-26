@@ -49,4 +49,27 @@ describe('estados vacíos de Deudores', () => {
     await wrapper.get('input[type="search"]').setValue('alumno inexistente')
     expect(wrapper.get('.debtors-empty').text()).toContain('No hay resultados para estos filtros')
   })
+
+  it('agrupa los filtros avanzados e indica cuántos están activos', async () => {
+    const wrapper = shallowMount(DeudoresView)
+    await flushPromises()
+
+    const moreFilters = wrapper.get('.debtors-more-filters')
+    expect(moreFilters.attributes('aria-expanded')).toBe('false')
+    expect(moreFilters.text()).toContain('0')
+    expect(wrapper.find('[aria-label="Filtrar por carrera"]').exists()).toBe(false)
+
+    await moreFilters.trigger('click')
+    expect(wrapper.get('.debtors-more-filters').attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('[aria-label="Filtrar por carrera"]').exists()).toBe(true)
+
+    await wrapper.get('[aria-label="Deuda desde"]').setValue('1000')
+    await wrapper.get('[aria-label="Mes correspondiente"]').setValue('09-2026')
+    expect(wrapper.get('.debtors-more-filters').text()).toContain('2')
+
+    await wrapper.get('.debtors-clear-advanced').trigger('click')
+    expect(wrapper.get('[aria-label="Deuda desde"]').element.value).toBe('')
+    expect(wrapper.get('[aria-label="Mes correspondiente"]').element.value).toBe('')
+    expect(wrapper.get('.debtors-more-filters').text()).toContain('0')
+  })
 })

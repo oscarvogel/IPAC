@@ -1,5 +1,5 @@
 <template>
-  <section class="students-screen text-text-primary">
+  <section class="students-screen text-text-primary" :class="{ 'students-screen--mobile-detail': mobileDetailMode }">
     <AppPageState
       v-if="!pageReady"
       :loading="!pageError"
@@ -129,8 +129,20 @@
       </div>
     </section>
 
+    <button
+      v-if="mobileDetailMode"
+      ref="mobileBackButton"
+      type="button"
+      class="students-mobile-back"
+      @click="returnToDirectory"
+    >
+      <ArrowLeftIcon aria-hidden="true" />
+      Volver al directorio
+    </button>
+
     <div class="students-grid">
       <AlumnoList
+        ref="studentList"
         :alumnos="visibleAlumnos"
         :selected-alumno="selectedAlumno"
         :filtered="hasActiveFilters"
@@ -246,10 +258,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   AcademicCapIcon,
+  ArrowLeftIcon,
   BanknotesIcon,
   BuildingStorefrontIcon,
   CheckCircleIcon,
@@ -317,6 +330,10 @@ const showAlumnoForm = ref(false)
 const editingAlumno = ref(null)
 const showPagoForm = ref(false)
 const showEstadoCuenta = ref(false)
+const mobileDetailMode = ref(false)
+const mobileBackButton = ref(null)
+const studentList = ref(null)
+const directoryScrollY = ref(0)
 const showGenerarCuota = ref(false)
 const showGenerarCuotasMasivas = ref(false)
 const pendingDeactivateAlumno = ref(null)
@@ -396,7 +413,24 @@ function loadBaseCatalogos() {
 
 async function onSelect(alumno) {
   setSelected(alumno.id)
+  if (window.matchMedia?.('(max-width: 760px)').matches) {
+    directoryScrollY.value = window.scrollY
+    mobileDetailMode.value = true
+    await nextTick()
+    window.scrollTo(0, 0)
+    mobileBackButton.value?.focus({ preventScroll: true })
+  }
   await loadPagos({ alumno: alumno.id })
+}
+
+async function returnToDirectory() {
+  mobileDetailMode.value = false
+  await nextTick()
+  const selectedId = selectedAlumno.value?.id
+  const selectedCard = [...(studentList.value?.$el?.querySelectorAll('.students-row') || [])]
+    .find((card) => card.dataset.alumnoId === String(selectedId))
+  selectedCard?.focus({ preventScroll: true })
+  window.scrollTo(0, directoryScrollY.value)
 }
 
 function openNewAlumnoForm() {

@@ -20,9 +20,11 @@ from rest_framework.views import APIView
 
 from django.contrib.auth.models import User
 
+from .access_scope import scoped_queryset_for_user
 from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, EventoAuditoria, Matricula, MovimientoCaja, Pago, PerfilUsuario, ReglaRecargo, Sucursal, TipoDescuento
 from .contexts.importacion.application.import_ipac_workbook import IPACWorkbookImporter
 from .contexts.cobranzas.application.registrar_pago import RegistrarPago
+from .contexts.cobranzas.application.evaluar_generacion_cuotas import EvaluarGeneracionCuotas
 from .contexts.cobranzas.application.anular_pago import AnularPago, PagoAnulacionError
 from .contexts.caja.application.validar_caja import CajaCerradaError, asegurar_caja_abierta
 from .contexts.caja.application.gestionar_caja import CerrarCaja, GestionarSaldoAnterior
@@ -36,6 +38,10 @@ from .contexts.auditoria.infrastructure.django_auditoria_repository import Djang
 from .contexts.reportes.infrastructure.xlsx_exporter import XlsxReportExporter
 from .contexts.cobranzas.application.recalcular_recargos import RecalcularRecargos
 from .contexts.cobranzas.infrastructure.django_recargo_repository import DjangoRecargoRepository
+from .contexts.cobranzas.infrastructure.django_alumno_elegible_cuota_reader import (
+    DatosGeneracionCuotasInvalidos,
+    DjangoAlumnoElegibleCuotaReader,
+)
 from .contexts.identidad.application.cambiar_clave import CambiarClave
 from .pagination import AlumnoPagination
 from .permissions import (
@@ -77,17 +83,6 @@ from .serializers import (
     ReglaRecargoSerializer,
     UsuarioCajaSerializer,
 )
-
-
-def scoped_queryset_for_user(queryset, user):
-    perfil = getattr(user, "perfil", None)
-    if not perfil:
-        return queryset.none()
-    if perfil.puede_ver_todas_las_sucursales:
-        return queryset
-    if queryset.model is Sucursal:
-        return queryset.filter(pk=perfil.sucursal_id)
-    return queryset.filter(sucursal=perfil.sucursal)
 
 
 def get_user_sucursal(user):
@@ -755,36 +750,18 @@ class CuotaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        conceptos = scoped_queryset_for_user(ConceptoCobrable.objects.filter(activo=True), request.user)
-        concepto = conceptos.filter(pk=concepto_id, sucursal_id=sucursal_id).first()
-        if not concepto:
-            return Response({"detail": "Concepto invalido o sin acceso."}, status=status.HTTP_400_BAD_REQUEST)
-
-        alumnos = scoped_queryset_for_user(
-            Alumno.objects.filter(estado=Alumno.Estado.ACTIVO, sucursal_id=sucursal_id),
-            request.user,
-        )
-        if carrera_id:
-            carrera = scoped_queryset_for_user(CarreraCurso.objects.all(), request.user).filter(
-                pk=carrera_id,
+        use_case = EvaluarGeneracionCuotas(DjangoAlumnoElegibleCuotaReader())
+        try:
+            preview = use_case.execute(
+                actor=request.user,
                 sucursal_id=sucursal_id,
-            ).first()
-            if not carrera:
-                return Response({"detail": "Carrera invalida o sin acceso."}, status=status.HTTP_400_BAD_REQUEST)
-            alumnos = alumnos.filter(carrera_id=carrera.id)
-
-        existing_alumnos = Cuota.objects.filter(
-            alumno_id__in=alumnos.values("id"),
-            concepto_id=concepto.id,
-            periodo=periodo,
-        ).values("alumno_id")
-        eligible_ids = list(alumnos.exclude(id__in=existing_alumnos).values_list("id", flat=True))
-        found_count = alumnos.count()
-        return Response({
-            "alumnos_encontrados": found_count,
-            "omitidas": found_count - len(eligible_ids),
-            "alumnos_elegibles": eligible_ids,
-        })
+                carrera_id=carrera_id,
+                concepto_id=concepto_id,
+                periodo=periodo,
+            )
+        except DatosGeneracionCuotasInvalidos as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(preview)
 
     @action(detail=False, methods=["post"], url_path="generar")
     def generar(self, request):

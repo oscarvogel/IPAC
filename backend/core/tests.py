@@ -1650,6 +1650,103 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(response.data["alumnos_encontrados"], 2)
         self.assertEqual(response.data["omitidas"], 1)
         self.assertEqual(response.data["alumnos_elegibles"], [ana.id])
+        self.assertEqual(
+            response.data["detalle_alumnos"],
+            [
+                {
+                    "id": ana.id,
+                    "legajo": "P-003",
+                    "nombre_completo": "Lopez, Ana",
+                    "carrera_nombre": "",
+                    "estado": "activo",
+                    "motivo": "",
+                },
+                {
+                    "id": pedro.id,
+                    "legajo": "P-001",
+                    "nombre_completo": "Perez, Pedro",
+                    "carrera_nombre": "",
+                    "estado": "activo",
+                    "motivo": "Ya existe una cuota para este concepto y período.",
+                },
+            ],
+        )
+        serialized_detail = str(response.data["detalle_alumnos"])
+        self.assertNotIn("dni", serialized_detail.lower())
+        self.assertNotIn("email", serialized_detail.lower())
+
+    def test_mass_fee_preview_rejects_a_branch_outside_the_actors_scope(self):
+        self.client.force_authenticate(self.tesoreria)
+        other_branch_concept = ConceptoCobrable.objects.create(
+            nombre="Cuota Eldorado",
+            tipo=ConceptoCobrable.Tipo.CUOTA,
+            importe="12000.00",
+            sucursal=self.eldorado,
+        )
+
+        response = self.client.post(
+            "/api/cuotas/evaluar-generacion/",
+            {"sucursal": self.eldorado.id, "concepto": other_branch_concept.id, "periodo": "2026-10"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Sucursal", response.data["detail"])
+
+    def test_mass_fee_preview_allows_the_actors_assigned_branch(self):
+        self.client.force_authenticate(self.tesoreria)
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+
+        response = self.client.post(
+            "/api/cuotas/evaluar-generacion/",
+            {"sucursal": self.posadas.id, "concepto": concepto.id, "periodo": "2026-10"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["alumnos_encontrados"], 1)
+        self.assertEqual(response.data["alumnos_elegibles"], [Alumno.objects.get(legajo="P-001").id])
+
+    def test_mass_fee_preview_rejects_a_career_from_another_branch(self):
+        self.client.force_authenticate(self.admin)
+        concepto = ConceptoCobrable.objects.get(nombre="Cuota mensual")
+        carrera = CarreraCurso.objects.create(nombre="Carrera Eldorado", sucursal=self.eldorado)
+
+        response = self.client.post(
+            "/api/cuotas/evaluar-generacion/",
+            {
+                "sucursal": self.posadas.id,
+                "carrera": carrera.id,
+                "concepto": concepto.id,
+                "periodo": "2026-10",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Carrera", response.data["detail"])
+
+    def test_mass_fee_preview_returns_compatible_empty_result(self):
+        self.client.force_authenticate(self.admin)
+        nueva_sucursal = Sucursal.objects.create(codigo="NVA", nombre="Nueva")
+        concepto = ConceptoCobrable.objects.create(
+            nombre="Cuota Nueva",
+            tipo=ConceptoCobrable.Tipo.CUOTA,
+            importe="1000.00",
+            sucursal=nueva_sucursal,
+        )
+
+        response = self.client.post(
+            "/api/cuotas/evaluar-generacion/",
+            {"sucursal": nueva_sucursal.id, "concepto": concepto.id, "periodo": "2026-10"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["alumnos_encontrados"], 0)
+        self.assertEqual(response.data["omitidas"], 0)
+        self.assertEqual(response.data["alumnos_elegibles"], [])
+        self.assertEqual(response.data["detalle_alumnos"], [])
 
     def test_student_directory_uses_applied_payments_for_split_total_balance(self):
         self.client.force_authenticate(user=self.admin)

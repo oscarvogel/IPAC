@@ -24,13 +24,11 @@
         <SunIcon v-if="isDark" aria-hidden="true" />
         <MoonIcon v-else aria-hidden="true" />
       </button>
-      <button
-        class="icon-button"
-        type="button"
-        :aria-label="`Período actual: ${periodLabel}`"
-      >
+      <span class="dashboard-period-label" :aria-label="`Período actual: ${periodLabel}`">
         <CalendarDaysIcon aria-hidden="true" />
-      </button>
+        <span>Período actual</span>
+        <strong>{{ periodLabel }}</strong>
+      </span>
 
       <label class="branch-select">
         <span class="sr-only">Sucursal</span>

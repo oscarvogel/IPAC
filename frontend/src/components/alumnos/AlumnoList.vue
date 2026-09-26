@@ -19,6 +19,7 @@
         data-motion-item
         :class="{ selected: selectedAlumno?.id === alumno.id }"
         :aria-pressed="selectedAlumno?.id === alumno.id"
+        :data-alumno-id="alumno.id"
         class="students-row"
         type="button"
         @click="$emit('select', alumno)"

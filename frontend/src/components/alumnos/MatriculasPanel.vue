@@ -181,7 +181,7 @@ function stateLabel(state) {
   border-radius: 8px;
   color: var(--primary);
   background: var(--surface);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 .matricula-actions button.danger { color: var(--danger); }
@@ -220,7 +220,7 @@ function stateLabel(state) {
 .matricula-history-row small {
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .matricula-active-card p {
@@ -231,7 +231,7 @@ function stateLabel(state) {
   display: inline-flex;
   margin-bottom: 5px;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   text-transform: uppercase;
 }
@@ -261,7 +261,7 @@ function stateLabel(state) {
   display: block;
   margin-bottom: 7px;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: .08em;
   text-transform: uppercase;

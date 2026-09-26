@@ -75,3 +75,16 @@ describe('estado accesible del menu mobile', () => {
     wrapper.unmount()
   })
 })
+
+describe('período del Dashboard', () => {
+  it('presenta el mes actual como una etiqueta estática accesible', async () => {
+    const wrapper = await mountTopbar()
+    const period = wrapper.get('.dashboard-period-label')
+
+    expect(period.element.tagName).toBe('SPAN')
+    expect(period.attributes('aria-label')).toMatch(/^Período actual:/)
+    expect(period.text()).toContain('Período actual')
+    expect(period.find('button').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})

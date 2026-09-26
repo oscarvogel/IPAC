@@ -130,7 +130,7 @@ defineProps({
     color: #6b7280;
     font-weight: 600;
     text-transform: uppercase;
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.05em;
   }
 
@@ -150,7 +150,7 @@ defineProps({
 
   .recibo-detalle th {
     background: #f3f4f6;
-    font-size: 11px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
