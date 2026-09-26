@@ -618,6 +618,70 @@ class CajaDiariaSerializer(serializers.ModelSerializer):
         return obj.total_esperado
 
 
+class CajaConsultaSerializer(serializers.ModelSerializer):
+    sucursal_nombre = serializers.CharField(source="sucursal.nombre", read_only=True)
+    usuario_nombre = serializers.CharField(source="usuario.username", read_only=True)
+    total_esperado = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    diferencia = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    resumen = CajaResumenSerializer(read_only=True)
+
+    class Meta:
+        model = CajaDiaria
+        fields = [
+            "id",
+            "fecha",
+            "sucursal",
+            "sucursal_nombre",
+            "usuario",
+            "usuario_nombre",
+            "estado",
+            "saldo_inicial",
+            "total_contado",
+            "total_esperado",
+            "diferencia",
+            "resumen",
+            "cerrada_en",
+        ]
+        read_only_fields = fields
+
+
+class CajaHistorialFilterSerializer(serializers.Serializer):
+    desde = serializers.DateField(required=False)
+    hasta = serializers.DateField(required=False)
+    sucursal = serializers.IntegerField(required=False, min_value=1)
+    usuario = serializers.IntegerField(required=False, min_value=1)
+    page = serializers.IntegerField(required=False, min_value=1, default=1)
+    page_size = serializers.ChoiceField(required=False, choices=(5, 10, 25), default=10)
+
+    def validate(self, attrs):
+        desde = attrs.get("desde")
+        hasta = attrs.get("hasta")
+        if desde and hasta and desde > hasta:
+            raise serializers.ValidationError({"hasta": "La fecha final debe ser igual o posterior a la inicial."})
+        return attrs
+
+
+class CajaHistorialSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    fecha = serializers.DateField()
+    sucursal = serializers.IntegerField()
+    sucursal_nombre = serializers.CharField()
+    usuario = serializers.IntegerField()
+    usuario_nombre = serializers.CharField()
+    estado = serializers.CharField()
+    saldo_inicial = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_esperado = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_contado = serializers.DecimalField(max_digits=12, decimal_places=2)
+    diferencia = serializers.DecimalField(max_digits=12, decimal_places=2, allow_null=True)
+    cantidad_movimientos = serializers.IntegerField()
+    cerrada_en = serializers.DateTimeField(allow_null=True)
+
+
+class UsuarioCajaSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    nombre = serializers.CharField()
+
+
 class EventoAuditoriaSerializer(serializers.ModelSerializer):
     usuario_nombre = serializers.CharField(source="usuario.username", read_only=True)
     sucursal_nombre = serializers.CharField(source="sucursal.nombre", read_only=True)

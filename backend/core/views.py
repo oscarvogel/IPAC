@@ -26,6 +26,7 @@ from .contexts.cobranzas.application.registrar_pago import RegistrarPago
 from .contexts.cobranzas.application.anular_pago import AnularPago, PagoAnulacionError
 from .contexts.caja.application.validar_caja import CajaCerradaError, asegurar_caja_abierta
 from .contexts.caja.application.gestionar_caja import CerrarCaja, GestionarSaldoAnterior
+from .contexts.caja.application.consultar_historial_cajas import ConsultarHistorialCajas
 from .contexts.caja.domain.resumen_caja import CajaOperacionError
 from .contexts.caja.infrastructure.django_caja_repository import DjangoCajaRepository
 from .contexts.alumnos.application.gestionar_matricula import GestionarMatricula, MatriculaError
@@ -55,6 +56,9 @@ from .serializers import (
     AlumnoSerializer,
     AplicacionPagoSerializer,
     CajaDiariaSerializer,
+    CajaConsultaSerializer,
+    CajaHistorialFilterSerializer,
+    CajaHistorialSerializer,
     CarreraCursoSerializer,
     ConceptoCobrableSerializer,
     CobroSerializer,
@@ -71,6 +75,7 @@ from .serializers import (
     EventoAuditoriaSerializer,
     TipoDescuentoSerializer,
     ReglaRecargoSerializer,
+    UsuarioCajaSerializer,
 )
 
 
@@ -1067,9 +1072,75 @@ class CajaDiariaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [CajaPermission]
 
     def get_queryset(self):
-        return scoped_queryset_for_user(
+        queryset = scoped_queryset_for_user(
             CajaDiaria.objects.select_related("sucursal", "usuario").prefetch_related("movimientos"),
             self.request.user,
+        )
+        profile = getattr(self.request.user, "perfil", None)
+        if not profile:
+            return queryset.none()
+        if profile.rol == PerfilUsuario.Rol.CAJA:
+            queryset = queryset.filter(usuario=self.request.user)
+        elif profile.rol == PerfilUsuario.Rol.CONSULTA:
+            return queryset.none()
+        elif self.action in {"cerrar", "saldo_anterior"} and self.request.method == "POST":
+            queryset = queryset.filter(usuario=self.request.user)
+        return queryset
+
+    def get_serializer_class(self):
+        profile = getattr(self.request.user, "perfil", None)
+        if profile and profile.rol == PerfilUsuario.Rol.CONSULTA:
+            return CajaConsultaSerializer
+        return super().get_serializer_class()
+
+    @action(detail=False, methods=["get"], url_path="historial")
+    def historial(self, request):
+        filter_serializer = CajaHistorialFilterSerializer(data=request.query_params)
+        filter_serializer.is_valid(raise_exception=True)
+        filters = filter_serializer.validated_data
+        sucursal_ids = tuple(
+            scoped_queryset_for_user(Sucursal.objects.all(), request.user).values_list("id", flat=True)
+        )
+        if "sucursal" in filters:
+            sucursal_ids = tuple(
+                sucursal_id for sucursal_id in sucursal_ids if sucursal_id == filters["sucursal"]
+            )
+
+        pagina = ConsultarHistorialCajas(DjangoCajaRepository()).execute(
+            desde=filters.get("desde"),
+            hasta=filters.get("hasta"),
+            sucursal_ids=sucursal_ids,
+            usuario_id=filters.get("usuario"),
+            propietario_id=(
+                request.user.id
+                if request.user.perfil.rol == PerfilUsuario.Rol.CAJA
+                else None
+            ),
+            page=filters["page"],
+            page_size=int(filters["page_size"]),
+        )
+        results = CajaHistorialSerializer(pagina.results, many=True).data
+        usuarios = UsuarioCajaSerializer(pagina.usuarios, many=True).data
+        next_link = None
+        previous_link = None
+        if pagina.page * pagina.page_size < pagina.count:
+            next_params = request.query_params.copy()
+            next_params["page"] = str(pagina.page + 1)
+            next_link = request.build_absolute_uri(f"{request.path}?{next_params.urlencode()}")
+        if pagina.page > 1:
+            previous_params = request.query_params.copy()
+            previous_params["page"] = str(pagina.page - 1)
+            previous_link = request.build_absolute_uri(f"{request.path}?{previous_params.urlencode()}")
+        return Response(
+            {
+                "count": pagina.count,
+                "page": pagina.page,
+                "page_size": pagina.page_size,
+                "next": next_link,
+                "previous": previous_link,
+                "usuarios": usuarios,
+                "results": results,
+            }
         )
 
     @action(detail=False, methods=["get"], url_path="hoy")
@@ -1200,8 +1271,13 @@ class MovimientoCajaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = MovimientoCaja.objects.select_related("caja", "caja__usuario", "pago")
-        caja_id = self.request.query_params.get("caja")
         queryset = queryset.filter(caja__in=scoped_queryset_for_user(CajaDiaria.objects.all(), self.request.user))
+        profile = getattr(self.request.user, "perfil", None)
+        if not profile or profile.rol == PerfilUsuario.Rol.CONSULTA:
+            return queryset.none()
+        if profile.rol == PerfilUsuario.Rol.CAJA:
+            queryset = queryset.filter(caja__usuario=self.request.user)
+        caja_id = self.request.query_params.get("caja")
         if caja_id:
             queryset = queryset.filter(caja_id=caja_id)
         return queryset

@@ -15,6 +15,9 @@ const pagos = ref([])
 const loading = ref(false)
 const error = ref('')
 const cobranzasUsuarios = ref([])
+const cajasHistorial = ref([])
+const cajasHistorialPaginacion = ref({ count: 0, page: 1, page_size: 10, next: null, previous: null })
+const cajasHistorialUsuarios = ref([])
 
 function buildQuery(filtros) {
   const query = {}
@@ -53,6 +56,37 @@ async function loadPagos(filtros = {}) {
 async function loadCobranzasUsuarios(filtros = {}) {
   const data = await apiRequest('/reportes/cobranzas-usuarios/', { query: buildQuery(filtros) })
   cobranzasUsuarios.value = data.resultados || []
+}
+
+async function loadCajasHistorial(filtros = {}, page = 1) {
+  loading.value = true
+  error.value = ''
+  try {
+    const query = {}
+    for (const key of ['desde', 'hasta', 'sucursal', 'usuario']) {
+      if (filtros?.[key]) query[key] = filtros[key]
+    }
+    query.page = page
+    const data = await apiRequest('/cajas/historial/', { query })
+    cajasHistorial.value = data.results || []
+    cajasHistorialPaginacion.value = {
+      count: data.count || 0,
+      page: data.page || 1,
+      page_size: data.page_size || 10,
+      next: data.next || null,
+      previous: data.previous || null,
+    }
+    cajasHistorialUsuarios.value = data.usuarios || []
+  } catch (err) {
+    error.value = err.message
+    throw err
+  } finally {
+    loading.value = false
+  }
+}
+
+function loadCajaDetalle(id) {
+  return apiRequest('/cajas/' + id + '/')
 }
 
 function exportarCsv(filtros = {}) {
@@ -117,11 +151,16 @@ export function useReportes() {
     resumen: readonly(resumen),
     pagos: readonly(pagos),
     cobranzasUsuarios: readonly(cobranzasUsuarios),
+    cajasHistorial: readonly(cajasHistorial),
+    cajasHistorialPaginacion: readonly(cajasHistorialPaginacion),
+    cajasHistorialUsuarios: readonly(cajasHistorialUsuarios),
     loading: readonly(loading),
     error: readonly(error),
     loadResumen,
     loadPagos,
     loadCobranzasUsuarios,
+    loadCajasHistorial,
+    loadCajaDetalle,
     exportarCsv,
     exportarExcel,
     clearError,

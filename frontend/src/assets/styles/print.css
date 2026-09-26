@@ -1,19 +1,85 @@
 @media print {
-  body * {
-    visibility: hidden;
+  @page {
+    margin: 12mm;
   }
 
-  .print-recibo,
-  .print-recibo *,
-  .cash-print-summary,
-  .cash-print-summary * {
-    visibility: visible;
+  html,
+  body {
+    min-height: 0 !important;
+    margin: 0 !important;
   }
 
-  .print-recibo,
-  .cash-print-summary {
-    position: absolute;
-    inset: 0;
+  html[data-print-target="receipt"] body > *:not(.print-recibo),
+  html[data-print-target="cash-summary"] body > *:not(.cash-print-summary) {
+    display: none !important;
+  }
+
+  html[data-print-target="receipt"] body > .print-recibo,
+  html[data-print-target="cash-summary"] body > .cash-print-summary {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: auto;
+    min-height: 0;
+    break-after: auto;
+    page-break-after: auto;
+    visibility: visible !important;
+    color: #111827;
+    background: #fff;
+  }
+
+  html[data-print-target="receipt"] body > .print-recibo *,
+  html[data-print-target="cash-summary"] body > .cash-print-summary * {
+    visibility: visible !important;
+  }
+
+  html[data-print-target="receipt"] body > .cash-print-summary,
+  html[data-print-target="receipt"] body > .cash-print-summary *,
+  html[data-print-target="cash-summary"] body > .print-recibo,
+  html[data-print-target="cash-summary"] body > .print-recibo * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  html[data-print-target="receipt"] body > .print-recibo {
+    padding: 0;
+  }
+
+  html[data-print-target="cash-summary"] body > .cash-print-summary {
+    padding: 0;
+  }
+
+  .cash-print-summary header,
+  .print-totals {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .cash-print-summary header {
+    padding-bottom: 14px;
+    border-bottom: 2px solid #111827;
+  }
+
+  .cash-print-summary h1 {
+    margin: 24px 0 4px;
+  }
+
+  .print-totals {
+    margin: 22px 0;
+    flex-wrap: wrap;
+  }
+
+  .print-totals div {
+    min-width: 130px;
+  }
+
+  .print-totals span,
+  .print-totals strong {
     display: block;
+  }
+
+  .cash-print-summary table {
+    min-width: 0;
   }
 }

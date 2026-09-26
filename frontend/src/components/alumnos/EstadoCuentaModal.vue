@@ -163,6 +163,7 @@ import { usePagos } from '@/composables/usePagos'
 import { useAuth } from '@/composables/useAuth'
 import { useToast } from '@/composables/useToast'
 import { formatMoney, formatDate } from '@/lib/formatters'
+import { printDocument } from '@/lib/print'
 import { confirmAnularPago } from '@/lib/swal'
 import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import ReciboPrintView from '@/components/ui/ReciboPrintView.vue'
@@ -195,7 +196,7 @@ async function printRecibo(pago) {
   try {
     reciboData.value = await getRecibo(pago.id)
     await nextTick()
-    window.print()
+    printDocument('receipt')
   } catch (err) {
     toast.error(err.message || 'No se pudo preparar el recibo para imprimir.')
   } finally {

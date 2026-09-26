@@ -29,6 +29,19 @@ describe('experiencia de reportes', () => {
     expect(wrapper.emitted('aplicar')).toHaveLength(1)
   })
 
+  it('permite ocultar el filtro de medio para el historial de cajas', () => {
+    const wrapper = mount(ReporteFiltros, {
+      props: {
+        filtros: { desde: '', hasta: '', sucursal: '', medio: '', usuario: '' },
+        sucursales: [{ id: 1, nombre: 'Posadas' }],
+        showMedium: false,
+      },
+    })
+
+    expect(wrapper.text()).not.toContain('Medio')
+    expect(wrapper.findAll('select')).toHaveLength(1)
+  })
+
   it('presenta la distribución por medio ordenada por importe', () => {
     const wrapper = mount(ReporteResumen, {
       props: {

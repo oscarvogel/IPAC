@@ -44,7 +44,7 @@
           <ChevronDownIcon aria-hidden="true" />
         </span>
       </label>
-      <label class="reports-filter-field reports-select-field">
+      <label v-if="showMedium" class="reports-filter-field reports-select-field">
         <span><CreditCardIcon aria-hidden="true" /> Medio</span>
         <span class="reports-select-control">
           <select v-model="local.medio">
@@ -104,6 +104,7 @@ const props = defineProps({
   exportLabel: { type: String, default: 'Exportar Excel' },
   usuarios: { type: Array, default: () => [] },
   showUser: { type: Boolean, default: false },
+  showMedium: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['update:filtros', 'aplicar', 'exportar'])

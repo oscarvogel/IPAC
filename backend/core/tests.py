@@ -2337,3 +2337,162 @@ class AuditoriaApiTests(APITestCase):
 
         self.client.force_authenticate(self.consulta)
         self.assertEqual(self.client.get("/api/auditoria/").status_code, status.HTTP_403_FORBIDDEN)
+
+
+class CajaHistorialApiTests(APITestCase):
+    def setUp(self):
+        self.posadas = Sucursal.objects.create(codigo="POS", nombre="Posadas")
+        self.eldorado = Sucursal.objects.create(codigo="ELD", nombre="Eldorado")
+        self.admin = self._user("admin-historial", PerfilUsuario.Rol.ADMINISTRACION, self.posadas, True)
+        self.superadmin = self._user("super-historial", PerfilUsuario.Rol.SUPERADMIN, self.posadas, True)
+        self.tesoreria = self._user("tesoreria-historial", PerfilUsuario.Rol.TESORERIA, self.posadas)
+        self.cajero = self._user("cajero-historial", PerfilUsuario.Rol.CAJA, self.posadas)
+        self.consulta = self._user("consulta-historial", PerfilUsuario.Rol.CONSULTA, self.posadas)
+
+    @staticmethod
+    def _user(username, role, sucursal, all_branches=False):
+        user = User.objects.create_user(username, password="test-password")
+        PerfilUsuario.objects.create(
+            user=user,
+            rol=role,
+            sucursal=sucursal,
+            puede_ver_todas_las_sucursales=all_branches,
+        )
+        return user
+
+    def _caja(self, usuario, sucursal=None, days_ago=0, estado=CajaDiaria.Estado.CERRADA):
+        return CajaDiaria.objects.create(
+            fecha=timezone.localdate() - timedelta(days=days_ago),
+            sucursal=sucursal or self.posadas,
+            usuario=usuario,
+            estado=estado,
+            saldo_inicial=Decimal("100.00"),
+            total_contado=Decimal("80.00"),
+        )
+
+    def test_historial_filtra_sucursal_usuario_y_pagina_dentro_del_alcance(self):
+        caja_del_cajero = self._caja(self.cajero)
+        MovimientoCaja.objects.create(
+            caja=caja_del_cajero,
+            tipo=MovimientoCaja.Tipo.EGRESO,
+            medio=Pago.Medio.EFECTIVO,
+            importe=Decimal("20.00"),
+            descripcion="Insumos",
+        )
+        self._caja(self.tesoreria)
+        self._caja(self.admin, sucursal=self.eldorado)
+        for days_ago in range(1, 12):
+            self._caja(self.cajero, days_ago=days_ago)
+
+        self.client.force_authenticate(self.admin)
+        first_page = self.client.get("/api/cajas/historial/?usuario={}&page_size=5".format(self.cajero.id))
+        self.assertEqual(first_page.status_code, status.HTTP_200_OK)
+        self.assertEqual(first_page.data["count"], 12)
+        self.assertEqual(first_page.data["page_size"], 5)
+        self.assertIsNotNone(first_page.data["next"])
+        self.assertEqual(len(first_page.data["results"]), 5)
+        self.assertEqual(first_page.data["usuarios"], [{"id": self.admin.id, "nombre": self.admin.username}, {"id": self.cajero.id, "nombre": self.cajero.username}, {"id": self.tesoreria.id, "nombre": self.tesoreria.username}])
+
+        second_page = self.client.get("/api/cajas/historial/?usuario={}&page=2&page_size=5".format(self.cajero.id))
+        self.assertEqual(second_page.data["page"], 2)
+        self.assertEqual(len(second_page.data["results"]), 5)
+        self.assertIsNotNone(second_page.data["previous"])
+
+        today = timezone.localdate().isoformat()
+        filtered = self.client.get(
+            "/api/cajas/historial/?desde={}&hasta={}&sucursal={}&usuario={}".format(
+                today,
+                today,
+                self.posadas.id,
+                self.cajero.id,
+            )
+        )
+        self.assertEqual(filtered.data["count"], 1)
+        self.assertEqual(filtered.data["results"][0]["total_esperado"], "80.00")
+
+        self.client.force_authenticate(self.tesoreria)
+        treasury_history = self.client.get("/api/cajas/historial/?page_size=25")
+        self.assertEqual(treasury_history.data["count"], 13)
+        self.assertTrue(all(row["sucursal"] == self.posadas.id for row in treasury_history.data["results"]))
+
+        self.client.force_authenticate(self.cajero)
+        own_history = self.client.get("/api/cajas/historial/?usuario={}".format(self.tesoreria.id))
+        self.assertEqual(own_history.data["count"], 0)
+        self.assertTrue(all(row["usuario"] == self.cajero.id for row in own_history.data["results"]))
+
+        self.client.force_authenticate(self.consulta)
+        self.assertEqual(
+            self.client.get("/api/cajas/historial/").status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_detalle_y_movimientos_respetan_roles_y_no_habilitan_operar_cajas_ajenas(self):
+        caja_ajena = self._caja(self.cajero)
+        caja_abierta = self._caja(
+            self.admin,
+            days_ago=1,
+            estado=CajaDiaria.Estado.ABIERTA,
+        )
+        movimiento = MovimientoCaja.objects.create(
+            caja=caja_ajena,
+            tipo=MovimientoCaja.Tipo.INGRESO,
+            medio=Pago.Medio.EFECTIVO,
+            importe=Decimal("15.00"),
+            descripcion="Ingreso manual",
+        )
+
+        for usuario in (self.admin, self.superadmin, self.tesoreria):
+            self.client.force_authenticate(usuario)
+            detalle = self.client.get("/api/cajas/{}/".format(caja_ajena.id))
+            self.assertEqual(detalle.status_code, status.HTTP_200_OK)
+            self.assertEqual(detalle.data["movimientos"][0]["id"], movimiento.id)
+            movimientos = self.client.get("/api/movimientos-caja/?caja={}".format(caja_ajena.id))
+            self.assertEqual(movimientos.status_code, status.HTTP_200_OK)
+            self.assertEqual(movimientos.data["count"], 1)
+
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(
+            self.client.post(
+                "/api/cajas/{}/cerrar/".format(caja_ajena.id),
+                {"total_contado": "0.00", "importe_retirado": "0.00", "saldo_arrastrable": "0.00"},
+                format="json",
+            ).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        self.client.force_authenticate(self.cajero)
+        own_detail = self.client.get("/api/cajas/{}/".format(caja_ajena.id))
+        self.assertEqual(own_detail.status_code, status.HTTP_200_OK)
+        own_movements = self.client.get("/api/movimientos-caja/?caja={}".format(caja_ajena.id))
+        self.assertEqual(own_movements.data["count"], 1)
+
+        self.client.force_authenticate(self.admin)
+        open_history = self.client.get(
+            "/api/cajas/historial/?usuario={}&desde={}&hasta={}".format(
+                self.admin.id,
+                caja_abierta.fecha.isoformat(),
+                caja_abierta.fecha.isoformat(),
+            )
+        )
+        self.assertIsNone(open_history.data["results"][0]["diferencia"])
+
+        self.client.force_authenticate(self.consulta)
+        self.assertEqual(
+            self.client.get("/api/cajas/{}/".format(caja_ajena.id)).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        consulta_movements = self.client.get("/api/movimientos-caja/?caja={}".format(caja_ajena.id))
+        self.assertEqual(consulta_movements.status_code, status.HTTP_200_OK)
+        self.assertEqual(consulta_movements.data["count"], 0)
+
+        caja_consulta = self._caja(self.consulta)
+        self.client.force_authenticate(self.consulta)
+        today = timezone.localdate().isoformat()
+        self.assertEqual(
+            self.client.get("/api/reportes/resumen/?desde={}&hasta={}".format(today, today)).status_code,
+            status.HTTP_200_OK,
+        )
+        resumen = self.client.get("/api/cajas/hoy/?sucursal={}".format(self.posadas.id))
+        self.assertEqual(resumen.status_code, status.HTTP_200_OK)
+        self.assertNotIn("movimientos", resumen.data)
+        self.assertEqual(resumen.data["id"], caja_consulta.id)

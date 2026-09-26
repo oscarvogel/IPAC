@@ -146,7 +146,9 @@
       </div>
     </div>
 
-    <ReciboPrintView :recibo="reciboData" />
+    <Teleport to="body">
+      <ReciboPrintView :recibo="reciboData" />
+    </Teleport>
   </section>
 </template>
 
@@ -168,6 +170,7 @@ import {
 import { usePagos } from '@/composables/usePagos'
 import { useToast } from '@/composables/useToast'
 import { formatDate, formatMoney } from '@/lib/formatters'
+import { printDocument } from '@/lib/print'
 import ReciboPrintView from '@/components/ui/ReciboPrintView.vue'
 import MotionList from '@/components/ui/MotionList.vue'
 
@@ -206,7 +209,7 @@ async function printRecibo(pago) {
   try {
     reciboData.value = await getRecibo(pago.id)
     await nextTick()
-    window.print()
+    printDocument('receipt')
   } catch (err) {
     toast.error(err.message || 'No se pudo preparar el recibo para imprimir.')
   } finally {
