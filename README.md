@@ -39,6 +39,8 @@ Base ejecutable inicial en desarrollo:
 
 - [Plan inicial](docs/PLAN_INICIAL.md)
 - [Backlog MVP](docs/BACKLOG_MVP.md)
+- [QA de recorridos, seis etapas](docs/QA_RECORRIDOS_IPAC_2026-09-26.md)
+- [Definiciones de indicadores](docs/DEFINICIONES_INDICADORES.md)
 
 ## Desarrollo local
 
