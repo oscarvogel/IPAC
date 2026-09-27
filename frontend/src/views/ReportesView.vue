@@ -15,6 +15,7 @@
       :usuarios="cajeros"
       :show-user="activeTab === 'cobranzas' || (activeTab === 'caja' && canFilterCajaUser)"
       :show-medium="activeTab !== 'caja'"
+      :show-export="activeTab !== 'resumen'"
       @update:filtros="updateFiltros"
       @aplicar="aplicarFiltros"
       :export-label="'Exportar Excel'"
@@ -194,7 +195,7 @@ import AppPageState from '@/components/ui/AppPageState.vue'
 import MotionList from '@/components/ui/MotionList.vue'
 import { animateSectionEnter, animateSectionLeave } from '@/lib/motion'
 import { vRevealOnScroll } from '@/directives/motion'
-import { formatDate, formatDateTime } from '@/lib/formatters'
+import { formatDate, formatDateTime, toLocalISODate } from '@/lib/formatters'
 
 const { sucursales, loadCatalogo, loadCatalogos } = useCatalogos()
 const auth = useAuth()
@@ -283,8 +284,7 @@ const filtros = reactive({
 function rangoPorDefecto() {
   const hoy = new Date()
   const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
-  const iso = (d) => d.toISOString().slice(0, 10)
-  return { desde: iso(primero), hasta: iso(hoy) }
+  return { desde: toLocalISODate(primero), hasta: toLocalISODate(hoy) }
 }
 
 function updateFiltros(nextFilters) {
@@ -429,6 +429,7 @@ async function loadCajaHistorialPage(page) {
 }
 
 async function exportarActual() {
+  if (activeTab.value === 'resumen') return
   const payload = {
     desde: filtros.desde || undefined,
     hasta: filtros.hasta || undefined,
@@ -458,9 +459,9 @@ function money(value) {
 
 <style scoped>
 .reports-tabs { display: flex; gap: .35rem; padding: .35rem; border: 1px solid var(--border); border-radius: .85rem; background: var(--surface); overflow-x: auto; }
-.reports-tabs button { min-height: 2.5rem; border: 0; border-radius: .65rem; padding: 0 1rem; background: transparent; color: var(--text-secondary); font-weight: 800; white-space: nowrap; }
+.reports-tabs button { min-height: 44px; border: 0; border-radius: .65rem; padding: 0 1rem; background: transparent; color: var(--text-secondary); font-weight: 800; white-space: nowrap; }
 .reports-tabs button.active { background: var(--primary); color: var(--on-primary); }
-.reports-tabs button:focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 55%, transparent); outline-offset: 2px; }
+.reports-tabs button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .reports-cobranzas-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
 .reports-cobranzas-table-wrap .audit-table { width: 100%; min-width: 850px; border-collapse: collapse; }
 .reports-cobranzas-table-wrap th, .reports-cobranzas-table-wrap td { padding: .8rem 1rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
@@ -492,7 +493,7 @@ function money(value) {
 .cash-history-movements { min-width: 650px; margin: 0; }
 .cash-history-movements th, .cash-history-movements td { padding: .65rem .75rem; }
 .cash-history-error { display: flex; justify-content: space-between; align-items: center; gap: .75rem; color: var(--danger); }
-.cash-history-error button, .cash-history-pagination button { min-height: 2.4rem; padding: .45rem .75rem; border: 1px solid var(--border); border-radius: .6rem; color: var(--text-primary); background: var(--surface); font-weight: 700; cursor: pointer; }
+.cash-history-error button, .cash-history-pagination button { min-height: 44px; padding: .45rem .75rem; border: 1px solid var(--border); border-radius: .6rem; color: var(--text-primary); background: var(--surface); font-weight: 700; cursor: pointer; }
 .cash-history-pagination { display: flex; justify-content: center; align-items: center; gap: .8rem; }
 .cash-history-pagination span { color: var(--text-secondary); font-size: .85rem; }
 .cash-history-pagination button:disabled { opacity: .45; cursor: not-allowed; }

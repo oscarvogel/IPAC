@@ -121,6 +121,7 @@ import { useToast } from '@/composables/useToast'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 import { useCatalogos } from '@/composables/useCatalogos'
+import { toLocalISODate } from '@/lib/formatters'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -164,8 +165,7 @@ const tiposFiltrados = computed(() => tiposDescuento.value.filter((tipo) => tipo
 const selectedDiscount = computed(() => tiposFiltrados.value.find((tipo) => String(tipo.id) === String(form.tipo_descuento)))
 
 function todayStr() {
-  const d = new Date()
-  return d.toISOString().slice(0, 10)
+  return toLocalISODate()
 }
 
 watch(

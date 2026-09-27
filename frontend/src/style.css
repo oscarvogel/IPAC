@@ -44,9 +44,9 @@
   --border: #E2E8F0;
   --row-hover: #F1F5F9;
 
-  --success: #15803D;
-  --warning: #D97706;
-  --danger: #DC2626;
+  --success: #067647;
+  --warning: #9A4F00;
+  --danger: #B42318;
   --info: #0284C7;
 
   --hero-text: #FFFFFF;
@@ -1452,11 +1452,18 @@ th {
   }
 
   .modal-grid,
-  .account-totals,
   .modal-actions {
     grid-template-columns: 1fr;
     display: grid;
   }
+
+  .account-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: grid;
+  }
+
+  .account-net-total { grid-column: 1 / -1; }
+  .account-totals strong { font-size: 18px; }
 
   .modal-actions {
     justify-content: stretch;
@@ -2359,7 +2366,7 @@ body {
 }
 
 :root[data-theme="dark"] {
-  --primary: #4F8FEA;
+  --primary: #5594EA;
   --primary-hover: #6FA7F5;
   --primary-soft: #162B49;
   --on-primary: #071D3D;
@@ -4729,6 +4736,40 @@ body.sidebar-scroll-locked {
   .students-detail-data {
     grid-template-columns: 1fr 1fr;
   }
+
+  .students-screen:not(.students-screen--mobile-detail) .students-detail-panel {
+    display: none;
+  }
+
+  .students-screen--mobile-detail .students-stats,
+  .students-screen--mobile-detail .students-toolbar,
+  .students-screen--mobile-detail .students-list-panel,
+  .students-screen--mobile-detail .students-pagination,
+  .students-screen--mobile-detail > .students-inline-error {
+    display: none;
+  }
+
+  .students-screen--mobile-detail .students-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .students-mobile-back {
+    min-height: 44px;
+    width: max-content;
+    max-width: 100%;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--primary);
+    background: var(--surface);
+    font-weight: 750;
+  }
+
+  .students-mobile-back svg { width: 18px; height: 18px; }
+  .students-mobile-back:focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 55%, transparent); outline-offset: 2px; }
 }
 
 @media (max-width: 560px) {
@@ -4827,35 +4868,6 @@ body.sidebar-scroll-locked {
     flex-basis: 50px;
   }
 
-  .students-screen--mobile-detail .students-stats,
-  .students-screen--mobile-detail .students-toolbar,
-  .students-screen--mobile-detail .students-list-panel,
-  .students-screen--mobile-detail .students-pagination,
-  .students-screen--mobile-detail > .students-inline-error {
-    display: none;
-  }
-
-  .students-screen--mobile-detail .students-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .students-mobile-back {
-    min-height: 44px;
-    width: max-content;
-    max-width: 100%;
-    padding: 0 12px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--primary);
-    background: var(--surface);
-    font-weight: 750;
-  }
-
-  .students-mobile-back svg { width: 18px; height: 18px; }
-  .students-mobile-back:focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 55%, transparent); outline-offset: 2px; }
 }
 
 /* Debtors workspace */
@@ -5101,6 +5113,31 @@ table.debtors-table tbody td {
   padding-top: 12px;
   padding-bottom: 12px;
   vertical-align: middle;
+}
+
+@media (min-width: 1181px) {
+  table.debtors-table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  table.debtors-table th:nth-child(1),
+  table.debtors-table td:nth-child(1) { width: 23%; }
+  table.debtors-table th:nth-child(2),
+  table.debtors-table td:nth-child(2) { width: 17%; }
+  table.debtors-table th:nth-child(3),
+  table.debtors-table td:nth-child(3) { width: 11%; }
+  table.debtors-table th:nth-child(4),
+  table.debtors-table td:nth-child(4) { width: 9%; }
+  table.debtors-table th:nth-child(5),
+  table.debtors-table td:nth-child(5) { width: 14%; }
+  table.debtors-table th:nth-child(6),
+  table.debtors-table td:nth-child(6) { width: 11%; }
+  table.debtors-table th:last-child,
+  table.debtors-table td:last-child {
+    width: 15%;
+    min-width: 0;
+  }
 }
 
 .users-row-actions.debtors-actions {
@@ -6749,7 +6786,7 @@ table.debtors-table tbody td {
 
 .reports-filter-field input,
 .reports-select-control {
-  height: 43px;
+  height: 44px;
   border: 1px solid var(--border);
   border-radius: 10px;
   color: var(--text-primary);
@@ -6758,7 +6795,7 @@ table.debtors-table tbody td {
 }
 
 .reports-filter-field input {
-  min-height: 43px;
+  min-height: 44px;
   padding: 0 11px;
   font-size: 12px;
 }
@@ -6798,7 +6835,8 @@ table.debtors-table tbody td {
 .reports-filter-field:focus-within .reports-select-control {
   border-color: color-mix(in srgb, var(--primary) 60%, var(--border));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 11%, transparent);
-  outline: 0;
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .reports-filter-actions {
@@ -6808,7 +6846,7 @@ table.debtors-table tbody td {
 
 .reports-apply-action,
 .reports-export-action {
-  min-height: 43px;
+  min-height: 44px;
   padding: 0 14px;
   display: inline-flex;
   align-items: center;
@@ -6862,7 +6900,7 @@ table.debtors-table tbody td {
 .reports-apply-action:focus-visible,
 .reports-export-action:focus-visible,
 .reports-print-action:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  outline: 3px solid var(--primary);
   outline-offset: 2px;
 }
 
@@ -10058,5 +10096,28 @@ a[href]:active {
   .dashboard-screen .stat-action svg,
   .sidebar {
     transition: none !important;
+  }
+}
+
+@media (max-width: 820px) {
+  .students-screen :is(button, input:not([type="checkbox"]), select),
+  .cash-workspace :is(button, input:not([type="checkbox"]), select),
+  .reports-workspace :is(button, input:not([type="checkbox"]), select) {
+    min-height: 44px;
+  }
+
+  .students-screen .students-icon-action {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    flex-basis: 44px;
+  }
+
+  .debtors-screen .students-active-filter {
+    min-height: 44px;
+  }
+
+  .cash-workspace .cash-type-filters button {
+    min-height: 44px;
   }
 }

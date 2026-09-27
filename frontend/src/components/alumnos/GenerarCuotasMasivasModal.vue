@@ -220,11 +220,11 @@
 }
 
 .massive-fee-preview-tabs { display: flex; gap: 4px; padding: 6px; border-bottom: 1px solid var(--border); background: var(--surface-soft); }
-.massive-fee-preview-tabs button { min-height: 40px; flex: 1; border: 0; border-radius: 8px; color: var(--text-secondary); background: transparent; font-weight: 750; }
+.massive-fee-preview-tabs button { min-height: 44px; flex: 1; border: 0; border-radius: 8px; color: var(--text-secondary); background: transparent; font-weight: 750; }
 .massive-fee-preview-tabs button[aria-selected="true"] { color: var(--primary); background: var(--surface); box-shadow: var(--shadow); }
 .massive-fee-preview-tabs button:focus-visible,
 .massive-fee-preview-list:focus-visible,
-.massive-fee-preview-pagination button:focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 55%, transparent); outline-offset: 2px; }
+.massive-fee-preview-pagination button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .massive-fee-preview-list { max-height: 230px; overflow-y: auto; margin: 0; padding: 0 16px; list-style: none; }
 .massive-fee-preview-list li { min-height: 56px; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .massive-fee-preview-list li:last-child { border-bottom: 0; }
@@ -234,7 +234,7 @@
 .massive-fee-omission { max-width: 42%; color: var(--danger); font-size: 12px; text-align: right; }
 .massive-fee-preview-empty { color: var(--text-secondary); justify-content: center !important; text-align: center; }
 .massive-fee-preview-pagination { min-height: 48px; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; }
-.massive-fee-preview-pagination button { min-height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); background: var(--surface); font-weight: 700; }
+.massive-fee-preview-pagination button { min-height: 44px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); background: var(--surface); font-weight: 700; }
 .massive-fee-preview-pagination button:disabled { opacity: .5; cursor: not-allowed; }
 
 .massive-fee-summary .students-inline-error {
@@ -265,6 +265,7 @@ import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useAuth } from '@/composables/useAuth'
+import { toLocalISODate } from '@/lib/formatters'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -335,7 +336,7 @@ const totalUnitario = computed(() => Math.max(
 const totalEstimado = computed(() => totalUnitario.value * alumnosElegibles.value.length)
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10)
+  return toLocalISODate()
 }
 
 function resetForm() {

@@ -76,6 +76,7 @@ import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import { useMatriculas } from '@/composables/useMatriculas'
 import { useToast } from '@/composables/useToast'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
+import { toLocalISODate } from '@/lib/formatters'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -100,7 +101,7 @@ const selectableCareers = computed(() => availableCareers.value.filter((carrera)
 )))
 
 function today() {
-  return new Date().toISOString().slice(0, 10)
+  return toLocalISODate()
 }
 
 function resetForm() {

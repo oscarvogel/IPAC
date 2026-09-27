@@ -45,6 +45,9 @@
               <dd>$ {{ formatMoney(diferencia) }}</dd>
             </div>
           </dl>
+          <p class="cash-close-explanation">
+            La diferencia se calcula como total contado menos total esperado. El efectivo retirado y el saldo para la próxima apertura deben sumar el total contado.
+          </p>
           <p v-if="tieneDiferencia" class="cash-close-warning" role="status">
             Hay una diferencia entre el total esperado y el total contado. Se registrará en el cierre.
           </p>
@@ -168,6 +171,10 @@ async function submit() {
   gap: .65rem 1rem;
   margin: 0 0 1rem;
 }
+
+.compact-modal .icon-button { min-width: 44px; min-height: 44px; }
+.cash-close-explanation { margin: 0 0 1rem; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.modal-grid label small { font-size: 12px; line-height: 1.4; }
 
 .cash-close-summary div {
   display: flex;

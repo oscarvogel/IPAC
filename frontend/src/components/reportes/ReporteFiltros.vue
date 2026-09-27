@@ -7,7 +7,7 @@
       <div>
         <p class="eyebrow">Análisis financiero</p>
         <h2>Período del reporte</h2>
-        <p>Definí el alcance del informe y exportá sus resultados.</p>
+        <p>{{ showExport ? 'Definí el alcance del informe y exportá sus resultados.' : 'Definí el período y revisá los indicadores operativos.' }}</p>
       </div>
     </div>
 
@@ -70,6 +70,7 @@
           <span>{{ loading ? 'Cargando' : 'Aplicar' }}</span>
         </button>
         <button
+          v-if="showExport"
           class="reports-export-action"
           type="button"
           :disabled="loading"
@@ -105,6 +106,7 @@ const props = defineProps({
   usuarios: { type: Array, default: () => [] },
   showUser: { type: Boolean, default: false },
   showMedium: { type: Boolean, default: true },
+  showExport: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['update:filtros', 'aplicar', 'exportar'])

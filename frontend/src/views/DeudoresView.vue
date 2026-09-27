@@ -505,7 +505,7 @@ onMounted(loadPage)
   .debtors-table-wrap .users-table-wrap { display: none; }
   .debtors-mobile-list { display: grid; gap: .75rem; padding: .75rem; }
   .debtors-mobile-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
-  .debtors-mobile-actions button { min-height: 42px; border: 1px solid var(--border); border-radius: .6rem; background: var(--surface); color: var(--primary); font-weight: 800; }
+.debtors-mobile-actions button { min-height: 44px; border: 1px solid var(--border); border-radius: .6rem; background: var(--surface); color: var(--primary); font-weight: 800; }
 
   .debtors-filters,
   .debtors-filters > * {

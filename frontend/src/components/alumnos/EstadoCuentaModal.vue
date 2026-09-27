@@ -40,6 +40,14 @@
               <strong>$ {{ formatMoney(data.resumen.saldo_pendiente) }}</strong>
             </article>
             <article>
+              <span>Saldo vencido</span>
+              <strong>$ {{ formatMoney(data.resumen.saldo_vencido || 0) }}</strong>
+            </article>
+            <article>
+              <span>Saldo por vencer</span>
+              <strong>$ {{ formatMoney(data.resumen.saldo_por_vencer || 0) }}</strong>
+            </article>
+            <article>
               <span>Saldo a favor</span>
               <strong>$ {{ formatMoney(data.resumen.saldo_a_favor) }}</strong>
             </article>
@@ -330,6 +338,13 @@ async function loadAccount(id = props.alumno?.id) {
 
 .account-net-total {
   min-width: 190px;
+}
+
+.account-modal .icon-button,
+.account-modal .print-recibo-btn,
+.account-modal .void-payment-btn {
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .account-net-total small {

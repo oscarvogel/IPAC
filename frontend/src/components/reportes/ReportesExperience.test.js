@@ -42,6 +42,18 @@ describe('experiencia de reportes', () => {
     expect(wrapper.findAll('select')).toHaveLength(1)
   })
 
+  it('oculta la exportación cuando la sección no dispone de un archivo propio', () => {
+    const wrapper = mount(ReporteFiltros, {
+      props: {
+        filtros: { desde: '', hasta: '', sucursal: '', medio: '' },
+        sucursales: [],
+        showExport: false,
+      },
+    })
+
+    expect(wrapper.find('.reports-export-action').exists()).toBe(false)
+  })
+
   it('presenta la distribución por medio ordenada por importe', () => {
     const wrapper = mount(ReporteResumen, {
       props: {

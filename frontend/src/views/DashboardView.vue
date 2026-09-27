@@ -136,7 +136,7 @@ import { useCaja } from '@/composables/useCaja'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useDashboardFilters } from '@/composables/useDashboardFilters'
 import { apiRequest } from '@/lib/api'
-import { formatDate, formatMoney } from '@/lib/formatters'
+import { formatDate, formatMoney, toLocalISODate } from '@/lib/formatters'
 import { useToast } from '@/composables/useToast'
 import AppPageState from '@/components/ui/AppPageState.vue'
 import AnimatedMetricValue from '@/components/ui/AnimatedMetricValue.vue'
@@ -254,10 +254,9 @@ async function cargarDashboard() {
 function dashboardDateQuery(sucursalId) {
   const hoy = new Date()
   const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
-  const iso = (date) => date.toISOString().slice(0, 10)
   return {
-    desde: iso(primero),
-    hasta: iso(hoy),
+    desde: toLocalISODate(primero),
+    hasta: toLocalISODate(hoy),
     sucursal: sucursalId,
   }
 }
