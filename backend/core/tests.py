@@ -1613,10 +1613,42 @@ class ApiInicialTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(len(response.data), 2)
         self.assertEqual(Cuota.objects.filter(periodo="2026-09").count(), 2)
+        self.assertEqual(
+            EventoAuditoria.objects.filter(entidad="core.Cuota").values_list("descripcion", flat=True).distinct().get(),
+            "Generación masiva de cuotas",
+        )
 
         repetida = self.client.post("/api/cuotas/generar/", payload, format="json")
         self.assertEqual(repetida.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Cuota.objects.filter(periodo="2026-09").count(), 2)
+
+    def test_fee_generation_allows_assigned_branch_and_rejects_other_branch_without_effects(self):
+        self.client.force_authenticate(user=self.tesoreria)
+        pedro = Alumno.objects.get(legajo="P-001")
+        concepto_posadas = ConceptoCobrable.objects.get(sucursal=self.posadas)
+        hoy = timezone.localdate()
+        allowed = self.client.post("/api/cuotas/generar/", {
+            "alumnos": [pedro.id], "concepto": concepto_posadas.id, "periodo": "2026-12",
+            "fecha_emision": hoy, "fecha_vencimiento": hoy, "importe": "25000.00",
+        }, format="json")
+        self.assertEqual(allowed.status_code, status.HTTP_201_CREATED, allowed.data)
+        self.assertEqual(
+            EventoAuditoria.objects.filter(entidad="core.Cuota").get().descripcion,
+            "Generación individual de cuota",
+        )
+
+        elena = Alumno.objects.get(legajo="E-001")
+        concepto_eldorado = ConceptoCobrable.objects.create(
+            nombre="Cuota Eldorado", tipo=ConceptoCobrable.Tipo.CUOTA,
+            importe=22000, sucursal=self.eldorado,
+        )
+        denied = self.client.post("/api/cuotas/generar/", {
+            "alumnos": [elena.id], "concepto": concepto_eldorado.id, "periodo": "2026-12",
+            "fecha_emision": hoy, "fecha_vencimiento": hoy,
+        }, format="json")
+        self.assertEqual(denied.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("acceso", denied.data["detail"].lower())
+        self.assertFalse(Cuota.objects.filter(alumno=elena, concepto=concepto_eldorado).exists())
 
     def test_can_evaluate_mass_fee_generation_without_loading_all_pages(self):
         self.client.force_authenticate(user=self.admin)
@@ -2367,6 +2399,61 @@ class CobroEndpointTests(APITestCase):
         self.assertEqual(str(estado.data["resumen"]["saldo_a_favor"]), "0.00")
         self.assertEqual(str(estado.data["resumen"]["saldo_neto"]), "10000.00")
 
+    def test_statement_separates_overdue_and_upcoming_positive_balances(self):
+        alumno = Alumno.objects.create(
+            legajo="POS-STATE-001", nombre="Sol", apellido="Ficticia",
+            dni="49999111", sucursal=self.posadas,
+        )
+        hoy = timezone.localdate()
+        overdue = Cuota.objects.create(
+            alumno=alumno, concepto=self.concepto, sucursal=self.posadas,
+            periodo="2030-01", fecha_emision=hoy - timedelta(days=40),
+            fecha_vencimiento=hoy - timedelta(days=10), importe="100.00",
+        )
+        today_due = Cuota.objects.create(
+            alumno=alumno, concepto=self.concepto, sucursal=self.posadas,
+            periodo="2030-02", fecha_emision=hoy, fecha_vencimiento=hoy,
+            importe="50.00",
+        )
+        upcoming = Cuota.objects.create(
+            alumno=alumno, concepto=self.concepto, sucursal=self.posadas,
+            periodo="2030-03", fecha_emision=hoy, fecha_vencimiento=hoy + timedelta(days=10),
+            importe="300.00",
+        )
+        paid = Cuota.objects.create(
+            alumno=alumno, concepto=self.concepto, sucursal=self.posadas,
+            periodo="2030-04", fecha_emision=hoy - timedelta(days=40),
+            fecha_vencimiento=hoy - timedelta(days=5), importe="500.00",
+        )
+        canceled = Cuota.objects.create(
+            alumno=alumno, concepto=self.concepto, sucursal=self.posadas,
+            periodo="2030-05", fecha_emision=hoy - timedelta(days=40),
+            fecha_vencimiento=hoy - timedelta(days=5), importe="800.00",
+            estado=Cuota.Estado.ANULADA,
+        )
+        payment = Pago.objects.create(
+            alumno=alumno, sucursal=self.posadas, registrado_por=self.cajero,
+            importe="540.00", medio=Pago.Medio.EFECTIVO,
+        )
+        AplicacionPago.objects.create(pago=payment, cuota=overdue, importe="40.00")
+        AplicacionPago.objects.create(pago=payment, cuota=paid, importe="500.00")
+
+        self.client.force_authenticate(self.cajero)
+        response = self.client.get(f"/api/alumnos/{alumno.id}/estado-cuenta/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["resumen"]["saldo_pendiente"], Decimal("410.00"))
+        self.assertEqual(response.data["resumen"]["saldo_vencido"], Decimal("60.00"))
+        self.assertEqual(response.data["resumen"]["saldo_por_vencer"], Decimal("350.00"))
+        overdue.refresh_from_db()
+        today_due.refresh_from_db()
+        upcoming.refresh_from_db()
+        canceled.refresh_from_db()
+        self.assertEqual(overdue.saldo, Decimal("60.00"))
+        self.assertEqual(today_due.saldo, Decimal("50.00"))
+        self.assertEqual(upcoming.saldo, Decimal("300.00"))
+        self.assertEqual(canceled.saldo, Decimal("800.00"))
+
 
 # Create your tests here.
 
@@ -2466,6 +2553,32 @@ class CajaHistorialApiTests(APITestCase):
             saldo_inicial=Decimal("100.00"),
             total_contado=Decimal("80.00"),
         )
+
+    def test_excel_cash_export_applies_user_and_authorized_branch_filters(self):
+        self._caja(self.cajero)
+        other_branch_user = self._user("export-eldorado", PerfilUsuario.Rol.CAJA, self.eldorado)
+        self._caja(other_branch_user, sucursal=self.eldorado)
+
+        self.client.force_authenticate(self.admin)
+        filtered = self.client.get(
+            "/api/reportes/exportar.xlsx",
+            {"tipo": "cajas", "sucursal": self.posadas.id, "usuario": self.cajero.id},
+        )
+        self.assertEqual(filtered.status_code, status.HTTP_200_OK)
+        workbook = load_workbook(BytesIO(filtered.content), data_only=True)
+        sheet = workbook.active
+        self.assertEqual(sheet["A1"].value, "Fecha")
+        self.assertEqual(sheet.max_row, 2)
+        self.assertEqual(sheet["C2"].value, self.cajero.username)
+
+        self.client.force_authenticate(self.tesoreria)
+        outside_scope = self.client.get(
+            "/api/reportes/exportar.xlsx",
+            {"tipo": "cajas", "sucursal": self.eldorado.id},
+        )
+        self.assertEqual(outside_scope.status_code, status.HTTP_200_OK)
+        workbook = load_workbook(BytesIO(outside_scope.content), data_only=True)
+        self.assertEqual(workbook.active.max_row, 1)
 
     def test_historial_filtra_sucursal_usuario_y_pagina_dentro_del_alcance(self):
         caja_del_cajero = self._caja(self.cajero)
