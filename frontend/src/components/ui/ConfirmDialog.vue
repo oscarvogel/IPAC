@@ -1,8 +1,7 @@
 <template>
   <Teleport to="body">
-    <Transition name="confirm-dialog">
+    <AppModalTransition :open="open">
       <div
-        v-if="open"
         class="confirm-dialog-backdrop"
         @click.self="cancel"
       >
@@ -38,7 +37,7 @@
           </div>
         </section>
       </div>
-    </Transition>
+    </AppModalTransition>
   </Teleport>
 </template>
 
@@ -49,6 +48,7 @@ import {
   NoSymbolIcon,
 } from '@heroicons/vue/24/outline'
 import { vFocusTrap } from '@/directives/accessibility'
+import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },

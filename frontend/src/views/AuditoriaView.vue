@@ -124,7 +124,7 @@ onMounted(() => load())
 .audit-table-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: 1rem; background: var(--color-surface); }
 .audit-table { width: 100%; border-collapse: collapse; min-width: 850px; }
 .audit-table th, .audit-table td { padding: .8rem 1rem; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: top; }
-.audit-table th { color: var(--color-text-secondary); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+.audit-table th { color: var(--color-text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .audit-module { border-radius: 999px; padding: .22rem .5rem; background: var(--primary-soft); color: var(--primary); font-size: .75rem; font-weight: 800; }
 .audit-empty { padding: 2rem !important; text-align: center !important; color: var(--color-text-secondary); }
 .audit-mobile-list, .audit-mobile-empty { display: none; }

@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="requestClose">
+    <AppModalTransition :open="open">
+      <div class="modal-backdrop" @click.self="requestClose">
       <form
         v-focus-trap="{ close: requestClose, busy: saving }"
         v-form-validation
@@ -42,6 +43,7 @@
             <label>
               Sucursal
               <select v-model="form.sucursal" required>
+                <option value="" disabled>Seleccionar sucursal</option>
                 <option v-for="s in sucursales" :key="s.id" :value="s.id">{{ s.nombre }}</option>
               </select>
             </label>
@@ -62,7 +64,8 @@
           </button>
         </footer>
       </form>
-    </div>
+      </div>
+    </AppModalTransition>
   </Teleport>
 </template>
 
@@ -71,8 +74,10 @@ import { reactive, ref, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { useAlumnos } from '@/composables/useAlumnos'
 import { useCatalogos } from '@/composables/useCatalogos'
+import { useAuth } from '@/composables/useAuth'
 import { useToast } from '@/composables/useToast'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
@@ -84,6 +89,7 @@ const emit = defineEmits(['close', 'saved'])
 
 const { createAlumno, updateAlumno } = useAlumnos()
 const { sucursales } = useCatalogos()
+const { user } = useAuth()
 const toast = useToast()
 
 const form = reactive({
@@ -99,6 +105,11 @@ const form = reactive({
 const editingId = ref(null)
 const saving = ref(false)
 
+function sucursalDelPerfilAutorizada() {
+  const profileBranchId = user.value?.perfil?.sucursal?.id
+  return sucursales.value.find((sucursal) => String(sucursal.id) === String(profileBranchId))?.id || ''
+}
+
 function requestClose() {
   if (!saving.value) emit('close')
 }
@@ -111,7 +122,7 @@ function resetForm() {
     dni: '',
     email: '',
     telefono: '',
-    sucursal: sucursales.value[0]?.id || '',
+    sucursal: sucursalDelPerfilAutorizada(),
   })
   editingId.value = null
 }

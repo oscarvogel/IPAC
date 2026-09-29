@@ -168,7 +168,10 @@ export function confirmGeneracionCuotasMasivas({
   concepto,
   periodo,
   importe,
+  descuento = 0,
+  recargo = 0,
   totalEstimado,
+  omitidas = 0,
 }) {
   return swalIpac.fire({
     icon: 'warning',
@@ -180,8 +183,11 @@ export function confirmGeneracionCuotasMasivas({
         <div><dt>Carrera/curso</dt><dd>${escapeHtml(carrera || 'Todas')}</dd></div>
         <div><dt>Concepto</dt><dd>${escapeHtml(concepto)}</dd></div>
         <div><dt>Período</dt><dd>${escapeHtml(periodo)}</dd></div>
-        <div><dt>Cantidad de alumnos</dt><dd>${cantidad}</dd></div>
+        <div><dt>Alumnos elegibles</dt><dd>${cantidad}</dd></div>
+        <div><dt>Alumnos omitidos</dt><dd>${omitidas}</dd></div>
         <div><dt>Importe unitario</dt><dd>$ ${formatMoney(importe)}</dd></div>
+        <div><dt>Descuento</dt><dd>− $ ${formatMoney(descuento)}</dd></div>
+        <div><dt>Recargo</dt><dd>+ $ ${formatMoney(recargo)}</dd></div>
         <div><dt>Total estimado</dt><dd>$ ${formatMoney(totalEstimado)}</dd></div>
       </dl>
     `,

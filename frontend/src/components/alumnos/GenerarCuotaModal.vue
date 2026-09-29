@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="requestClose">
+    <AppModalTransition :open="open">
+      <div class="modal-backdrop" @click.self="requestClose">
       <form
         v-focus-trap="{ close: requestClose, busy: saving }"
         v-form-validation
@@ -92,7 +93,8 @@
           </button>
         </footer>
       </form>
-    </div>
+      </div>
+    </AppModalTransition>
   </Teleport>
 </template>
 
@@ -101,7 +103,7 @@
   display: block;
   margin-top: 5px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -114,10 +116,12 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { usePagos } from '@/composables/usePagos'
+import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import { useToast } from '@/composables/useToast'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 import { useCatalogos } from '@/composables/useCatalogos'
+import { toLocalISODate } from '@/lib/formatters'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -161,8 +165,7 @@ const tiposFiltrados = computed(() => tiposDescuento.value.filter((tipo) => tipo
 const selectedDiscount = computed(() => tiposFiltrados.value.find((tipo) => String(tipo.id) === String(form.tipo_descuento)))
 
 function todayStr() {
-  const d = new Date()
-  return d.toISOString().slice(0, 10)
+  return toLocalISODate()
 }
 
 watch(

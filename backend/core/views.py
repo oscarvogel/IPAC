@@ -20,12 +20,16 @@ from rest_framework.views import APIView
 
 from django.contrib.auth.models import User
 
+from .access_scope import scoped_queryset_for_user
 from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, EventoAuditoria, Matricula, MovimientoCaja, Pago, PerfilUsuario, ReglaRecargo, Sucursal, TipoDescuento
 from .contexts.importacion.application.import_ipac_workbook import IPACWorkbookImporter
 from .contexts.cobranzas.application.registrar_pago import RegistrarPago
+from .contexts.cobranzas.application.generar_cuotas import GeneracionCuotasError, GenerarCuotas
+from .contexts.cobranzas.application.evaluar_generacion_cuotas import EvaluarGeneracionCuotas
 from .contexts.cobranzas.application.anular_pago import AnularPago, PagoAnulacionError
 from .contexts.caja.application.validar_caja import CajaCerradaError, asegurar_caja_abierta
 from .contexts.caja.application.gestionar_caja import CerrarCaja, GestionarSaldoAnterior
+from .contexts.caja.application.consultar_historial_cajas import ConsultarHistorialCajas
 from .contexts.caja.domain.resumen_caja import CajaOperacionError
 from .contexts.caja.infrastructure.django_caja_repository import DjangoCajaRepository
 from .contexts.alumnos.application.gestionar_matricula import GestionarMatricula, MatriculaError
@@ -33,8 +37,15 @@ from .contexts.auditoria.presentation.mixins import AuditableViewSetMixin, snaps
 from .contexts.auditoria.application.registrar_evento import RegistrarEventoAuditoria
 from .contexts.auditoria.infrastructure.django_auditoria_repository import DjangoAuditoriaRepository
 from .contexts.reportes.infrastructure.xlsx_exporter import XlsxReportExporter
+from .contexts.reportes.application.exportar_cajas import ExportarCajas, FiltrosExportacionCajas
+from .contexts.reportes.infrastructure.django_caja_export_reader import DjangoCajaExportReader
 from .contexts.cobranzas.application.recalcular_recargos import RecalcularRecargos
 from .contexts.cobranzas.infrastructure.django_recargo_repository import DjangoRecargoRepository
+from .contexts.cobranzas.infrastructure.django_alumno_elegible_cuota_reader import (
+    DatosGeneracionCuotasInvalidos,
+    DjangoAlumnoElegibleCuotaReader,
+)
+from .contexts.cobranzas.infrastructure.django_cuota_generator import DjangoCuotaGenerator
 from .contexts.identidad.application.cambiar_clave import CambiarClave
 from .pagination import AlumnoPagination
 from .permissions import (
@@ -55,6 +66,9 @@ from .serializers import (
     AlumnoSerializer,
     AplicacionPagoSerializer,
     CajaDiariaSerializer,
+    CajaConsultaSerializer,
+    CajaHistorialFilterSerializer,
+    CajaHistorialSerializer,
     CarreraCursoSerializer,
     ConceptoCobrableSerializer,
     CobroSerializer,
@@ -71,18 +85,8 @@ from .serializers import (
     EventoAuditoriaSerializer,
     TipoDescuentoSerializer,
     ReglaRecargoSerializer,
+    UsuarioCajaSerializer,
 )
-
-
-def scoped_queryset_for_user(queryset, user):
-    perfil = getattr(user, "perfil", None)
-    if not perfil:
-        return queryset.none()
-    if perfil.puede_ver_todas_las_sucursales:
-        return queryset
-    if queryset.model is Sucursal:
-        return queryset.filter(pk=perfil.sucursal_id)
-    return queryset.filter(sucursal=perfil.sucursal)
 
 
 def get_user_sucursal(user):
@@ -309,15 +313,16 @@ class ReporteExportarExcelView(APIView):
             ]
             title = "Morosidad"
         elif report_type == "cajas":
-            headers = ["Fecha", "Sucursal", "Usuario", "Estado", "Saldo inicial", "Efectivo esperado", "Total contado", "Diferencia", "Saldo siguiente"]
-            cajas = scoped_queryset_for_user(CajaDiaria.objects.select_related("sucursal", "usuario").prefetch_related("movimientos"), request.user)
-            if sucursal := request.query_params.get("sucursal"):
-                cajas = cajas.filter(sucursal_id=sucursal)
-            if desde := request.query_params.get("desde"):
-                cajas = cajas.filter(fecha__gte=desde)
-            if hasta := request.query_params.get("hasta"):
-                cajas = cajas.filter(fecha__lte=hasta)
-            rows = [[c.fecha, c.sucursal.nombre, c.usuario.username, c.get_estado_display(), c.saldo_inicial, c.total_esperado, c.total_contado, c.diferencia, c.saldo_arrastrable] for c in cajas]
+            export = ExportarCajas(DjangoCajaExportReader()).execute(
+                actor=request.user,
+                filtros=FiltrosExportacionCajas(
+                    desde=request.query_params.get("desde"),
+                    hasta=request.query_params.get("hasta"),
+                    sucursal_id=request.query_params.get("sucursal"),
+                    usuario_id=request.query_params.get("usuario"),
+                ),
+            )
+            headers, rows = export["headers"], export["rows"]
             title = "Cajas"
         elif report_type == "alumnos":
             headers = ["Legajo", "Apellido", "Nombre", "DNI", "Sucursal", "Carrera/curso", "Estado", "Teléfono", "Email"]
@@ -386,17 +391,33 @@ class AlumnoViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         money = DecimalField(max_digits=14, decimal_places=2)
+        aplicaciones_por_cuota = (
+            AplicacionPago.objects.filter(cuota_id=OuterRef("pk"), activa=True)
+            .values("cuota_id")
+            .annotate(total=Sum("importe"))
+            .values("total")[:1]
+        )
         deuda_por_alumno = (
             Cuota.objects.filter(alumno_id=OuterRef("pk"))
             .exclude(estado=Cuota.Estado.ANULADA)
-            .values("alumno_id")
             .annotate(
-                total=Sum(F("importe") - F("descuento") + F("recargo"), output_field=money)
-                - Coalesce(
-                    Sum("aplicaciones__importe", filter=Q(aplicaciones__activa=True)),
+                saldo_calculado=Greatest(
+                    ExpressionWrapper(
+                        F("importe") - F("descuento") + F("recargo") - Coalesce(
+                            Subquery(aplicaciones_por_cuota, output_field=money),
+                            Value(Decimal("0")),
+                            output_field=money,
+                        ),
+                        output_field=money,
+                    ),
                     Value(Decimal("0")),
                     output_field=money,
-                )
+                ),
+            )
+            .filter(saldo_calculado__gt=0)
+            .values("alumno_id")
+            .annotate(
+                total=Sum("saldo_calculado", output_field=money),
             )
             .values("total")[:1]
         )
@@ -473,7 +494,17 @@ class AlumnoViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
         cuotas = Cuota.objects.filter(alumno=alumno).select_related("concepto").prefetch_related("aplicaciones")
         pagos = Pago.objects.filter(alumno=alumno).select_related("concepto").prefetch_related("aplicaciones")
         cuotas_activas = [cuota for cuota in cuotas if cuota.estado != Cuota.Estado.ANULADA]
-        total_deuda = sum((cuota.saldo for cuota in cuotas_activas), 0)
+        cuotas_con_saldo = [cuota for cuota in cuotas_activas if cuota.saldo > 0]
+        total_deuda = sum((cuota.saldo for cuota in cuotas_con_saldo), Decimal("0"))
+        hoy = timezone.localdate()
+        saldo_vencido = sum(
+            (cuota.saldo for cuota in cuotas_con_saldo if cuota.fecha_vencimiento < hoy),
+            Decimal("0"),
+        )
+        saldo_por_vencer = sum(
+            (cuota.saldo for cuota in cuotas_con_saldo if cuota.fecha_vencimiento >= hoy),
+            Decimal("0"),
+        )
         saldo_a_favor = sum((pago.saldo_a_favor for pago in pagos), 0)
         return Response(
             {
@@ -481,6 +512,8 @@ class AlumnoViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
                 "resumen": {
                     "total_cuotas": sum((cuota.total for cuota in cuotas_activas), 0),
                     "saldo_pendiente": total_deuda,
+                    "saldo_vencido": saldo_vencido,
+                    "saldo_por_vencer": saldo_por_vencer,
                     "saldo_a_favor": saldo_a_favor,
                     "saldo_neto": total_deuda - saldo_a_favor,
                 },
@@ -734,114 +767,36 @@ class CuotaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        conceptos = scoped_queryset_for_user(ConceptoCobrable.objects.filter(activo=True), request.user)
-        concepto = conceptos.filter(pk=concepto_id, sucursal_id=sucursal_id).first()
-        if not concepto:
-            return Response({"detail": "Concepto invalido o sin acceso."}, status=status.HTTP_400_BAD_REQUEST)
-
-        alumnos = scoped_queryset_for_user(
-            Alumno.objects.filter(estado=Alumno.Estado.ACTIVO, sucursal_id=sucursal_id),
-            request.user,
-        )
-        if carrera_id:
-            carrera = scoped_queryset_for_user(CarreraCurso.objects.all(), request.user).filter(
-                pk=carrera_id,
+        use_case = EvaluarGeneracionCuotas(DjangoAlumnoElegibleCuotaReader())
+        try:
+            preview = use_case.execute(
+                actor=request.user,
                 sucursal_id=sucursal_id,
-            ).first()
-            if not carrera:
-                return Response({"detail": "Carrera invalida o sin acceso."}, status=status.HTTP_400_BAD_REQUEST)
-            alumnos = alumnos.filter(carrera_id=carrera.id)
-
-        existing_alumnos = Cuota.objects.filter(
-            alumno_id__in=alumnos.values("id"),
-            concepto_id=concepto.id,
-            periodo=periodo,
-        ).values("alumno_id")
-        eligible_ids = list(alumnos.exclude(id__in=existing_alumnos).values_list("id", flat=True))
-        found_count = alumnos.count()
-        return Response({
-            "alumnos_encontrados": found_count,
-            "omitidas": found_count - len(eligible_ids),
-            "alumnos_elegibles": eligible_ids,
-        })
+                carrera_id=carrera_id,
+                concepto_id=concepto_id,
+                periodo=periodo,
+            )
+        except DatosGeneracionCuotasInvalidos as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(preview)
 
     @action(detail=False, methods=["post"], url_path="generar")
     def generar(self, request):
-        alumno_ids = request.data.get("alumnos", [])
-        concepto_id = request.data.get("concepto")
-        periodo = request.data.get("periodo")
-        fecha_emision = request.data.get("fecha_emision")
-        fecha_vencimiento = request.data.get("fecha_vencimiento")
-        if not isinstance(alumno_ids, list) or not alumno_ids:
-            return Response({"detail": "Debe indicar al menos un alumno."}, status=status.HTTP_400_BAD_REQUEST)
-        if not all([concepto_id, periodo, fecha_emision, fecha_vencimiento]):
-            return Response({"detail": "Concepto, periodo y fechas son obligatorios."}, status=status.HTTP_400_BAD_REQUEST)
-
-        conceptos = scoped_queryset_for_user(ConceptoCobrable.objects.filter(activo=True), request.user)
-        concepto = conceptos.filter(pk=concepto_id).first()
-        if not concepto:
-            return Response({"detail": "Concepto invalido o sin acceso."}, status=status.HTTP_400_BAD_REQUEST)
-        alumnos = scoped_queryset_for_user(Alumno.objects.filter(id__in=alumno_ids, estado=Alumno.Estado.ACTIVO), request.user)
-        if alumnos.count() != len(set(alumno_ids)):
-            return Response({"detail": "Hay alumnos invalidos, inactivos o de otra sucursal."}, status=status.HTTP_400_BAD_REQUEST)
-        if alumnos.exclude(sucursal=concepto.sucursal).exists():
-            return Response({"detail": "El concepto debe pertenecer a la sucursal de todos los alumnos."}, status=status.HTTP_400_BAD_REQUEST)
-        existentes = Cuota.objects.filter(alumno__in=alumnos, concepto=concepto, periodo=periodo)
-        if existentes.exists():
-            return Response(
-                {"detail": "Ya existen cuotas para este concepto y periodo.", "alumnos": list(existentes.values_list("alumno_id", flat=True))},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         try:
-            importe = Decimal(str(request.data.get("importe", concepto.importe)))
-            descuento = Decimal(str(request.data.get("descuento", 0)))
-            recargo = Decimal(str(request.data.get("recargo", 0)))
-        except (InvalidOperation, TypeError):
-            return Response({"detail": "Los importes deben ser numericos."}, status=status.HTTP_400_BAD_REQUEST)
-        if importe <= 0 or descuento < 0 or recargo < 0 or descuento > importe + recargo:
-            return Response({"detail": "Los importes, descuentos o recargos no son validos."}, status=status.HTTP_400_BAD_REQUEST)
-        tipo_descuento = None
-        motivo_descuento = request.data.get("motivo_descuento", "")
-        if tipo_id := request.data.get("tipo_descuento"):
-            tipo_descuento = scoped_queryset_for_user(TipoDescuento.objects.filter(activo=True), request.user).filter(
-                pk=tipo_id,
-                sucursal=concepto.sucursal,
-            ).first()
-            if not tipo_descuento:
-                raise ValidationError({"detail": "Tipo de descuento inválido o sin acceso."})
-            if tipo_descuento.valor > 0:
-                descuento = tipo_descuento.calcular(importe)
-        elif descuento > 0:
-            tipo_descuento, _ = TipoDescuento.objects.get_or_create(
-                nombre="Excepción manual",
-                sucursal=concepto.sucursal,
-                defaults={"modalidad": TipoDescuento.Modalidad.IMPORTE, "valor": 0},
-            )
-            motivo_descuento = motivo_descuento or "Ajuste manual"
-        with transaction.atomic():
-            cuotas = [
-                Cuota(
-                    alumno=alumno,
-                    concepto=concepto,
-                    sucursal=alumno.sucursal,
-                    periodo=periodo,
-                    fecha_emision=fecha_emision,
-                    fecha_vencimiento=fecha_vencimiento,
-                    importe=importe,
-                    descuento=descuento,
-                    tipo_descuento=tipo_descuento,
-                    motivo_descuento=motivo_descuento,
-                    descuento_registrado_por=request.user if descuento > 0 else None,
-                    recargo=recargo,
+            with transaction.atomic():
+                cuotas = GenerarCuotas(DjangoCuotaGenerator()).execute(
+                    actor=request.user,
+                    payload=request.data,
                 )
-                for alumno in alumnos
-            ]
-            Cuota.objects.bulk_create(cuotas)
-            for cuota in cuotas:
-                self._audit(action="alta", instance=cuota, after=snapshot(cuota), description="Generación masiva de cuota")
+                description = "Generación individual de cuota" if len(cuotas) == 1 else "Generación masiva de cuotas"
+                for cuota in cuotas:
+                    self._audit(action="alta", instance=cuota, after=snapshot(cuota), description=description)
+        except GeneracionCuotasError as exc:
+            payload = {"detail": exc.detail}
+            if exc.alumnos is not None:
+                payload["alumnos"] = exc.alumnos
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
         return Response(CuotaSerializer(cuotas, many=True).data, status=status.HTTP_201_CREATED)
-
 
 class AplicacionPagoViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
     audit_module = "cobranzas"
@@ -1051,9 +1006,75 @@ class CajaDiariaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [CajaPermission]
 
     def get_queryset(self):
-        return scoped_queryset_for_user(
+        queryset = scoped_queryset_for_user(
             CajaDiaria.objects.select_related("sucursal", "usuario").prefetch_related("movimientos"),
             self.request.user,
+        )
+        profile = getattr(self.request.user, "perfil", None)
+        if not profile:
+            return queryset.none()
+        if profile.rol == PerfilUsuario.Rol.CAJA:
+            queryset = queryset.filter(usuario=self.request.user)
+        elif profile.rol == PerfilUsuario.Rol.CONSULTA:
+            return queryset.none()
+        elif self.action in {"cerrar", "saldo_anterior"} and self.request.method == "POST":
+            queryset = queryset.filter(usuario=self.request.user)
+        return queryset
+
+    def get_serializer_class(self):
+        profile = getattr(self.request.user, "perfil", None)
+        if profile and profile.rol == PerfilUsuario.Rol.CONSULTA:
+            return CajaConsultaSerializer
+        return super().get_serializer_class()
+
+    @action(detail=False, methods=["get"], url_path="historial")
+    def historial(self, request):
+        filter_serializer = CajaHistorialFilterSerializer(data=request.query_params)
+        filter_serializer.is_valid(raise_exception=True)
+        filters = filter_serializer.validated_data
+        sucursal_ids = tuple(
+            scoped_queryset_for_user(Sucursal.objects.all(), request.user).values_list("id", flat=True)
+        )
+        if "sucursal" in filters:
+            sucursal_ids = tuple(
+                sucursal_id for sucursal_id in sucursal_ids if sucursal_id == filters["sucursal"]
+            )
+
+        pagina = ConsultarHistorialCajas(DjangoCajaRepository()).execute(
+            desde=filters.get("desde"),
+            hasta=filters.get("hasta"),
+            sucursal_ids=sucursal_ids,
+            usuario_id=filters.get("usuario"),
+            propietario_id=(
+                request.user.id
+                if request.user.perfil.rol == PerfilUsuario.Rol.CAJA
+                else None
+            ),
+            page=filters["page"],
+            page_size=int(filters["page_size"]),
+        )
+        results = CajaHistorialSerializer(pagina.results, many=True).data
+        usuarios = UsuarioCajaSerializer(pagina.usuarios, many=True).data
+        next_link = None
+        previous_link = None
+        if pagina.page * pagina.page_size < pagina.count:
+            next_params = request.query_params.copy()
+            next_params["page"] = str(pagina.page + 1)
+            next_link = request.build_absolute_uri(f"{request.path}?{next_params.urlencode()}")
+        if pagina.page > 1:
+            previous_params = request.query_params.copy()
+            previous_params["page"] = str(pagina.page - 1)
+            previous_link = request.build_absolute_uri(f"{request.path}?{previous_params.urlencode()}")
+        return Response(
+            {
+                "count": pagina.count,
+                "page": pagina.page,
+                "page_size": pagina.page_size,
+                "next": next_link,
+                "previous": previous_link,
+                "usuarios": usuarios,
+                "results": results,
+            }
         )
 
     @action(detail=False, methods=["get"], url_path="hoy")
@@ -1184,8 +1205,13 @@ class MovimientoCajaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = MovimientoCaja.objects.select_related("caja", "caja__usuario", "pago")
-        caja_id = self.request.query_params.get("caja")
         queryset = queryset.filter(caja__in=scoped_queryset_for_user(CajaDiaria.objects.all(), self.request.user))
+        profile = getattr(self.request.user, "perfil", None)
+        if not profile or profile.rol == PerfilUsuario.Rol.CONSULTA:
+            return queryset.none()
+        if profile.rol == PerfilUsuario.Rol.CAJA:
+            queryset = queryset.filter(caja__usuario=self.request.user)
+        caja_id = self.request.query_params.get("caja")
         if caja_id:
             queryset = queryset.filter(caja_id=caja_id)
         return queryset

@@ -82,16 +82,18 @@
 
     <CajaMovimientos :movimientos="cajaMovimientos" />
 
-    <CajaPrintSummary
-      :caja-hoy="cajaHoy"
-      :movimientos="cajaMovimientos"
-      :caja-totales="cajaTotales"
-      :username="auth.user?.username || ''"
-      :fallback-sucursal="auth.user?.perfil?.sucursal?.nombre"
-    />
+    <Teleport to="body">
+      <CajaPrintSummary
+        :caja-hoy="cajaHoy"
+        :movimientos="cajaMovimientos"
+        :caja-totales="cajaTotales"
+        :username="auth.user?.username || ''"
+        :fallback-sucursal="auth.user?.perfil?.sucursal?.nombre"
+      />
+    </Teleport>
 
     <MovimientoForm
-      v-if="showMovimiento"
+      :open="showMovimiento"
       :caja-hoy="cajaHoy"
       :loading="loading"
       :tipo-inicial="movimientoTipoInicial"
@@ -100,7 +102,7 @@
     />
 
     <CerrarCajaModal
-      v-if="showCerrar"
+      :open="showCerrar"
       :caja-hoy="cajaHoy"
       :total-esperado="cajaTotales.efectivoEsperado"
       :loading="loading"
@@ -127,6 +129,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useCaja } from '@/composables/useCaja'
 import { useToast } from '@/composables/useToast'
 import { formatDate, formatMoney } from '@/lib/formatters'
+import { printDocument } from '@/lib/print'
 import CajaHero from '@/components/caja/CajaHero.vue'
 import CajaMovimientos from '@/components/caja/CajaMovimientos.vue'
 import CajaPrintSummary from '@/components/caja/CajaPrintSummary.vue'
@@ -253,7 +256,7 @@ async function submitCerrar(cierre) {
 }
 
 function printCajaResumen() {
-  window.print()
+  printDocument('cash-summary')
 }
 
 onMounted(loadPage)

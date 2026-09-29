@@ -29,9 +29,9 @@
         </div>
       </article>
 
-      <div v-if="history.length" class="matriculas-history">
-        <span class="matriculas-history-title">Historial</span>
-        <article v-for="matricula in history" :key="matricula.id" class="matricula-history-row">
+      <MotionList v-if="history.length" class="matriculas-history" data-motion-list="matriculas-history">
+        <span key="history-title" class="matriculas-history-title">Historial</span>
+        <article v-for="matricula in history" :key="matricula.id" data-motion-item class="matricula-history-row">
           <div>
             <strong>{{ matricula.carrera_nombre }}</strong>
             <small>
@@ -43,7 +43,7 @@
           <span :class="['matricula-status', matricula.estado]">{{ stateLabel(matricula.estado) }}</span>
           <button v-if="canManage && matricula.estado !== 'anulada'" type="button" @click="openEdit(matricula)">Editar</button>
         </article>
-      </div>
+      </MotionList>
 
       <p v-if="!activeMatricula && !history.length" class="students-inline-empty">
         Este alumno todavía no tiene matrículas registradas.
@@ -68,6 +68,7 @@ import { useMatriculas } from '@/composables/useMatriculas'
 import { useToast } from '@/composables/useToast'
 import { confirmAnularMatricula, confirmFinalizarMatricula } from '@/lib/swal'
 import { formatDate } from '@/lib/formatters'
+import MotionList from '@/components/ui/MotionList.vue'
 
 const props = defineProps({
   alumno: { type: Object, default: null },
@@ -180,7 +181,7 @@ function stateLabel(state) {
   border-radius: 8px;
   color: var(--primary);
   background: var(--surface);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 .matricula-actions button.danger { color: var(--danger); }
@@ -219,7 +220,7 @@ function stateLabel(state) {
 .matricula-history-row small {
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .matricula-active-card p {
@@ -230,7 +231,7 @@ function stateLabel(state) {
   display: inline-flex;
   margin-bottom: 5px;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   text-transform: uppercase;
 }
@@ -260,7 +261,7 @@ function stateLabel(state) {
   display: block;
   margin-bottom: 7px;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: .08em;
   text-transform: uppercase;

@@ -1,12 +1,14 @@
 <template>
-  <div class="app-shell" :class="{ 'sidebar-is-open': sidebarOpen }">
+  <div ref="appShell" class="app-shell" :class="{ 'sidebar-is-open': sidebarOpen }">
     <a class="skip-link" href="#main-content">Ir al contenido principal</a>
-    <AppSidebar :open="sidebarOpen" @close="closeSidebar" />
+    <AppSidebar ref="sidebarComponent" :open="sidebarOpen" @close="closeSidebar" />
     <button
-      v-if="sidebarOpen"
+      ref="sidebarBackdrop"
       class="sidebar-backdrop"
       type="button"
       aria-label="Cerrar navegación"
+      :aria-hidden="sidebarOpen ? undefined : 'true'"
+      :tabindex="sidebarOpen ? 0 : -1"
       @click="sidebarOpen = false"
     />
     <section class="workspace" :inert="sidebarOpen ? '' : undefined">
@@ -36,11 +38,17 @@ import { useRoute } from 'vue-router'
 import AppSidebar from './AppSidebar.vue'
 import AppTopbar from './AppTopbar.vue'
 import AppPageState from '@/components/ui/AppPageState.vue'
+import { animateSidebar } from '@/lib/motion'
 
 const route = useRoute()
 const sidebarOpen = ref(false)
 const mainContent = ref(null)
+const appShell = ref(null)
+const sidebarComponent = ref(null)
+const sidebarBackdrop = ref(null)
 const mobileMediaQuery = window.matchMedia?.('(max-width: 760px)')
+let sidebarTween = null
+let sidebarAnimationId = 0
 
 function syncBodyScrollLock() {
   const isMobile = mobileMediaQuery?.matches ?? false
@@ -64,7 +72,23 @@ watch(
   },
 )
 
-watch(sidebarOpen, syncBodyScrollLock)
+watch(sidebarOpen, async (open) => {
+  syncBodyScrollLock()
+  const animationId = ++sidebarAnimationId
+  await nextTick()
+  if (animationId !== sidebarAnimationId) return
+
+  const shell = appShell.value
+  const sidebar = sidebarComponent.value?.$el
+  const backdrop = sidebarBackdrop.value
+  if (!mobileMediaQuery?.matches || !sidebar) return
+
+  sidebarTween?.kill()
+  shell?.classList.add('sidebar-gsap-active')
+  sidebarTween = animateSidebar(sidebar, backdrop, open, () => {
+    if (animationId === sidebarAnimationId) shell?.classList.remove('sidebar-gsap-active')
+  })
+})
 
 onMounted(() => {
   mobileMediaQuery?.addEventListener?.('change', syncBodyScrollLock)
@@ -72,6 +96,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  sidebarTween?.kill()
+  appShell.value?.classList.remove('sidebar-gsap-active')
   mobileMediaQuery?.removeEventListener?.('change', syncBodyScrollLock)
   document.body.classList.remove('sidebar-scroll-locked')
 })

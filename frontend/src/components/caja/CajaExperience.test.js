@@ -1,9 +1,35 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import CajaHero from './CajaHero.vue'
 import CajaMovimientos from './CajaMovimientos.vue'
+import CerrarCajaModal from './CerrarCajaModal.vue'
+
+const confirmCierreCaja = vi.hoisted(() => vi.fn().mockResolvedValue({ isConfirmed: false }))
+vi.mock('@/lib/swal', () => ({ confirmCierreCaja }))
 
 describe('experiencia de caja', () => {
+  it('explica el cálculo de diferencia y la distribución del efectivo antes del cierre', async () => {
+    const wrapper = mount(CerrarCajaModal, {
+      props: {
+        open: true,
+        totalEsperado: 100,
+        cajaHoy: { id: 1, fecha: '2026-09-26', estado: 'abierta', sucursal_nombre: 'Posadas' },
+      },
+      global: {
+        stubs: {
+          Teleport: true,
+          AppModalTransition: { template: '<div><slot /></div>' },
+          AppButtonContent: { template: '<span>{{ label }}</span>', props: ['label'] },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('total contado menos total esperado')
+    expect(wrapper.text()).toContain('deben sumar el total contado')
+    await wrapper.find('input[type="number"]').setValue('90')
+    expect(wrapper.text()).toContain('Hay una diferencia entre el total esperado y el total contado.')
+  })
+
   it('mantiene disponibles las operaciones de una caja abierta', async () => {
     const wrapper = mount(CajaHero, {
       props: {

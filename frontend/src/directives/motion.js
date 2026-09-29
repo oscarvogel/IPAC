@@ -1,8 +1,6 @@
-const revealObservers = new WeakMap()
+import { prefersReducedMotion } from '@/lib/motion'
 
-function prefersReducedMotion() {
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
-}
+const revealObservers = new WeakMap()
 
 function reveal(element) {
   element.classList.add('is-visible')

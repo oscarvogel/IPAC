@@ -16,10 +16,11 @@
       </span>
     </header>
 
-    <div v-if="sortedSucursales.length" class="branches-card-grid">
+    <MotionList v-if="sortedSucursales.length" class="branches-card-grid" data-motion-list="sucursales">
       <article
         v-for="sucursal in sortedSucursales"
         :key="sucursal.id"
+        data-motion-item
         class="branch-card"
         :class="{ inactive: !sucursal.activa }"
       >
@@ -72,7 +73,7 @@
           </button>
         </footer>
       </article>
-    </div>
+    </MotionList>
 
     <div v-else class="branches-empty-state">
       <span><BuildingOffice2Icon aria-hidden="true" /></span>
@@ -94,6 +95,7 @@ import {
   PauseCircleIcon,
   PencilSquareIcon,
 } from '@heroicons/vue/24/outline'
+import MotionList from '@/components/ui/MotionList.vue'
 
 const props = defineProps({
   sucursales: { type: Array, required: true },

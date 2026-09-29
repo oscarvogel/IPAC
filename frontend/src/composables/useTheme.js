@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { animateThemeTransition, readThemeVariables } from '@/lib/motion'
 
 const STORAGE_KEY = 'ipac-theme'
 const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
@@ -13,9 +14,14 @@ function applyTheme() {
 if (typeof document !== 'undefined') applyTheme()
 
 function toggleTheme() {
+  const root = typeof document !== 'undefined' ? document.documentElement : null
+  const previousVariables = root ? readThemeVariables(root) : {}
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
   localStorage.setItem(STORAGE_KEY, theme.value)
   applyTheme()
+  if (root) {
+    animateThemeTransition(root, previousVariables, readThemeVariables(root))
+  }
 }
 
 export function useTheme() {

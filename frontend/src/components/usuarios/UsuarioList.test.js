@@ -31,9 +31,16 @@ const usuarios = [
   },
 ]
 
+function mountList(props) {
+  return mount(UsuarioList, {
+    props,
+    global: { stubs: { TransitionGroup: false } },
+  })
+}
+
 describe('directorio de usuarios', () => {
   it('prioriza usuarios activos y representa rol y alcance', () => {
-    const wrapper = mount(UsuarioList, { props: { usuarios } })
+    const wrapper = mountList({ usuarios })
     const rows = wrapper.findAll('tbody tr')
 
     expect(rows).toHaveLength(2)
@@ -44,7 +51,7 @@ describe('directorio de usuarios', () => {
   })
 
   it('mantiene edición y limita la desactivación a usuarios activos', async () => {
-    const wrapper = mount(UsuarioList, { props: { usuarios } })
+    const wrapper = mountList({ usuarios })
     const rows = wrapper.findAll('tbody tr')
 
     await rows[0].get('button[aria-label="Editar usuario"]').trigger('click')
@@ -57,7 +64,7 @@ describe('directorio de usuarios', () => {
   })
 
   it('mantiene los datos y acciones prioritarias en tarjetas móviles', async () => {
-    const wrapper = mount(UsuarioList, { props: { usuarios } })
+    const wrapper = mountList({ usuarios })
     const cards = wrapper.findAll('.users-mobile-list .mobile-record-card')
 
     expect(cards).toHaveLength(2)

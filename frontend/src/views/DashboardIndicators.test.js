@@ -75,6 +75,6 @@ describe('indicadores móviles del Dashboard', () => {
     expect(toggle.attributes('aria-expanded')).toBe('false')
     await toggle.trigger('click')
     expect(toggle.attributes('aria-expanded')).toBe('true')
-    expect(wrapper.get('#dashboard-indicators').classes()).toContain('show-all-mobile-stats')
+    expect(wrapper.get('#dashboard-indicators').classes()).toContain('show-all-indicators')
   })
 })

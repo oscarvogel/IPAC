@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatMoney, formatDate, formatDateTime } from '@/lib/formatters'
+import { formatMoney, formatDate, formatDateTime, toLocalISODate } from '@/lib/formatters'
 
 describe('formatters', () => {
   describe('formatMoney', () => {
@@ -43,6 +43,17 @@ describe('formatters', () => {
     it('devuelve vacio para null/undefined', () => {
       expect(formatDateTime(null)).toBe('')
       expect(formatDateTime(undefined)).toBe('')
+    })
+  })
+
+  describe('toLocalISODate', () => {
+    it('mantiene el día calendario local para campos de fecha', () => {
+      const localDate = new Date(2026, 8, 26, 23, 45, 0)
+      expect(toLocalISODate(localDate)).toBe('2026-09-26')
+    })
+
+    it('devuelve vacío ante una fecha inválida', () => {
+      expect(toLocalISODate('invalid')).toBe('')
     })
   })
 })

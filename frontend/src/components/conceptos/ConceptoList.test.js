@@ -23,9 +23,16 @@ const conceptos = [
   },
 ]
 
+function mountList(props) {
+  return mount(ConceptoList, {
+    props,
+    global: { stubs: { TransitionGroup: false } },
+  })
+}
+
 describe('catálogo de conceptos', () => {
   it('ordena los conceptos y mantiene disponible la edición', async () => {
-    const wrapper = mount(ConceptoList, { props: { conceptos } })
+    const wrapper = mountList({ conceptos })
     const rows = wrapper.findAll('tbody tr')
 
     expect(rows).toHaveLength(2)
@@ -36,7 +43,7 @@ describe('catálogo de conceptos', () => {
   })
 
   it('ofrece desactivar solamente los conceptos activos', async () => {
-    const wrapper = mount(ConceptoList, { props: { conceptos } })
+    const wrapper = mountList({ conceptos })
     const deactivateButtons = wrapper.findAll('.concepts-table button[aria-label="Desactivar concepto"]')
 
     expect(deactivateButtons).toHaveLength(1)
@@ -45,7 +52,7 @@ describe('catálogo de conceptos', () => {
   })
 
   it('ofrece tarjetas móviles con acciones contextuales equivalentes', async () => {
-    const wrapper = mount(ConceptoList, { props: { conceptos } })
+    const wrapper = mountList({ conceptos })
     const cards = wrapper.findAll('.concepts-mobile-list .mobile-record-card')
 
     expect(cards).toHaveLength(2)

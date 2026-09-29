@@ -40,29 +40,10 @@
             <ChevronDownIcon class="students-select-chevron" aria-hidden="true" />
           </label>
 
-          <label class="debtors-filter-field">
-            <span class="sr-only">Filtrar por carrera</span>
-            <select v-model="carreraFilter" aria-label="Filtrar por carrera">
-              <option value="">Todas las carreras</option>
-              <option v-for="carrera in careerOptions" :key="carrera.id" :value="carrera.id">
-                {{ carrera.nombre }}
-              </option>
-            </select>
-          </label>
-
           <label class="students-active-filter" :class="{ active: onlyOverdue }">
             <input v-model="onlyOverdue" class="sr-only" type="checkbox" />
             <ExclamationCircleIcon aria-hidden="true" />
             <span>Vencidas</span>
-          </label>
-
-          <label class="debtors-amount-field">
-            <span class="sr-only">Deuda mínima</span>
-            <input v-model="deudaMin" type="number" min="0" step="0.01" placeholder="Deuda desde" aria-label="Deuda desde" />
-          </label>
-          <label class="debtors-amount-field">
-            <span class="sr-only">Deuda máxima</span>
-            <input v-model="deudaMax" type="number" min="0" step="0.01" placeholder="Deuda hasta" aria-label="Deuda hasta" />
           </label>
 
           <label class="debtors-order-field">
@@ -73,22 +54,53 @@
             </select>
           </label>
 
-          <label class="debtors-filter-field">
-            <span class="sr-only">Mes correspondiente</span>
-            <input v-model.trim="periodo" placeholder="Mes (MM-AAAA)" aria-label="Mes correspondiente" />
-          </label>
-
-          <label class="debtors-order-field">
-            <span class="sr-only">Segmento de morosidad</span>
-            <select v-model="segmento" aria-label="Segmento de morosidad">
-              <option value="">Todas las antigüedades</option>
-              <option value="1">1 cuota vencida</option>
-              <option value="2">2 cuotas vencidas</option>
-              <option value="3plus">3 o más cuotas vencidas</option>
-            </select>
-          </label>
-
           <button type="button" class="debtors-export" @click="exportDebt"><ArrowDownTrayIcon aria-hidden="true" /> Exportar Excel</button>
+          <button
+            type="button"
+            class="debtors-more-filters"
+            :aria-expanded="advancedFiltersExpanded"
+            aria-controls="debtors-advanced-filters"
+            @click="advancedFiltersExpanded = !advancedFiltersExpanded"
+          >
+            Más filtros <span class="debtors-filter-count">{{ advancedFiltersCount }}</span>
+            <ChevronDownIcon aria-hidden="true" />
+          </button>
+
+          <div v-if="advancedFiltersExpanded" id="debtors-advanced-filters" class="debtors-advanced-filters">
+            <label class="debtors-filter-field">
+              <span class="sr-only">Filtrar por carrera</span>
+              <select v-model="carreraFilter" aria-label="Filtrar por carrera">
+                <option value="">Todas las carreras</option>
+                <option v-for="carrera in careerOptions" :key="carrera.id" :value="carrera.id">
+                  {{ carrera.nombre }}
+                </option>
+              </select>
+            </label>
+            <label class="debtors-amount-field">
+              <span class="sr-only">Deuda mínima</span>
+              <input v-model="deudaMin" type="number" min="0" step="0.01" placeholder="Deuda desde" aria-label="Deuda desde" />
+            </label>
+            <label class="debtors-amount-field">
+              <span class="sr-only">Deuda máxima</span>
+              <input v-model="deudaMax" type="number" min="0" step="0.01" placeholder="Deuda hasta" aria-label="Deuda hasta" />
+            </label>
+            <label class="debtors-filter-field">
+              <span class="sr-only">Mes correspondiente</span>
+              <input v-model.trim="periodo" placeholder="Mes (MM-AAAA)" aria-label="Mes correspondiente" />
+            </label>
+            <label class="debtors-order-field">
+              <span class="sr-only">Segmento de morosidad</span>
+              <select v-model="segmento" aria-label="Segmento de morosidad">
+                <option value="">Todas las antigüedades</option>
+                <option value="1">1 cuota vencida</option>
+                <option value="2">2 cuotas vencidas</option>
+                <option value="3plus">3 o más cuotas vencidas</option>
+              </select>
+            </label>
+            <button v-if="advancedFiltersCount" type="button" class="debtors-clear-advanced" @click="clearAdvancedFilters">
+              Quitar filtros avanzados
+            </button>
+          </div>
         </div>
       </section>
 
@@ -117,8 +129,8 @@
                 <th><span class="sr-only">Acciones</span></th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-for="deudor in deudores" :key="deudor.id">
+            <MotionList tag="tbody" data-motion-list="deudores-desktop">
+              <tr v-for="deudor in deudores" :key="deudor.id" data-motion-item>
                 <td>
                   <strong>{{ deudor.apellido }}, {{ deudor.nombre }}</strong>
                   <small>DNI {{ deudor.dni || 'sin informar' }} · Legajo {{ deudor.legajo || 'sin informar' }}</small>
@@ -142,16 +154,16 @@
                   </div>
                 </td>
               </tr>
-            </tbody>
+            </MotionList>
           </table>
         </div>
-        <div v-if="deudores.length" class="mobile-record-list debtors-mobile-list" role="list">
-          <article v-for="deudor in deudores" :key="`mobile-${deudor.id}`" class="mobile-record-card" role="listitem">
+        <MotionList v-if="deudores.length" class="mobile-record-list debtors-mobile-list" data-motion-list="deudores-mobile" role="list">
+          <article v-for="deudor in deudores" :key="`mobile-${deudor.id}`" data-motion-item class="mobile-record-card" role="listitem">
             <header class="mobile-record-head"><span class="mobile-record-title"><strong>{{ deudor.apellido }}, {{ deudor.nombre }}</strong><small>{{ deudor.legajo }} · {{ deudor.sucursal_nombre }}</small></span><strong class="debtors-debt">$ {{ formatMoney(deudor.deuda_total, { fractionDigits: 2 }) }}</strong></header>
             <dl class="mobile-record-meta"><div><dt>Cuotas</dt><dd>{{ deudor.cuotas_pendientes }} pendientes · {{ deudor.cuotas_vencidas }} vencidas</dd></div><div><dt>Antigüedad</dt><dd>{{ deudor.dias_mora ? `${deudor.dias_mora} días` : 'Sin vencidas' }}</dd></div><div><dt>Contacto</dt><dd>{{ deudor.telefono || deudor.email || 'Sin informar' }}</dd></div></dl>
             <footer class="mobile-record-footer debtors-mobile-actions"><button type="button" @click="openEstado(deudor)">Estado de cuenta</button><button v-if="canRegisterPayments" type="button" @click="openPago(deudor)">Registrar pago</button></footer>
           </article>
-        </div>
+        </MotionList>
       </section>
 
       <p v-if="error" class="students-inline-error" role="alert">{{ error }}</p>
@@ -194,6 +206,7 @@ import {
 import AppPageState from '@/components/ui/AppPageState.vue'
 import EstadoCuentaModal from '@/components/alumnos/EstadoCuentaModal.vue'
 import PagoForm from '@/components/alumnos/PagoForm.vue'
+import MotionList from '@/components/ui/MotionList.vue'
 import { useCatalogos } from '@/composables/useCatalogos'
 import { useDeudores } from '@/composables/useDeudores'
 import { useAuth } from '@/composables/useAuth'
@@ -230,12 +243,20 @@ const pageError = ref('')
 const selectedAlumno = ref(null)
 const showEstadoCuenta = ref(false)
 const showPagoForm = ref(false)
+const advancedFiltersExpanded = ref(false)
 
 const canRegisterPayments = computed(() => auth.can('register-payments'))
 const careerOptions = computed(() => carreras.value.filter((carrera) => (
   sucursalFilter.value === 'todas' || String(carrera.sucursal) === String(sucursalFilter.value)
 )))
 const totalPages = computed(() => Math.max(1, Math.ceil(pagination.value.count / pagination.value.pageSize)))
+const advancedFiltersCount = computed(() => [
+  carreraFilter.value,
+  deudaMin.value,
+  deudaMax.value,
+  periodo.value.trim(),
+  segmento.value,
+].filter(Boolean).length)
 const hasActiveFilters = computed(() => Boolean(
   search.value.trim()
   || sucursalFilter.value !== 'todas'
@@ -313,6 +334,14 @@ function openEstado(deudor) {
   showEstadoCuenta.value = true
 }
 
+function clearAdvancedFilters() {
+  carreraFilter.value = ''
+  deudaMin.value = ''
+  deudaMax.value = ''
+  periodo.value = ''
+  segmento.value = ''
+}
+
 function openPago(deudor) {
   if (!canRegisterPayments.value) return
   selectedAlumno.value = deudor
@@ -348,6 +377,25 @@ onMounted(loadPage)
   align-items: center;
   gap: 9px;
 }
+
+.debtors-more-filters {
+  min-height: 44px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  background: var(--surface);
+  font-weight: 750;
+}
+
+.debtors-more-filters svg { width: 17px; height: 17px; transition: transform .16s ease; }
+.debtors-more-filters[aria-expanded="true"] svg { transform: rotate(180deg); }
+.debtors-filter-count { min-width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 999px; color: var(--primary); background: var(--primary-soft); font-size: 12px; }
+.debtors-advanced-filters { width: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 9px; }
+.debtors-clear-advanced { min-height: 44px; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px; color: var(--primary); background: var(--surface); font-weight: 700; }
 
 .debtors-filter-field,
 .debtors-order-field,
@@ -416,7 +464,7 @@ onMounted(loadPage)
 .debtors-table td small {
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .debtors-debt {
@@ -457,7 +505,7 @@ onMounted(loadPage)
   .debtors-table-wrap .users-table-wrap { display: none; }
   .debtors-mobile-list { display: grid; gap: .75rem; padding: .75rem; }
   .debtors-mobile-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
-  .debtors-mobile-actions button { min-height: 42px; border: 1px solid var(--border); border-radius: .6rem; background: var(--surface); color: var(--primary); font-weight: 800; }
+.debtors-mobile-actions button { min-height: 44px; border: 1px solid var(--border); border-radius: .6rem; background: var(--surface); color: var(--primary); font-weight: 800; }
 
   .debtors-filters,
   .debtors-filters > * {
@@ -471,5 +519,13 @@ onMounted(loadPage)
   .debtors-amount-field input {
     width: 100%;
   }
+
+  .debtors-more-filters,
+  .debtors-advanced-filters,
+  .debtors-advanced-filters > * {
+    width: 100%;
+  }
+
+  .debtors-advanced-filters { justify-content: stretch; }
 }
 </style>

@@ -29,8 +29,8 @@
             <th><span class="sr-only">Acciones</span></th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-for="usuario in paginatedUsuarios" :key="usuario.id">
+        <MotionList tag="tbody" data-motion-list="usuarios-desktop" :animate="animate">
+          <tr v-for="usuario in paginatedUsuarios" :key="usuario.id" data-motion-item>
             <td>
               <div class="users-identity-cell">
                 <span class="users-avatar">{{ avatarInitials(usuario) }}</span>
@@ -97,13 +97,14 @@
               </div>
             </td>
           </tr>
-        </tbody>
+        </MotionList>
       </table>
 
-      <div v-if="sortedUsuarios.length" class="mobile-record-list users-mobile-list" role="list">
+      <MotionList v-if="sortedUsuarios.length" class="mobile-record-list users-mobile-list" data-motion-list="usuarios-mobile" role="list" :animate="animate">
         <article
           v-for="usuario in paginatedUsuarios"
           :key="`mobile-${usuario.id}`"
+          data-motion-item
           class="mobile-record-card user-mobile-card"
           role="listitem"
         >
@@ -171,7 +172,7 @@
             </span>
           </footer>
         </article>
-      </div>
+      </MotionList>
 
       <nav v-if="sortedUsuarios.length" class="catalog-pagination" aria-label="Paginación de usuarios">
         <label class="catalog-page-size">
@@ -215,6 +216,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import MobileActionMenu from '@/components/ui/MobileActionMenu.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
+import MotionList from '@/components/ui/MotionList.vue'
 
 const props = defineProps({
   usuarios: { type: Array, required: true },
@@ -222,6 +224,7 @@ const props = defineProps({
   canEdit: { type: Boolean, default: true },
   canDeactivate: { type: Boolean, default: true },
   canManageSuperadmins: { type: Boolean, default: true },
+  animate: { type: Boolean, default: true },
 })
 
 defineEmits(['edit', 'deactivate'])

@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="requestClose">
+    <AppModalTransition :open="open">
+      <div class="modal-backdrop" @click.self="requestClose">
       <form
         v-focus-trap="{ close: requestClose, busy: saving }"
         v-form-validation
@@ -93,13 +94,62 @@
         <section class="massive-fee-summary" aria-live="polite">
           <strong v-if="loading">Calculando alumnos activos…</strong>
           <template v-else>
-            <strong>{{ alumnosElegibles.length }} alumnos serán afectados</strong>
-            <span v-if="alumnosEncontrados && omitidas">
-              {{ omitidas }} ya tienen esta cuota y serán omitidos.
-            </span>
-            <span v-else-if="!alumnosElegibles.length">No hay alumnos activos elegibles para este filtro.</span>
+            <strong>{{ alumnosElegibles.length }} alumnos elegibles · {{ omitidas }} omitidos</strong>
+            <dl class="massive-fee-summary-details">
+              <div><dt>Sucursal</dt><dd>{{ sucursalSeleccionada?.nombre || 'Elegí una sucursal' }}</dd></div>
+              <div><dt>Carrera/curso</dt><dd>{{ carreraSeleccionada?.nombre || 'Todas' }}</dd></div>
+              <div><dt>Concepto</dt><dd>{{ conceptoSeleccionado?.nombre || 'Sin seleccionar' }}</dd></div>
+              <div><dt>Período</dt><dd>{{ periodoParaBackend(form.periodo) || 'Sin seleccionar' }}</dd></div>
+              <div><dt>Importe unitario</dt><dd>{{ formatCurrency(form.importe) }}</dd></div>
+              <div><dt>Descuento</dt><dd>− {{ formatCurrency(form.descuento) }}</dd></div>
+              <div><dt>Recargo</dt><dd>+ {{ formatCurrency(form.recargo) }}</dd></div>
+              <div><dt>Total estimado</dt><dd>{{ formatCurrency(totalEstimado) }}</dd></div>
+            </dl>
+            <span v-if="!alumnosEncontrados && !loading">No hay alumnos activos que coincidan con este filtro.</span>
           </template>
           <p v-if="error" class="students-inline-error" role="alert">{{ error }}</p>
+        </section>
+
+        <section v-if="!loading && detalleAlumnos.length" class="massive-fee-preview" aria-label="Detalle de la previsualización">
+          <div class="massive-fee-preview-tabs" role="tablist" aria-label="Alumnos de la generación">
+            <button
+              id="massive-fee-eligible-tab"
+              type="button"
+              role="tab"
+              :aria-selected="previewTab === 'elegibles'"
+              :tabindex="previewTab === 'elegibles' ? 0 : -1"
+              aria-controls="massive-fee-preview-list"
+              @keydown="handlePreviewTabKeydown($event, 'elegibles')"
+              @click="setPreviewTab('elegibles')"
+            >Elegibles ({{ alumnosElegibles.length }})</button>
+            <button
+              id="massive-fee-omitted-tab"
+              type="button"
+              role="tab"
+              :aria-selected="previewTab === 'omitidos'"
+              :tabindex="previewTab === 'omitidos' ? 0 : -1"
+              aria-controls="massive-fee-preview-list"
+              @keydown="handlePreviewTabKeydown($event, 'omitidos')"
+              @click="setPreviewTab('omitidos')"
+            >Omitidos ({{ omitidosDetalle.length }})</button>
+          </div>
+          <ul id="massive-fee-preview-list" class="massive-fee-preview-list" role="tabpanel" tabindex="0" :aria-labelledby="previewTab === 'elegibles' ? 'massive-fee-eligible-tab' : 'massive-fee-omitted-tab'">
+            <li v-for="alumno in previewPageItems" :key="alumno.id">
+              <span class="massive-fee-preview-identity">
+                <strong>{{ alumno.nombre_completo }}</strong>
+                <small>Legajo {{ alumno.legajo }} · {{ alumno.carrera_nombre || 'Sin carrera asignada' }} · {{ alumno.estado }}</small>
+              </span>
+              <span v-if="previewTab === 'omitidos'" class="massive-fee-omission">{{ alumno.motivo }}</span>
+            </li>
+            <li v-if="!previewPageItems.length" class="massive-fee-preview-empty">
+              {{ previewTab === 'omitidos' ? 'No hay alumnos omitidos.' : 'No hay alumnos elegibles.' }}
+            </li>
+          </ul>
+          <nav v-if="previewTotalPages > 1" class="massive-fee-preview-pagination" aria-label="Páginas del detalle de alumnos">
+            <button type="button" :disabled="previewPage <= 1" @click="previewPage -= 1">Anterior</button>
+            <span aria-live="polite">Página {{ previewPage }} de {{ previewTotalPages }}</span>
+            <button type="button" :disabled="previewPage >= previewTotalPages" @click="previewPage += 1">Siguiente</button>
+          </nav>
         </section>
 
         <footer class="modal-actions">
@@ -109,7 +159,8 @@
           </button>
         </footer>
       </form>
-    </div>
+      </div>
+    </AppModalTransition>
   </Teleport>
 </template>
 
@@ -118,7 +169,7 @@
   display: block;
   margin-top: 5px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -149,6 +200,43 @@
   display: block;
 }
 
+.massive-fee-summary-details {
+  margin: 6px 0 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.massive-fee-summary-details > div { min-width: 0; }
+.massive-fee-summary-details dt { color: var(--text-secondary); }
+.massive-fee-summary-details dd { margin: 2px 0 0; color: var(--text-primary); font-weight: 700; overflow-wrap: anywhere; }
+
+.massive-fee-preview {
+  margin: 0 24px 24px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.massive-fee-preview-tabs { display: flex; gap: 4px; padding: 6px; border-bottom: 1px solid var(--border); background: var(--surface-soft); }
+.massive-fee-preview-tabs button { min-height: 44px; flex: 1; border: 0; border-radius: 8px; color: var(--text-secondary); background: transparent; font-weight: 750; }
+.massive-fee-preview-tabs button[aria-selected="true"] { color: var(--primary); background: var(--surface); box-shadow: var(--shadow); }
+.massive-fee-preview-tabs button:focus-visible,
+.massive-fee-preview-list:focus-visible,
+.massive-fee-preview-pagination button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.massive-fee-preview-list { max-height: 230px; overflow-y: auto; margin: 0; padding: 0 16px; list-style: none; }
+.massive-fee-preview-list li { min-height: 56px; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.massive-fee-preview-list li:last-child { border-bottom: 0; }
+.massive-fee-preview-identity { min-width: 0; display: grid; gap: 3px; }
+.massive-fee-preview-identity strong { color: var(--text-primary); overflow-wrap: anywhere; }
+.massive-fee-preview-identity small { color: var(--text-secondary); font-size: 12px; }
+.massive-fee-omission { max-width: 42%; color: var(--danger); font-size: 12px; text-align: right; }
+.massive-fee-preview-empty { color: var(--text-secondary); justify-content: center !important; text-align: center; }
+.massive-fee-preview-pagination { min-height: 48px; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; }
+.massive-fee-preview-pagination button { min-height: 44px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); background: var(--surface); font-weight: 700; }
+.massive-fee-preview-pagination button:disabled { opacity: .5; cursor: not-allowed; }
+
 .massive-fee-summary .students-inline-error {
   margin: 2px 0 0;
 }
@@ -158,18 +246,26 @@
     margin-right: 16px;
     margin-left: 16px;
   }
+
+  .massive-fee-preview { margin-right: 16px; margin-left: 16px; }
+  .massive-fee-summary-details { grid-template-columns: 1fr; }
+  .massive-fee-preview-list li { align-items: flex-start; flex-direction: column; }
+  .massive-fee-omission { max-width: none; text-align: left; }
 }
 </style>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { useCuotasMasivas } from '@/composables/useCuotasMasivas'
+import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import { useToast } from '@/composables/useToast'
 import { confirmGeneracionCuotasMasivas, showResultadoCuotasMasivas } from '@/lib/swal'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 import { useCatalogos } from '@/composables/useCatalogos'
+import { useAuth } from '@/composables/useAuth'
+import { toLocalISODate } from '@/lib/formatters'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -182,8 +278,9 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'saved'])
 const toast = useToast()
-const { alumnosElegibles, alumnosEncontrados, omitidas, loading, error, evaluar, generar } = useCuotasMasivas()
+const { alumnosElegibles, alumnosEncontrados, omitidas, detalleAlumnos, loading, error, evaluar, generar } = useCuotasMasivas()
 const { tiposDescuento } = useCatalogos()
+const { user } = useAuth()
 const isDiscountCatalogLoading = computed(() => props.tiposDescuentoLoading)
 const discountCatalogErrorMessage = computed(() => props.tiposDescuentoError)
 
@@ -201,6 +298,21 @@ const form = reactive({
   recargo: 0,
 })
 const saving = ref(false)
+const previewTab = ref('elegibles')
+const previewPage = ref(1)
+
+const sucursalSeleccionada = computed(() => props.sucursales.find(
+  (item) => String(item.id) === String(form.sucursal),
+))
+const carreraSeleccionada = computed(() => carrerasFiltradas.value.find(
+  (item) => String(item.id) === String(form.carrera),
+))
+const omitidosDetalle = computed(() => detalleAlumnos.value.filter((alumno) => alumno.motivo))
+const previewRows = computed(() => previewTab.value === 'omitidos'
+  ? omitidosDetalle.value
+  : detalleAlumnos.value.filter((alumno) => !alumno.motivo))
+const previewTotalPages = computed(() => Math.max(1, Math.ceil(previewRows.value.length / 10)))
+const previewPageItems = computed(() => previewRows.value.slice((previewPage.value - 1) * 10, previewPage.value * 10))
 
 const carrerasFiltradas = computed(() => props.carreras.filter(
   (carrera) => String(carrera.sucursal) === String(form.sucursal),
@@ -224,21 +336,45 @@ const totalUnitario = computed(() => Math.max(
 const totalEstimado = computed(() => totalUnitario.value * alumnosElegibles.value.length)
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10)
+  return toLocalISODate()
 }
 
 function resetForm() {
-  form.sucursal = props.sucursales[0]?.id || ''
+  const profileBranchId = user.value?.perfil?.sucursal?.id
+  form.sucursal = props.sucursales.find((item) => String(item.id) === String(profileBranchId))?.id || ''
   form.carrera = ''
-  form.concepto = ''
+  form.concepto = conceptosFiltrados.value[0]?.id || ''
   form.periodo = ''
   form.fecha_emision = todayStr()
   form.fecha_vencimiento = ''
-  form.importe = ''
+  form.importe = conceptoSeleccionado.value?.importe || ''
   form.descuento = 0
   form.tipo_descuento = ''
   form.motivo_descuento = ''
   form.recargo = 0
+  previewTab.value = 'elegibles'
+  previewPage.value = 1
+}
+
+function setPreviewTab(tab) {
+  previewTab.value = tab
+  previewPage.value = 1
+}
+
+function handlePreviewTabKeydown(event, currentTab) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  const nextTab = event.key === 'Home'
+    ? 'elegibles'
+    : event.key === 'End'
+      ? 'omitidos'
+      : currentTab === 'elegibles' ? 'omitidos' : 'elegibles'
+  setPreviewTab(nextTab)
+  nextTick(() => document.getElementById(`massive-fee-${nextTab === 'elegibles' ? 'eligible' : 'omitted'}-tab`)?.focus())
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 }).format(Number(value || 0))
 }
 
 function requestClose() {
@@ -250,6 +386,7 @@ watch(
   (isOpen) => {
     if (isOpen) resetForm()
   },
+  { immediate: true },
 )
 
 watch([() => form.tipo_descuento, () => form.importe], () => {
@@ -268,6 +405,7 @@ watch(
     form.carrera = ''
     form.concepto = conceptosFiltrados.value[0]?.id || ''
   },
+  { immediate: true },
 )
 
 watch(
@@ -291,6 +429,10 @@ watch(
   },
 )
 
+watch([previewRows], () => {
+  if (previewPage.value > previewTotalPages.value) previewPage.value = previewTotalPages.value
+})
+
 async function handleSubmit() {
   const sucursal = props.sucursales.find((item) => String(item.id) === String(form.sucursal))
   const carrera = carrerasFiltradas.value.find((item) => String(item.id) === String(form.carrera))
@@ -301,7 +443,10 @@ async function handleSubmit() {
     concepto: conceptoSeleccionado.value?.nombre || 'Sin concepto',
     periodo: form.periodo,
     importe: form.importe,
+    descuento: form.descuento,
+    recargo: form.recargo,
     totalEstimado: totalEstimado.value,
+    omitidas: omitidas.value,
   })
   if (!confirmation.isConfirmed) return
 

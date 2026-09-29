@@ -92,6 +92,7 @@ class CajaPermission(RolePermission):
     write_roles = frozenset()
     action_roles = {
         "hoy": ALL_ROLES,
+        "historial": CASH_ROLES,
         "cerrar": CASH_ROLES,
         "saldo_anterior": CASH_ROLES,
     }

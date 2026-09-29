@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="requestClose">
+    <AppModalTransition :open="open">
+      <div class="modal-backdrop" @click.self="requestClose">
       <form
         v-focus-trap="{ close: requestClose, busy: saving }"
         v-form-validation
@@ -79,7 +80,8 @@
           </button>
         </footer>
       </form>
-    </div>
+      </div>
+    </AppModalTransition>
   </Teleport>
 </template>
 
@@ -88,7 +90,7 @@
   display: block;
   margin-top: 5px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -105,7 +107,7 @@
 .payment-debt-summary > span,
 .field-label {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -166,6 +168,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { usePagos } from '@/composables/usePagos'
+import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import { useToast } from '@/composables/useToast'
 import { confirmSaldoAFavor } from '@/lib/swal'
 import { formatDate, formatMoney } from '@/lib/formatters'

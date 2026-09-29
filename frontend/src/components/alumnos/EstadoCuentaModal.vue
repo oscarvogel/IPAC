@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="requestClose">
+    <AppModalTransition :open="open">
+      <div class="modal-backdrop" @click.self="requestClose">
       <section
         v-focus-trap="{ close: requestClose, busy: Boolean(printingId) }"
         class="modal-card account-modal"
@@ -37,6 +38,14 @@
             <article>
               <span>Saldo pendiente</span>
               <strong>$ {{ formatMoney(data.resumen.saldo_pendiente) }}</strong>
+            </article>
+            <article>
+              <span>Saldo vencido</span>
+              <strong>$ {{ formatMoney(data.resumen.saldo_vencido || 0) }}</strong>
+            </article>
+            <article>
+              <span>Saldo por vencer</span>
+              <strong>$ {{ formatMoney(data.resumen.saldo_por_vencer || 0) }}</strong>
             </article>
             <article>
               <span>Saldo a favor</span>
@@ -148,7 +157,8 @@
           <p class="empty-state flat">No se pudo cargar el estado de cuenta.</p>
         </section>
       </section>
-    </div>
+      </div>
+    </AppModalTransition>
 
     <ReciboPrintView :recibo="reciboData" />
   </Teleport>
@@ -161,7 +171,9 @@ import { usePagos } from '@/composables/usePagos'
 import { useAuth } from '@/composables/useAuth'
 import { useToast } from '@/composables/useToast'
 import { formatMoney, formatDate } from '@/lib/formatters'
+import { printDocument } from '@/lib/print'
 import { confirmAnularPago } from '@/lib/swal'
+import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import ReciboPrintView from '@/components/ui/ReciboPrintView.vue'
 import { vFocusTrap } from '@/directives/accessibility'
 
@@ -192,7 +204,7 @@ async function printRecibo(pago) {
   try {
     reciboData.value = await getRecibo(pago.id)
     await nextTick()
-    window.print()
+    printDocument('receipt')
   } catch (err) {
     toast.error(err.message || 'No se pudo preparar el recibo para imprimir.')
   } finally {
@@ -328,6 +340,13 @@ async function loadAccount(id = props.alumno?.id) {
   min-width: 190px;
 }
 
+.account-modal .icon-button,
+.account-modal .print-recibo-btn,
+.account-modal .void-payment-btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .account-net-total small {
   display: block;
   margin-top: 4px;
@@ -366,7 +385,7 @@ async function loadAccount(id = props.alumno?.id) {
 
 .account-balance span {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -381,7 +400,7 @@ async function loadAccount(id = props.alumno?.id) {
 
 .payment-applications-title {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;

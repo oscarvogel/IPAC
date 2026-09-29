@@ -1,6 +1,6 @@
 <template>
   <div class="reports-summary">
-    <div v-if="showMetrics" class="reports-metrics-grid cash-metrics-grid">
+    <div v-if="showMetrics" ref="metricsGrid" class="reports-metrics-grid cash-metrics-grid">
       <article
         v-for="stat in stats"
         :key="stat.label"
@@ -11,13 +11,17 @@
         </span>
         <span class="cash-metric-copy">
           <span>{{ stat.label }}</span>
-          <strong>{{ stat.value }}</strong>
+          <AnimatedMetricValue
+            :value="stat.value"
+            :kind="stat.kind"
+            :prefix="stat.prefix"
+          />
           <small>{{ stat.detail }}</small>
         </span>
       </article>
     </div>
 
-    <section v-if="showDistribution" class="reports-distribution-card border-border bg-surface">
+    <section v-if="showDistribution" ref="distributionCard" class="reports-distribution-card border-border bg-surface">
       <header class="reports-distribution-head">
         <div class="reports-distribution-title">
           <span class="reports-distribution-icon">
@@ -63,7 +67,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, watch, ref } from 'vue'
 import {
   BanknotesIcon,
   BuildingLibraryIcon,
@@ -75,12 +79,19 @@ import {
   QuestionMarkCircleIcon,
 } from '@heroicons/vue/24/outline'
 import { formatMoney } from '@/lib/formatters'
+import AnimatedMetricValue from '@/components/ui/AnimatedMetricValue.vue'
+import { animateProgressBars, animateStaggerIn, createMotionContext } from '@/lib/motion'
 
 const props = defineProps({
   resumen: { type: Object, default: null },
   showMetrics: { type: Boolean, default: true },
   showDistribution: { type: Boolean, default: true },
 })
+
+const distributionCard = ref(null)
+const metricsGrid = ref(null)
+let cleanupDistributionMotion = () => {}
+let cleanupMetricsMotion = () => {}
 
 const totalCobrado = computed(
   () => Number(props.resumen?.cobranzas?.total || 0),
@@ -101,21 +112,27 @@ const cajasCerradas = computed(
 const stats = computed(() => [
   {
     label: 'Total cobrado',
-    value: `$ ${formatMoney(totalCobrado.value, { fractionDigits: 2 })}`,
+    value: totalCobrado.value,
+    kind: 'money',
+    prefix: '$ ',
     detail: `${cantidadPagos.value} pagos en el período`,
     tone: 'primary',
     icon: BanknotesIcon,
   },
   {
     label: 'Deuda pendiente',
-    value: `$ ${formatMoney(deudaPendiente.value, { fractionDigits: 2 })}`,
+    value: deudaPendiente.value,
+    kind: 'money',
+    prefix: '$ ',
     detail: 'importe total que aún deben los alumnos',
     tone: 'warning',
     icon: ExclamationTriangleIcon,
   },
   {
     label: 'Saldo a favor',
-    value: `$ ${formatMoney(saldoAFavor.value, { fractionDigits: 2 })}`,
+    value: saldoAFavor.value,
+    kind: 'money',
+    prefix: '$ ',
     detail: 'crédito disponible de los alumnos',
     tone: 'success',
     icon: GiftIcon,
@@ -129,6 +146,18 @@ const stats = computed(() => [
   },
 ])
 
+watch(
+  [stats, () => props.showMetrics],
+  async () => {
+    await nextTick()
+    cleanupMetricsMotion()
+    cleanupMetricsMotion = createMotionContext(metricsGrid.value, () => {
+      animateStaggerIn(metricsGrid.value?.children, { stagger: 0.05 })
+    })
+  },
+  { deep: true, immediate: true },
+)
+
 const porMedioRows = computed(() => {
   const porMedio = props.resumen?.cobranzas?.por_medio || {}
   const total = totalCobrado.value
@@ -139,6 +168,19 @@ const porMedioRows = computed(() => {
       porcentaje: total > 0 ? Math.round((Number(totalMedio || 0) / total) * 100) : 0,
     }))
     .sort((a, b) => b.total - a.total)
+})
+
+watch(porMedioRows, async () => {
+  await nextTick()
+  cleanupDistributionMotion()
+  cleanupDistributionMotion = createMotionContext(distributionCard.value, () => {
+    animateProgressBars(distributionCard.value?.querySelectorAll('.reports-progress > span'))
+  })
+}, { deep: true })
+
+onBeforeUnmount(() => {
+  cleanupMetricsMotion()
+  cleanupDistributionMotion()
 })
 
 function paymentIcon(method) {

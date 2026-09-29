@@ -13,21 +13,21 @@
     <div class="cash-movements-table-wrap">
       <table class="cash-movements-table">
         <thead><tr><th>Tipo</th><th>Medio</th><th>Descripción</th><th>Hora / cajero</th><th>Importe</th></tr></thead>
-        <tbody><tr v-for="movimiento in filteredMovements" :key="movimiento.id">
+        <MotionList tag="tbody" data-motion-list="movimientos-desktop"><tr v-for="movimiento in filteredMovements" :key="movimiento.id" data-motion-item>
           <td><span :class="['cash-movement-type', movementTone(movimiento.tipo)]"><component :is="movementIcon(movimiento.tipo)" aria-hidden="true" />{{ movimiento.tipo_label || movementLabel(movimiento.tipo) }}</span></td>
           <td><span class="cash-payment-method"><component :is="paymentIcon(movimiento.medio)" aria-hidden="true" />{{ paymentLabel(movimiento.medio) }}</span></td>
           <td class="cash-movement-description">{{ movimiento.descripcion || 'Sin descripción' }}<small v-if="movimiento.pago_numero_recibo" class="cash-movement-receipt">{{ movimiento.pago_numero_recibo }}</small></td>
           <td><strong>{{ formatTime(movimiento.creado) }}</strong><small class="cash-movement-user">{{ movimiento.usuario_nombre || 'Sin usuario' }}</small></td>
           <td :class="['cash-movement-amount', { negative: isNegative(movimiento.tipo) }]">{{ isNegative(movimiento.tipo) ? '−' : '+' }} $ {{ formatMoney(movimiento.importe, { fractionDigits: 2 }) }}</td>
-        </tr></tbody>
+        </tr></MotionList>
       </table>
-      <div v-if="filteredMovements.length" class="mobile-record-list cash-mobile-list" role="list">
-        <article v-for="movimiento in filteredMovements" :key="`mobile-${movimiento.id}`" class="mobile-record-card cash-mobile-card" role="listitem">
+      <MotionList v-if="filteredMovements.length" class="mobile-record-list cash-mobile-list" data-motion-list="movimientos-mobile" role="list">
+        <article v-for="movimiento in filteredMovements" :key="`mobile-${movimiento.id}`" data-motion-item class="mobile-record-card cash-mobile-card" role="listitem">
           <header class="mobile-record-head"><span :class="['mobile-record-icon', movementTone(movimiento.tipo)]"><component :is="movementIcon(movimiento.tipo)" aria-hidden="true" /></span><span class="mobile-record-title"><strong>{{ movimiento.tipo_label || movementLabel(movimiento.tipo) }}</strong><small>{{ formatTime(movimiento.creado) }} · {{ paymentLabel(movimiento.medio) }}</small></span><strong :class="['mobile-record-amount', { negative: isNegative(movimiento.tipo) }]">{{ isNegative(movimiento.tipo) ? '−' : '+' }} $ {{ formatMoney(movimiento.importe, { fractionDigits: 2 }) }}</strong></header>
           <p class="mobile-record-description">{{ movimiento.descripcion || 'Sin descripción' }}</p>
           <footer class="mobile-record-footer"><span class="cash-payment-method"><component :is="paymentIcon(movimiento.medio)" aria-hidden="true" />{{ paymentLabel(movimiento.medio) }}</span><small>{{ movimiento.usuario_nombre || 'Sin usuario' }}</small></footer>
         </article>
-      </div>
+      </MotionList>
       <div v-if="!filteredMovements.length" class="cash-movements-empty"><span><ReceiptPercentIcon aria-hidden="true" /></span><strong>{{ movimientos.length ? 'No hay movimientos para estos filtros' : 'La caja todavía no tiene movimientos' }}</strong><p>{{ movimientos.length ? 'Probá cambiando el tipo, medio o búsqueda.' : 'Los movimientos de la jornada aparecerán en esta lista.' }}</p></div>
     </div>
   </section>
@@ -37,6 +37,7 @@
 import { computed, ref } from 'vue'
 import { ArrowDownCircleIcon, ArrowUpCircleIcon, ArrowsRightLeftIcon, BanknotesIcon, BuildingLibraryIcon, CreditCardIcon, QuestionMarkCircleIcon, ReceiptPercentIcon } from '@heroicons/vue/24/outline'
 import { formatMoney } from '@/lib/formatters'
+import MotionList from '@/components/ui/MotionList.vue'
 
 const props = defineProps({ movimientos: { type: Array, required: true } })
 const typeFilter = ref(''); const mediumFilter = ref(''); const search = ref(''); const ordering = ref('recent')
@@ -58,6 +59,6 @@ function formatTime(value) { return value ? new Intl.DateTimeFormat('es-AR', { h
 </script>
 
 <style scoped>
-.cash-movement-filters{display:grid;grid-template-columns:1fr minmax(150px,220px) 165px 145px;gap:.55rem;padding:.75rem 1rem;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}.cash-type-filters{display:flex;gap:.3rem;overflow-x:auto}.cash-type-filters button{min-height:2.3rem;border:1px solid var(--border);border-radius:999px;padding:0 .7rem;background:var(--surface);color:var(--text-secondary);font-size:.75rem;font-weight:800;white-space:nowrap}.cash-type-filters button.active{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}.cash-movement-filters input,.cash-movement-filters select{width:100%;min-height:2.3rem;border:1px solid var(--border);border-radius:.6rem;padding:.4rem .6rem;background:var(--surface);color:var(--text-primary)}.cash-movement-user,.cash-movement-receipt{display:block;margin-top:.15rem;color:var(--text-secondary)}
+.cash-movement-filters{display:grid;grid-template-columns:1fr minmax(150px,220px) 165px 145px;gap:.55rem;padding:.75rem 1rem;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}.cash-type-filters{display:flex;gap:.3rem;overflow-x:auto}.cash-type-filters button{min-height:44px;border:1px solid var(--border);border-radius:999px;padding:0 .7rem;background:var(--surface);color:var(--text-secondary);font-size:.75rem;font-weight:800;white-space:nowrap}.cash-type-filters button.active{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}.cash-movement-filters input,.cash-movement-filters select{width:100%;min-height:44px;border:1px solid var(--border);border-radius:.6rem;padding:.4rem .6rem;background:var(--surface);color:var(--text-primary)}.cash-movement-user,.cash-movement-receipt{display:block;margin-top:.15rem;color:var(--text-secondary);font-size:12px;line-height:1.4}
   @media(max-width:1000px){.cash-movement-filters{grid-template-columns:1fr 1fr}.cash-type-filters{grid-column:1/-1}}@media(max-width:760px){.cash-type-filters{flex-wrap:wrap;overflow:visible;row-gap:.4rem}.cash-type-filters button{flex:1 1 auto}}@media(max-width:560px){.cash-movement-filters{grid-template-columns:1fr}.cash-type-filters{grid-column:auto}}
 </style>

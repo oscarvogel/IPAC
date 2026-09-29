@@ -13,7 +13,9 @@
       :sucursales="sucursales"
       :loading="loading || activeSectionLoading"
       :usuarios="cajeros"
-      :show-user="activeTab === 'cobranzas'"
+      :show-user="activeTab === 'cobranzas' || (activeTab === 'caja' && canFilterCajaUser)"
+      :show-medium="activeTab !== 'caja'"
+      :show-export="activeTab !== 'resumen'"
       @update:filtros="updateFiltros"
       @aplicar="aplicarFiltros"
       :export-label="'Exportar Excel'"
@@ -21,7 +23,7 @@
     />
 
     <nav class="reports-tabs" aria-label="Categorías de reportes">
-      <button v-for="tab in tabs" :key="tab.id" type="button" :class="{ active: activeTab === tab.id }" @click="selectTab(tab.id)">
+      <button v-for="tab in tabs" :key="tab.id" type="button" :class="{ active: activeTab === tab.id }" :aria-current="activeTab === tab.id ? 'page' : undefined" @click="selectTab(tab.id)">
         {{ tab.label }}
       </button>
     </nav>
@@ -34,7 +36,9 @@
       @retry="retryActiveSection"
     />
 
-    <template v-else-if="activeTab === 'resumen'">
+    <Transition v-else :css="false" @enter="enterSection" @leave="leaveSection">
+      <div :key="activeTab" class="reports-section-motion">
+    <template v-if="activeTab === 'resumen'">
       <ReporteResumen :resumen="resumen" :show-distribution="false" />
     </template>
 
@@ -45,18 +49,18 @@
         <div class="reports-cobranzas-table-wrap">
           <table class="audit-table">
             <thead><tr><th>Usuario</th><th>Pagos</th><th>Efectivo</th><th>Transferencia</th><th>Mercado Pago</th><th>Tarjeta</th><th>Otros</th><th>Total</th><th>Diferencia caja</th></tr></thead>
-            <tbody>
-              <tr v-for="row in cobranzasUsuarios" :key="row.usuario_id || row.usuario">
+            <MotionList tag="tbody" data-motion-list="cobranzas-usuarios-desktop">
+              <tr v-for="row in cobranzasUsuarios" :key="row.usuario_id || row.usuario" data-motion-item>
                 <td><strong>{{ row.usuario }}</strong></td><td>{{ row.cantidad }}</td>
                 <td>{{ money(row.efectivo) }}</td><td>{{ money(row.transferencia) }}</td><td>{{ money(row.mercado_pago) }}</td><td>{{ money(row.tarjeta) }}</td><td>{{ money(row.otro) }}</td>
                 <td><strong>{{ money(row.total) }}</strong></td><td :class="{ 'report-difference': Number(row.diferencia_caja) !== 0 }">{{ money(row.diferencia_caja) }}</td>
               </tr>
-              <tr v-if="!cobranzasUsuarios.length"><td colspan="9">No hay cobranzas en el período.</td></tr>
-            </tbody>
+              <tr v-if="!cobranzasUsuarios.length" key="cobranzas-empty"><td colspan="9">No hay cobranzas en el período.</td></tr>
+            </MotionList>
           </table>
         </div>
-        <div v-if="cobranzasUsuarios.length" class="mobile-record-list reports-cobranzas-mobile-list" role="list">
-          <article v-for="row in cobranzasUsuarios" :key="`mobile-${row.usuario_id || row.usuario}`" class="mobile-record-card" role="listitem">
+        <MotionList v-if="cobranzasUsuarios.length" class="mobile-record-list reports-cobranzas-mobile-list" data-motion-list="cobranzas-usuarios-mobile" role="list">
+          <article v-for="row in cobranzasUsuarios" :key="`mobile-${row.usuario_id || row.usuario}`" data-motion-item class="mobile-record-card" role="listitem">
             <header class="mobile-record-head">
               <span class="mobile-record-icon info" aria-hidden="true"><BanknotesIcon /></span>
               <span class="mobile-record-title">
@@ -74,7 +78,7 @@
               <div><dt>Diferencia caja</dt><dd :class="{ 'report-difference': Number(row.diferencia_caja) !== 0 }">{{ money(row.diferencia_caja) }}</dd></div>
             </dl>
           </article>
-        </div>
+        </MotionList>
         <p v-if="!cobranzasUsuarios.length" class="reports-cobranzas-mobile-empty">No hay cobranzas en el período.</p>
       </section>
       <PagosListado :pagos="pagos" />
@@ -90,37 +94,125 @@
       <RouterLink to="/alumnos">Abrir directorio</RouterLink>
     </section>
 
-    <section v-else v-reveal-on-scroll class="report-category-card">
-      <div><p class="eyebrow">Tesorería</p><h2>Cajas del período</h2><p>{{ resumen?.cajas?.cerradas || 0 }} cerradas · {{ resumen?.cajas?.abiertas || 0 }} abiertas · diferencia acumulada {{ money(resumen?.cajas?.diferencia_acumulada) }}</p></div>
-      <RouterLink to="/caja">Ir a Caja</RouterLink>
-    </section>
+    <template v-else>
+      <section v-reveal-on-scroll class="report-category-card report-category-callout">
+        <div><p class="eyebrow">Tesorería</p><h2>Cajas del período</h2><p>{{ resumen?.cajas?.cerradas || 0 }} cerradas · {{ resumen?.cajas?.abiertas || 0 }} abiertas · diferencia acumulada {{ money(resumen?.cajas?.diferencia_acumulada) }}</p></div>
+        <RouterLink to="/caja">Ir a Caja</RouterLink>
+      </section>
+
+      <section v-if="canViewCajaHistory" class="cash-history-card" aria-labelledby="cash-history-title">
+        <header class="cash-history-heading">
+          <div>
+            <p class="eyebrow">Consulta de tesorería</p>
+            <h2 id="cash-history-title">Historial de cajas</h2>
+            <p>Revisá quién operó cada caja y abrí sus movimientos.</p>
+          </div>
+          <span>{{ cajasHistorialPaginacion.count }} cajas</span>
+        </header>
+
+        <div v-if="!cajasHistorial.length" class="cash-history-empty">
+          No hay cajas para los filtros seleccionados.
+        </div>
+
+        <div v-else class="cash-history-list">
+          <article v-for="caja in cajasHistorial" :key="caja.id" class="cash-history-item">
+            <button
+              type="button"
+              class="cash-history-toggle"
+              :aria-expanded="openCajaId === caja.id"
+              :aria-controls="'caja-movimientos-' + caja.id"
+              @click="toggleCajaHistorial(caja.id)"
+            >
+              <span class="cash-history-identity">
+                <strong>{{ formatDate(caja.fecha) }} · {{ caja.sucursal_nombre }}</strong>
+                <span>{{ caja.usuario_nombre }}</span>
+                <small>{{ caja.cantidad_movimientos }} {{ caja.cantidad_movimientos === 1 ? 'movimiento' : 'movimientos' }}</small>
+              </span>
+              <span class="cash-history-amounts">
+                <span><small>Estado</small><strong>{{ caja.estado }}</strong></span>
+                <span><small>Efectivo esperado</small><strong>{{ money(caja.total_esperado) }}</strong></span>
+                <span><small>Diferencia</small><strong :class="{ 'report-difference': caja.estado === 'cerrada' && Number(caja.diferencia) !== 0 }">{{ caja.estado === 'cerrada' ? money(caja.diferencia) : '—' }}</strong></span>
+                <span class="cash-history-open-label">{{ openCajaId === caja.id ? 'Ocultar movimientos' : 'Ver movimientos' }}</span>
+              </span>
+            </button>
+
+            <div
+              v-if="openCajaId === caja.id"
+              :id="'caja-movimientos-' + caja.id"
+              class="cash-history-detail"
+            >
+              <p v-if="loadingCajaId === caja.id" role="status">Cargando movimientos…</p>
+              <div v-else-if="cajaDetailErrors[caja.id]" class="cash-history-error" role="alert">
+                <span>{{ cajaDetailErrors[caja.id] }}</span>
+                <button type="button" @click="loadCajaHistorialDetalle(caja.id)">Reintentar</button>
+              </div>
+              <div v-else-if="cajaDetalles[caja.id]?.movimientos?.length" class="cash-history-movements-wrap">
+                <table class="cash-history-movements">
+                  <thead>
+                    <tr><th>Fecha</th><th>Tipo</th><th>Medio</th><th>Descripción</th><th>Importe</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="movimiento in cajaDetalles[caja.id].movimientos" :key="movimiento.id">
+                      <td>{{ formatDateTime(movimiento.creado) }}</td>
+                      <td>{{ movimiento.tipo_label }}</td>
+                      <td>{{ movimiento.medio }}</td>
+                      <td>{{ movimiento.descripcion || movimiento.pago_numero_recibo || 'Sin descripción' }}</td>
+                      <td>{{ money(movimiento.importe) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p v-else>No hay movimientos registrados en esta caja.</p>
+            </div>
+          </article>
+        </div>
+
+        <nav v-if="cajasHistorialPaginacion.count > cajasHistorialPaginacion.page_size" class="cash-history-pagination" aria-label="Páginas del historial de cajas">
+          <button type="button" :disabled="!cajasHistorialPaginacion.previous" @click="loadCajaHistorialPage(cajasHistorialPaginacion.page - 1)">Anterior</button>
+          <span>Página {{ cajasHistorialPaginacion.page }} · {{ cajasHistorialPaginacion.count }} cajas</span>
+          <button type="button" :disabled="!cajasHistorialPaginacion.next" @click="loadCajaHistorialPage(cajasHistorialPaginacion.page + 1)">Siguiente</button>
+        </nav>
+      </section>
+    </template>
+      </div>
+    </Transition>
     </template>
   </section>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { BanknotesIcon } from '@heroicons/vue/24/outline'
 import { useCatalogos } from '@/composables/useCatalogos'
+import { useAuth } from '@/composables/useAuth'
 import { useReportes } from '@/composables/useReportes'
 import { useToast } from '@/composables/useToast'
 import ReporteFiltros from '@/components/reportes/ReporteFiltros.vue'
 import ReporteResumen from '@/components/reportes/ReporteResumen.vue'
 import PagosListado from '@/components/reportes/PagosListado.vue'
 import AppPageState from '@/components/ui/AppPageState.vue'
+import MotionList from '@/components/ui/MotionList.vue'
+import { animateSectionEnter, animateSectionLeave } from '@/lib/motion'
 import { vRevealOnScroll } from '@/directives/motion'
+import { formatDate, formatDateTime, toLocalISODate } from '@/lib/formatters'
 
 const { sucursales, loadCatalogo, loadCatalogos } = useCatalogos()
+const auth = useAuth()
 const {
   resumen,
   pagos,
   cobranzasUsuarios,
+  cajasHistorial,
+  cajasHistorialPaginacion,
+  cajasHistorialUsuarios,
   loading,
   error: reportesError,
   loadResumen,
   loadPagos,
   loadCobranzasUsuarios,
+  loadCajasHistorial,
+  loadCajaDetalle,
   exportarExcel,
 } = useReportes()
 const toast = useToast()
@@ -135,6 +227,12 @@ let sectionRequestId = 0
 const reportSections = ['resumen', 'cobranzas', 'morosidad', 'caja', 'alumnos']
 const activeTab = ref(reportSections.includes(route.query.seccion) ? route.query.seccion : 'resumen')
 const cajeros = ref([])
+const openCajaId = ref(null)
+const cajaDetalles = ref({})
+const loadingCajaId = ref(null)
+const cajaDetailErrors = ref({})
+const canFilterCajaUser = computed(() => ['superadmin', 'administracion', 'tesoreria'].includes(auth.user.value?.perfil?.rol))
+const canViewCajaHistory = computed(() => canFilterCajaUser.value || auth.user.value?.perfil?.rol === 'caja')
 const tabs = [
   { id: 'resumen', label: 'Resumen' },
   { id: 'cobranzas', label: 'Cobranzas' },
@@ -167,6 +265,14 @@ function selectTab(section) {
   router.push({ path: route.path, query: { ...route.query, seccion: section }, hash: route.hash })
 }
 
+function enterSection(element, done) {
+  animateSectionEnter(element, done)
+}
+
+function leaveSection(element, done) {
+  animateSectionLeave(element, done)
+}
+
 const filtros = reactive({
   desde: '',
   hasta: '',
@@ -178,8 +284,7 @@ const filtros = reactive({
 function rangoPorDefecto() {
   const hoy = new Date()
   const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
-  const iso = (d) => d.toISOString().slice(0, 10)
-  return { desde: iso(primero), hasta: iso(hoy) }
+  return { desde: toLocalISODate(primero), hasta: toLocalISODate(hoy) }
 }
 
 function updateFiltros(nextFilters) {
@@ -215,13 +320,18 @@ async function fetchReportData({ force = false } = {}) {
     resumen: () => loadResumen(payload),
     pagos: () => loadPagos(payload),
     cobranzasUsuarios: () => loadCobranzasUsuarios(payload),
+    cajasHistorial: () => loadCajasHistorial({
+      ...payload,
+      usuario: canFilterCajaUser.value ? payload.usuario : undefined,
+    }),
   }
+  const cajaHistoryRequired = section === 'caja' && canViewCajaHistory.value
   const requiredResources = section === 'cobranzas'
     ? ['resumen', 'pagos', 'cobranzasUsuarios']
     : section === 'resumen'
       ? ['resumen']
       : section === 'caja'
-        ? ['resumen']
+        ? ['resumen', ...(cajaHistoryRequired ? ['cajasHistorial'] : [])]
         : []
   const pendingResources = requiredResources.filter((resource) => force || !loadedResources.has(resource))
   const requestId = ++sectionRequestId
@@ -240,6 +350,10 @@ async function fetchReportData({ force = false } = {}) {
       }
       cajeros.value = [...known.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
     }
+    if (section === 'caja' && cajaHistoryRequired && canFilterCajaUser.value) {
+      cajeros.value = [...cajasHistorialUsuarios.value]
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    }
   } catch (err) {
     if (requestId === sectionRequestId) activeSectionError.value = err.message || 'No se pudo cargar el reporte seleccionado.'
     throw err
@@ -255,13 +369,67 @@ function retryActiveSection() {
 async function aplicarFiltros() {
   try {
     loadedResources.clear()
+    cajaDetalles.value = {}
+    cajaDetailErrors.value = {}
+    openCajaId.value = null
     await fetchReportData({ force: true })
   } catch (err) {
     toast.error(err.message || 'No se pudieron actualizar los reportes.')
   }
 }
 
+async function toggleCajaHistorial(id) {
+  if (openCajaId.value === id) {
+    openCajaId.value = null
+    return
+  }
+  openCajaId.value = id
+  if (!cajaDetalles.value[id]) await loadCajaHistorialDetalle(id)
+}
+
+async function loadCajaHistorialDetalle(id) {
+  loadingCajaId.value = id
+  delete cajaDetailErrors.value[id]
+  try {
+    cajaDetalles.value[id] = await loadCajaDetalle(id)
+  } catch (err) {
+    cajaDetailErrors.value[id] = err.message || 'No se pudieron cargar los movimientos de la caja.'
+  } finally {
+    loadingCajaId.value = null
+  }
+}
+
+async function loadCajaHistorialPage(page) {
+  if (!canViewCajaHistory.value || page < 1) return
+  const payload = {
+    desde: filtros.desde || undefined,
+    hasta: filtros.hasta || undefined,
+    sucursal: filtros.sucursal || undefined,
+    usuario: canFilterCajaUser.value ? (filtros.usuario || undefined) : undefined,
+  }
+  const requestId = ++sectionRequestId
+  activeSectionLoading.value = true
+  activeSectionError.value = ''
+  try {
+    await loadCajasHistorial(payload, page)
+    cajaDetalles.value = {}
+    cajaDetailErrors.value = {}
+    openCajaId.value = null
+    if (canFilterCajaUser.value) {
+      cajeros.value = [...cajasHistorialUsuarios.value]
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    }
+  } catch (err) {
+    if (requestId === sectionRequestId) {
+      activeSectionError.value = err.message || 'No se pudo cargar el historial de cajas.'
+    }
+  } finally {
+    if (requestId === sectionRequestId) activeSectionLoading.value = false
+  }
+}
+
 async function exportarActual() {
+  if (activeTab.value === 'resumen') return
   const payload = {
     desde: filtros.desde || undefined,
     hasta: filtros.hasta || undefined,
@@ -291,24 +459,56 @@ function money(value) {
 
 <style scoped>
 .reports-tabs { display: flex; gap: .35rem; padding: .35rem; border: 1px solid var(--border); border-radius: .85rem; background: var(--surface); overflow-x: auto; }
-.reports-tabs button { min-height: 2.5rem; border: 0; border-radius: .65rem; padding: 0 1rem; background: transparent; color: var(--text-secondary); font-weight: 800; white-space: nowrap; }
+.reports-tabs button { min-height: 44px; border: 0; border-radius: .65rem; padding: 0 1rem; background: transparent; color: var(--text-secondary); font-weight: 800; white-space: nowrap; }
 .reports-tabs button.active { background: var(--primary); color: var(--on-primary); }
+.reports-tabs button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .reports-cobranzas-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
 .reports-cobranzas-table-wrap .audit-table { width: 100%; min-width: 850px; border-collapse: collapse; }
 .reports-cobranzas-table-wrap th, .reports-cobranzas-table-wrap td { padding: .8rem 1rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
-.reports-cobranzas-table-wrap th { color: var(--text-secondary); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+.reports-cobranzas-table-wrap th { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .reports-cobranzas-mobile-list, .reports-cobranzas-mobile-empty { display: none; }
 .report-category-card { padding: 1.1rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
 .report-category-card h2 { margin: .2rem 0; }
 .report-category-callout { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .report-category-card > a { display: inline-flex; padding: .7rem 1rem; border-radius: .7rem; background: var(--primary); color: var(--on-primary); text-decoration: none; font-weight: 800; }
 .report-difference { color: var(--danger); font-weight: 800; }
+.cash-history-card { display: grid; gap: 1rem; padding: 1.1rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
+.cash-history-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.cash-history-heading h2 { margin: .2rem 0; }
+.cash-history-heading p:last-child { margin: .35rem 0 0; color: var(--text-secondary); }
+.cash-history-heading > span { padding: .4rem .65rem; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); font-size: .8rem; font-weight: 800; white-space: nowrap; }
+.cash-history-list { display: grid; gap: .65rem; }
+.cash-history-item { overflow: hidden; border: 1px solid var(--border); border-radius: .85rem; background: var(--surface); }
+.cash-history-toggle { width: 100%; display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); align-items: center; gap: 1rem; padding: .9rem 1rem; border: 0; color: var(--text-primary); background: transparent; text-align: left; cursor: pointer; }
+.cash-history-toggle:hover { background: var(--surface-soft); }
+.cash-history-toggle:focus-visible, .cash-history-pagination button:focus-visible, .cash-history-error button:focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 55%, transparent); outline-offset: 2px; }
+.cash-history-identity, .cash-history-amounts, .cash-history-amounts > span { display: grid; gap: .2rem; }
+.cash-history-identity > span, .cash-history-identity small, .cash-history-amounts small { color: var(--text-secondary); font-size: .8rem; }
+.cash-history-amounts { display: flex; justify-content: flex-end; align-items: center; gap: 1rem; }
+.cash-history-amounts > span { min-width: 0; }
+.cash-history-open-label { color: var(--primary); font-size: .82rem; font-weight: 800; white-space: nowrap; }
+.cash-history-detail { padding: .8rem 1rem 1rem; border-top: 1px solid var(--border); }
+.cash-history-detail > p { margin: 0; color: var(--text-secondary); }
+.cash-history-movements-wrap { overflow-x: auto; }
+.cash-history-movements { min-width: 650px; margin: 0; }
+.cash-history-movements th, .cash-history-movements td { padding: .65rem .75rem; }
+.cash-history-error { display: flex; justify-content: space-between; align-items: center; gap: .75rem; color: var(--danger); }
+.cash-history-error button, .cash-history-pagination button { min-height: 44px; padding: .45rem .75rem; border: 1px solid var(--border); border-radius: .6rem; color: var(--text-primary); background: var(--surface); font-weight: 700; cursor: pointer; }
+.cash-history-pagination { display: flex; justify-content: center; align-items: center; gap: .8rem; }
+.cash-history-pagination span { color: var(--text-secondary); font-size: .85rem; }
+.cash-history-pagination button:disabled { opacity: .45; cursor: not-allowed; }
+.cash-history-empty { padding: 1.2rem; border: 1px dashed var(--border); border-radius: .75rem; color: var(--text-secondary); text-align: center; }
 @media (max-width: 700px) { .report-category-callout { align-items: stretch; flex-direction: column; } }
 @media (max-width: 760px) {
-  .reports-tabs { overflow: visible; flex-wrap: wrap; }
-  .reports-tabs button { flex: 1 1 calc(50% - .35rem); min-width: 0; }
+  .reports-tabs { overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scroll-snap-type: x proximity; scrollbar-width: thin; }
+  .reports-tabs button { flex: 0 0 auto; min-width: max-content; scroll-snap-align: start; }
   .reports-cobranzas-table-wrap { display: none; }
   .reports-cobranzas-mobile-list { display: grid; }
   .reports-cobranzas-mobile-empty { display: block; margin: 0; padding: 1.25rem; border: 1px solid var(--border); border-radius: 1rem; color: var(--text-secondary); background: var(--surface); text-align: center; }
+  .cash-history-toggle { grid-template-columns: 1fr; }
+  .cash-history-amounts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
+  .cash-history-open-label { grid-column: 1 / -1; }
+  .cash-history-pagination { gap: .4rem; }
+  .cash-history-pagination span { text-align: center; }
 }
 </style>

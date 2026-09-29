@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div class="modal-backdrop" @click.self="requestClose">
+    <AppModalTransition :open="open">
+      <div class="modal-backdrop" @click.self="requestClose">
       <form
         v-focus-trap="{ close: requestClose, busy: loading }"
         v-form-validation
@@ -53,18 +54,21 @@
           </button>
         </footer>
       </form>
-    </div>
+      </div>
+    </AppModalTransition>
   </Teleport>
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
-  cajaHoy: { type: Object, required: true },
+  open: { type: Boolean, default: false },
+  cajaHoy: { type: Object, default: null },
   loading: { type: Boolean, default: false },
   tipoInicial: { type: String, default: 'egreso' },
 })
@@ -77,6 +81,17 @@ const form = reactive({
   importe: '',
   descripcion: '',
 })
+
+watch(
+  () => props.open,
+  (open) => {
+    if (!open) return
+    form.tipo = props.tipoInicial
+    form.medio = 'efectivo'
+    form.importe = ''
+    form.descripcion = ''
+  },
+)
 
 function requestClose() {
   if (!props.loading) emit('close')

@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body">
-    <div class="modal-backdrop" @click.self="requestClose">
+    <AppModalTransition :open="open">
+      <div class="modal-backdrop" @click.self="requestClose">
       <form
         v-focus-trap="{ close: requestClose, busy: loading }"
         v-form-validation
@@ -44,6 +45,9 @@
               <dd>$ {{ formatMoney(diferencia) }}</dd>
             </div>
           </dl>
+          <p class="cash-close-explanation">
+            La diferencia se calcula como total contado menos total esperado. El efectivo retirado y el saldo para la próxima apertura deben sumar el total contado.
+          </p>
           <p v-if="tieneDiferencia" class="cash-close-warning" role="status">
             Hay una diferencia entre el total esperado y el total contado. Se registrará en el cierre.
           </p>
@@ -71,7 +75,8 @@
           </button>
         </footer>
       </form>
-    </div>
+      </div>
+    </AppModalTransition>
   </Teleport>
 </template>
 
@@ -81,9 +86,11 @@ import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { formatDate, formatMoney } from '@/lib/formatters'
 import { confirmCierreCaja } from '@/lib/swal'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
+import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
 
 const props = defineProps({
+  open: { type: Boolean, default: false },
   totalEsperado: { type: Number, default: 0 },
   cajaHoy: { type: Object, default: null },
   loading: { type: Boolean, default: false },
@@ -111,6 +118,16 @@ const distribucionValida = computed(() => {
 function requestClose() {
   if (!props.loading) emit('close')
 }
+
+watch(
+  () => props.open,
+  (open) => {
+    if (!open) return
+    totalContado.value = Number(props.totalEsperado || 0).toFixed(2)
+    importeRetirado.value = Number(props.totalEsperado || 0).toFixed(2)
+    saldoArrastrable.value = '0.00'
+  },
+)
 
 watch(
   () => props.totalEsperado,
@@ -154,6 +171,10 @@ async function submit() {
   gap: .65rem 1rem;
   margin: 0 0 1rem;
 }
+
+.compact-modal .icon-button { min-width: 44px; min-height: 44px; }
+.cash-close-explanation { margin: 0 0 1rem; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.modal-grid label small { font-size: 12px; line-height: 1.4; }
 
 .cash-close-summary div {
   display: flex;
