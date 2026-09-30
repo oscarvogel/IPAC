@@ -1,4 +1,6 @@
 @media print {
+  html[data-print-target] body > .print-recibo[data-print-excluded="true"],
+  html[data-print-target] body > .cash-print-summary[data-print-excluded="true"] { display: none !important; }
   @page {
     margin: 12mm;
   }
@@ -7,6 +9,8 @@
   body {
     min-height: 0 !important;
     margin: 0 !important;
+    background: #fff !important;
+    color-scheme: light !important;
   }
 
   html[data-print-target="receipt"] body > *:not(.print-recibo),
@@ -26,6 +30,13 @@
     visibility: visible !important;
     color: #111827;
     background: #fff;
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --text-muted: #4b5563;
+    --surface: #fff;
+    --surface-soft: #f3f4f6;
+    --border: #d1d5db;
+    --row-hover: #fff;
   }
 
   html[data-print-target="receipt"] body > .print-recibo *,

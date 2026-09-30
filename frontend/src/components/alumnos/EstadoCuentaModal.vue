@@ -1,9 +1,10 @@
 <template>
   <Teleport to="body">
     <AppModalTransition :open="open">
-      <div class="modal-backdrop" @click.self="requestClose">
+      <div ref="accountBackdrop" v-show="!selectedOperation" class="modal-backdrop" @click.self="requestClose">
       <section
-        v-focus-trap="{ close: requestClose, busy: Boolean(printingId) }"
+        ref="accountPanel"
+        v-focus-trap="{ close: requestClose, busy: Boolean(printingId), active: !selectedOperation }"
         class="modal-card account-modal"
         role="dialog"
         aria-modal="true"
@@ -120,6 +121,7 @@
                 </div>
 
                 <div class="account-row-end">
+                  <button type="button" class="secondary-button" :data-operacion-id="pago.id" @click="openOperation(pago, $event)">Ver detalle</button>
                   <button
                     v-if="pago.id"
                     class="print-recibo-btn"
@@ -160,8 +162,9 @@
       </div>
     </AppModalTransition>
 
-    <ReciboPrintView :recibo="reciboData" />
+    <ReciboPrintView ref="printView" :recibo="reciboData" />
   </Teleport>
+  <OperacionDetalle :operacion="selectedOperation" :return-focus="operationTrigger" tipo="pago" @close="closeOperation" />
 </template>
 
 <script setup>
@@ -175,6 +178,7 @@ import { printDocument } from '@/lib/print'
 import { confirmAnularPago } from '@/lib/swal'
 import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import ReciboPrintView from '@/components/ui/ReciboPrintView.vue'
+import OperacionDetalle from '@/components/ui/OperacionDetalle.vue'
 import { vFocusTrap } from '@/directives/accessibility'
 
 const props = defineProps({
@@ -191,6 +195,24 @@ const toast = useToast()
 const data = ref(null)
 const loading = ref(false)
 const reciboData = ref(null)
+const selectedOperation = ref(null)
+const operationTrigger = ref(null)
+const accountPanel = ref(null), accountBackdrop = ref(null)
+let accountPosition = null
+function openOperation(pago, event) {
+  accountPosition = { id: pago.id, panel: accountPanel.value?.scrollTop || 0, backdrop: accountBackdrop.value?.scrollTop || 0 }
+  operationTrigger.value = event.currentTarget
+  selectedOperation.value = pago
+}
+async function closeOperation() {
+  selectedOperation.value = null
+  await nextTick()
+  if (!accountPosition) return
+  if (accountPanel.value) accountPanel.value.scrollTop = accountPosition.panel
+  if (accountBackdrop.value) accountBackdrop.value.scrollTop = accountPosition.backdrop
+  accountPanel.value?.querySelector(`[data-operacion-id="${accountPosition.id}"]`)?.focus({ preventScroll: true })
+}
+const printView = ref(null)
 const printingId = ref(null)
 const cancellingId = ref(null)
 
@@ -204,7 +226,7 @@ async function printRecibo(pago) {
   try {
     reciboData.value = await getRecibo(pago.id)
     await nextTick()
-    printDocument('receipt')
+    printDocument('receipt', printView.value?.$el)
   } catch (err) {
     toast.error(err.message || 'No se pudo preparar el recibo para imprimir.')
   } finally {

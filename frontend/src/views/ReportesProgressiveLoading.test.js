@@ -61,6 +61,19 @@ async function mountReportes(path = '/reportes') {
 }
 
 describe('carga progresiva de Reportes', () => {
+  it('conserva filtros aplicados si falla la consulta y reintenta el borrador', async () => {
+    const wrapper = await mountReportes()
+    const original = { ...wrapper.getComponent({ name: 'ReporteFiltros' }).props('filtros') }
+    reportState.loadResumen.mockRejectedValueOnce(new Error('Sin conexión'))
+    const filters = wrapper.getComponent({ name: 'ReporteFiltros' })
+    filters.vm.$emit('aplicar', { ...original, desde: '2026-08-01', hasta: '2026-08-30' }, 'personalizado')
+    await flushPromises()
+    expect({ ...filters.props('filtros') }).toEqual(original)
+    wrapper.getComponent({ name: 'AppPageState' }).vm.$emit('retry')
+    await flushPromises()
+    expect(filters.props('filtros').desde).toBe('2026-08-01')
+    wrapper.unmount()
+  })
   beforeEach(() => {
     Object.values(reportState).forEach((mock) => mock.mockClear())
   })

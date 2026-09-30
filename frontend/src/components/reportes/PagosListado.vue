@@ -62,6 +62,7 @@
               $ {{ formatMoney(pago.importe, { fractionDigits: 2 }) }}
             </td>
             <td>
+              <button type="button" class="secondary-button" @click="selectedOperation = pago">Ver detalle</button>
               <button
                 v-if="pago.id"
                 class="reports-print-action"
@@ -120,6 +121,7 @@
           </dl>
 
           <footer class="mobile-record-footer">
+            <button type="button" class="secondary-button" @click="selectedOperation = pago">Ver detalle</button>
             <span class="reports-payment-method">
               <component :is="paymentIcon(pago.medio)" aria-hidden="true" />
               {{ paymentLabel(pago.medio) }}
@@ -147,8 +149,9 @@
     </div>
 
     <Teleport to="body">
-      <ReciboPrintView :recibo="reciboData" />
+      <ReciboPrintView ref="printView" :recibo="reciboData" />
     </Teleport>
+    <OperacionDetalle :operacion="selectedOperation" tipo="pago" @close="selectedOperation = null" />
   </section>
 </template>
 
@@ -173,6 +176,7 @@ import { formatDate, formatMoney } from '@/lib/formatters'
 import { printDocument } from '@/lib/print'
 import ReciboPrintView from '@/components/ui/ReciboPrintView.vue'
 import MotionList from '@/components/ui/MotionList.vue'
+import OperacionDetalle from '@/components/ui/OperacionDetalle.vue'
 
 defineProps({
   pagos: { type: Array, required: true },
@@ -182,6 +186,8 @@ const { getRecibo } = usePagos()
 const toast = useToast()
 
 const reciboData = ref(null)
+const selectedOperation = ref(null)
+const printView = ref(null)
 const printingId = ref(null)
 
 function paymentIcon(method) {
@@ -209,7 +215,7 @@ async function printRecibo(pago) {
   try {
     reciboData.value = await getRecibo(pago.id)
     await nextTick()
-    printDocument('receipt')
+    printDocument('receipt', printView.value?.$el)
   } catch (err) {
     toast.error(err.message || 'No se pudo preparar el recibo para imprimir.')
   } finally {

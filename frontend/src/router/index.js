@@ -39,6 +39,8 @@ const routes = [
     path: '/',
     component: AppShell,
     children: [
+      { path: 'ayuda', name: 'ayuda', component: () => import('@/views/AyudaView.vue'), meta: { roles: ['superadmin', 'administracion', 'tesoreria', 'caja', 'consulta'] } },
+      { path: 'novedades', name: 'novedades', component: () => import('@/views/NovedadesView.vue'), meta: { roles: ['superadmin', 'administracion', 'tesoreria', 'caja', 'consulta'] } },
       { path: '', redirect: '/dashboard' },
       {
         path: 'dashboard',

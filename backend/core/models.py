@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models.functions import Lower
 from decimal import Decimal
 
 
@@ -526,3 +527,19 @@ class EventoAuditoria(TimeStampedModel):
 
     def __str__(self):
         return f"{self.modulo}:{self.accion} {self.entidad}#{self.entidad_id}"
+
+
+class ConsultaFavorita(models.Model):
+    """Adaptador de persistencia de preferencias de Identidad y Acceso."""
+    propietario = models.ForeignKey(User, on_delete=models.CASCADE, related_name="consultas_favoritas")
+    nombre = models.CharField(max_length=80)
+    pantalla = models.CharField(max_length=16)
+    configuracion = models.JSONField()
+
+    class Meta:
+        ordering = ["nombre", "id"]
+        constraints = [
+            models.UniqueConstraint(Lower("nombre"), "propietario", "pantalla", name="favorita_nombre_cuenta_pantalla"),
+            models.CheckConstraint(condition=~models.Q(nombre=""), name="favorita_nombre_no_vacio"),
+            models.CheckConstraint(condition=models.Q(pantalla__in=["caja", "reportes"]), name="favorita_pantalla_valida"),
+        ]

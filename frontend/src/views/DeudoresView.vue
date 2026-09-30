@@ -188,6 +188,9 @@
         :conceptos="conceptos"
         @close="showPagoForm = false"
         @saved="onPagoSaved"
+        :refresh-error="paymentRefreshError"
+        :refresh-loading="paymentRefreshLoading"
+        @retry-refresh="onPagoSaved"
       />
     </template>
   </section>
@@ -243,6 +246,7 @@ const pageError = ref('')
 const selectedAlumno = ref(null)
 const showEstadoCuenta = ref(false)
 const showPagoForm = ref(false)
+const paymentRefreshError = ref(''), paymentRefreshLoading = ref(false)
 const advancedFiltersExpanded = ref(false)
 
 const canRegisterPayments = computed(() => auth.can('register-payments'))
@@ -344,13 +348,17 @@ function clearAdvancedFilters() {
 
 function openPago(deudor) {
   if (!canRegisterPayments.value) return
+  paymentRefreshError.value = ''
   selectedAlumno.value = deudor
   showPagoForm.value = true
 }
 
 async function onPagoSaved() {
-  showPagoForm.value = false
-  await loadFilteredPage()
+  if (paymentRefreshLoading.value) return
+  paymentRefreshLoading.value = true; paymentRefreshError.value = ''
+  try { await loadDeudores(buildQuery()) }
+  catch (err) { paymentRefreshError.value = err.message }
+  finally { paymentRefreshLoading.value = false }
 }
 
 async function exportDebt() {

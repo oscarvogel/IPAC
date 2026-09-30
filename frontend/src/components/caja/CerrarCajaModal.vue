@@ -23,6 +23,7 @@
           </button>
         </header>
         <section class="modal-section">
+          <AyudaContextual guia="cierre" />
           <dl class="cash-close-summary" aria-live="polite">
             <div>
               <dt>Sucursal</dt>
@@ -88,6 +89,7 @@ import { confirmCierreCaja } from '@/lib/swal'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
+import AyudaContextual from '@/components/ui/AyudaContextual.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },

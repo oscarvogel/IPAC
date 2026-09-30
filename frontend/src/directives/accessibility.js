@@ -20,13 +20,15 @@ export const vFocusTrap = {
   mounted(element, binding) {
     const state = {
       value: binding.value || {},
-      previousFocus: document.activeElement,
+      previousFocus: binding.value?.returnFocus || document.activeElement,
       keydown: null,
     }
 
     state.keydown = (event) => {
       if (state.value.active === false) return
       if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
         if (!state.value.busy) state.value.close?.()
         return
       }
@@ -44,7 +46,7 @@ export const vFocusTrap = {
       if (event.shiftKey && (document.activeElement === first || !element.contains(document.activeElement))) {
         event.preventDefault()
         last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && (document.activeElement === last || !element.contains(document.activeElement))) {
         event.preventDefault()
         first.focus()
       }
@@ -55,6 +57,7 @@ export const vFocusTrap = {
 
     if (state.value.active === false) return
     requestAnimationFrame(() => {
+      if (state.value.active === false || !element.isConnected || element.contains(document.activeElement)) return
       const initial = element.querySelector('[autofocus], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])')
         || visibleFocusableElements(element)[0]
       initial?.focus()
@@ -70,7 +73,7 @@ export const vFocusTrap = {
     const state = focusTrapState.get(element)
     if (!state) return
     element.removeEventListener('keydown', state.keydown)
-    state.previousFocus?.focus?.()
+    requestAnimationFrame(() => state.previousFocus?.focus?.({ preventScroll: true }))
     focusTrapState.delete(element)
   },
 }

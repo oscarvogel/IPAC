@@ -31,7 +31,7 @@ function buildRouter(path = '/dashboard') {
   ]
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: paths.map((routePath) => ({ path: routePath, component: { template: '<div />' } })),
+    routes: [...paths, '/ayuda', '/novedades'].map((routePath) => ({ path: routePath, component: { template: '<div />' } })),
   })
   return router.push(path).then(() => router.isReady()).then(() => router)
 }

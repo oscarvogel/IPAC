@@ -100,6 +100,8 @@ const titles = {
   '/caja': 'Caja',
   '/conceptos': 'Conceptos',
   '/reportes': 'Reportes',
+  '/ayuda': 'Ayuda',
+  '/novedades': 'Novedades',
   '/sucursales': 'Sucursales',
   '/usuarios': 'Usuarios',
   '/configuracion': 'Configuración',

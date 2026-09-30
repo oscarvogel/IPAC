@@ -156,6 +156,8 @@ import {
   UserIcon,
   WalletIcon,
   XMarkIcon,
+  QuestionMarkCircleIcon,
+  MegaphoneIcon,
 } from '@heroicons/vue/24/outline'
 import { useAuth } from '@/composables/useAuth'
 import { vFocusTrap } from '@/directives/accessibility'
@@ -258,6 +260,7 @@ const modules = computed(() => {
       ],
     })
   }
+  base.push({ id: 'ayuda', to: '/ayuda', label: 'Ayuda', meta: 'Guías de uso', icon: QuestionMarkCircleIcon }, { id: 'novedades', to: '/novedades', label: 'Novedades', meta: 'Cambios del sistema', icon: MegaphoneIcon })
   return base
 })
 

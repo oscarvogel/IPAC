@@ -10,26 +10,35 @@
       <label><span class="sr-only">Filtrar por medio</span><select v-model="mediumFilter"><option value="">Todos los medios</option><option v-for="item in mediumOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
       <label><span class="sr-only">Ordenar movimientos</span><select v-model="ordering"><option value="recent">Más recientes</option><option value="oldest">Más antiguos</option><option value="amount">Mayor importe</option></select></label>
     </div>
+    <div class="cash-filter-summary" aria-label="Filtros aplicados">
+      <button v-if="typeFilter" type="button" class="secondary-button" @click="typeFilter = ''">Tipo: {{ movementLabel(typeFilter) }} · Quitar</button>
+      <button v-if="mediumFilter" type="button" class="secondary-button" @click="mediumFilter = ''">Medio: {{ paymentLabel(mediumFilter) }} · Quitar</button>
+      <button type="button" class="secondary-button" @click="clearFilters">Limpiar filtros</button>
+    </div>
+    <ConsultasFavoritas pantalla="caja" :configuracion="{ tipo: typeFilter, medio: mediumFilter, ordenamiento: ordering }" @aplicar="applyFavorite" />
     <div class="cash-movements-table-wrap">
       <table class="cash-movements-table">
-        <thead><tr><th>Tipo</th><th>Medio</th><th>Descripción</th><th>Hora / cajero</th><th>Importe</th></tr></thead>
+        <thead><tr><th>Tipo</th><th>Medio</th><th>Descripción</th><th>Hora / cajero</th><th>Importe</th><th>Detalle</th></tr></thead>
         <MotionList tag="tbody" data-motion-list="movimientos-desktop"><tr v-for="movimiento in filteredMovements" :key="movimiento.id" data-motion-item>
           <td><span :class="['cash-movement-type', movementTone(movimiento.tipo)]"><component :is="movementIcon(movimiento.tipo)" aria-hidden="true" />{{ movimiento.tipo_label || movementLabel(movimiento.tipo) }}</span></td>
           <td><span class="cash-payment-method"><component :is="paymentIcon(movimiento.medio)" aria-hidden="true" />{{ paymentLabel(movimiento.medio) }}</span></td>
           <td class="cash-movement-description">{{ movimiento.descripcion || 'Sin descripción' }}<small v-if="movimiento.pago_numero_recibo" class="cash-movement-receipt">{{ movimiento.pago_numero_recibo }}</small></td>
           <td><strong>{{ formatTime(movimiento.creado) }}</strong><small class="cash-movement-user">{{ movimiento.usuario_nombre || 'Sin usuario' }}</small></td>
           <td :class="['cash-movement-amount', { negative: isNegative(movimiento.tipo) }]">{{ isNegative(movimiento.tipo) ? '−' : '+' }} $ {{ formatMoney(movimiento.importe, { fractionDigits: 2 }) }}</td>
+          <td><button type="button" class="secondary-button" @click="selectedOperation = movimiento">Ver detalle</button></td>
         </tr></MotionList>
       </table>
       <MotionList v-if="filteredMovements.length" class="mobile-record-list cash-mobile-list" data-motion-list="movimientos-mobile" role="list">
         <article v-for="movimiento in filteredMovements" :key="`mobile-${movimiento.id}`" data-motion-item class="mobile-record-card cash-mobile-card" role="listitem">
           <header class="mobile-record-head"><span :class="['mobile-record-icon', movementTone(movimiento.tipo)]"><component :is="movementIcon(movimiento.tipo)" aria-hidden="true" /></span><span class="mobile-record-title"><strong>{{ movimiento.tipo_label || movementLabel(movimiento.tipo) }}</strong><small>{{ formatTime(movimiento.creado) }} · {{ paymentLabel(movimiento.medio) }}</small></span><strong :class="['mobile-record-amount', { negative: isNegative(movimiento.tipo) }]">{{ isNegative(movimiento.tipo) ? '−' : '+' }} $ {{ formatMoney(movimiento.importe, { fractionDigits: 2 }) }}</strong></header>
           <p class="mobile-record-description">{{ movimiento.descripcion || 'Sin descripción' }}</p>
+          <button type="button" class="secondary-button" @click="selectedOperation = movimiento">Ver detalle</button>
           <footer class="mobile-record-footer"><span class="cash-payment-method"><component :is="paymentIcon(movimiento.medio)" aria-hidden="true" />{{ paymentLabel(movimiento.medio) }}</span><small>{{ movimiento.usuario_nombre || 'Sin usuario' }}</small></footer>
         </article>
       </MotionList>
       <div v-if="!filteredMovements.length" class="cash-movements-empty"><span><ReceiptPercentIcon aria-hidden="true" /></span><strong>{{ movimientos.length ? 'No hay movimientos para estos filtros' : 'La caja todavía no tiene movimientos' }}</strong><p>{{ movimientos.length ? 'Probá cambiando el tipo, medio o búsqueda.' : 'Los movimientos de la jornada aparecerán en esta lista.' }}</p></div>
     </div>
+    <OperacionDetalle :operacion="selectedOperation" @close="selectedOperation = null" />
   </section>
 </template>
 
@@ -38,9 +47,14 @@ import { computed, ref } from 'vue'
 import { ArrowDownCircleIcon, ArrowUpCircleIcon, ArrowsRightLeftIcon, BanknotesIcon, BuildingLibraryIcon, CreditCardIcon, QuestionMarkCircleIcon, ReceiptPercentIcon } from '@heroicons/vue/24/outline'
 import { formatMoney } from '@/lib/formatters'
 import MotionList from '@/components/ui/MotionList.vue'
+import ConsultasFavoritas from '@/components/ui/ConsultasFavoritas.vue'
+import OperacionDetalle from '@/components/ui/OperacionDetalle.vue'
 
 const props = defineProps({ movimientos: { type: Array, required: true } })
 const typeFilter = ref(''); const mediumFilter = ref(''); const search = ref(''); const ordering = ref('recent')
+const selectedOperation = ref(null)
+function clearFilters() { typeFilter.value = ''; mediumFilter.value = ''; search.value = ''; ordering.value = 'recent' }
+function applyFavorite(config) { typeFilter.value = config.tipo; mediumFilter.value = config.medio; ordering.value = config.ordenamiento; search.value = '' }
 const typeOptions = [{ value: '', label: 'Todos' }, { value: 'pago', label: 'Pagos' }, { value: 'ingreso', label: 'Ingresos' }, { value: 'egreso', label: 'Egresos' }, { value: 'retiro', label: 'Retiros' }, { value: 'reverso', label: 'Reversiones' }]
 const mediumOptions = [{ value: 'efectivo', label: 'Efectivo' }, { value: 'transferencia', label: 'Transferencia' }, { value: 'mercado_pago', label: 'Mercado Pago' }, { value: 'tarjeta', label: 'Tarjeta' }, { value: 'otro', label: 'Otros' }]
 const negativeTypes = new Set(['egreso', 'retiro', 'pase', 'reverso'])
@@ -59,6 +73,7 @@ function formatTime(value) { return value ? new Intl.DateTimeFormat('es-AR', { h
 </script>
 
 <style scoped>
+.cash-filter-summary{display:flex;flex-wrap:wrap;gap:.5rem;padding:.75rem 1rem}.cash-filter-summary button{min-height:44px}.cash-movements-card>.favorites{margin:.75rem 1rem}
 .cash-movement-filters{display:grid;grid-template-columns:1fr minmax(150px,220px) 165px 145px;gap:.55rem;padding:.75rem 1rem;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}.cash-type-filters{display:flex;gap:.3rem;overflow-x:auto}.cash-type-filters button{min-height:44px;border:1px solid var(--border);border-radius:999px;padding:0 .7rem;background:var(--surface);color:var(--text-secondary);font-size:.75rem;font-weight:800;white-space:nowrap}.cash-type-filters button.active{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}.cash-movement-filters input,.cash-movement-filters select{width:100%;min-height:44px;border:1px solid var(--border);border-radius:.6rem;padding:.4rem .6rem;background:var(--surface);color:var(--text-primary)}.cash-movement-user,.cash-movement-receipt{display:block;margin-top:.15rem;color:var(--text-secondary);font-size:12px;line-height:1.4}
   @media(max-width:1000px){.cash-movement-filters{grid-template-columns:1fr 1fr}.cash-type-filters{grid-column:1/-1}}@media(max-width:760px){.cash-type-filters{flex-wrap:wrap;overflow:visible;row-gap:.4rem}.cash-type-filters button{flex:1 1 auto}}@media(max-width:560px){.cash-movement-filters{grid-template-columns:1fr}.cash-type-filters{grid-column:auto}}
 </style>

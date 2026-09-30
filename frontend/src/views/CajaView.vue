@@ -87,7 +87,7 @@
         :caja-hoy="cajaHoy"
         :movimientos="cajaMovimientos"
         :caja-totales="cajaTotales"
-        :username="auth.user?.username || ''"
+        :username="auth.user.value?.username || ''"
         :fallback-sucursal="auth.user?.perfil?.sucursal?.nombre"
       />
     </Teleport>

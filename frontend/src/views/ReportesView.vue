@@ -8,22 +8,25 @@
       @retry="loadPage"
     />
     <template v-else>
+    <AyudaContextual guia="reportes" :seccion="activeTab" />
     <ReporteFiltros
       :filtros="filtros"
       :sucursales="sucursales"
       :loading="loading || activeSectionLoading"
       :usuarios="cajeros"
       :show-user="activeTab === 'cobranzas' || (activeTab === 'caja' && canFilterCajaUser)"
-      :show-medium="activeTab !== 'caja'"
+      :show-medium="['resumen', 'cobranzas'].includes(activeTab)"
+      :show-period="['resumen', 'cobranzas', 'caja'].includes(activeTab)"
       :show-export="activeTab !== 'resumen'"
-      @update:filtros="updateFiltros"
+      :periodo="appliedPeriodo"
       @aplicar="aplicarFiltros"
       :export-label="'Exportar Excel'"
       @exportar="exportarActual"
     />
+    <ConsultasFavoritas pantalla="reportes" :configuracion="favoriteConfig" :disabled="activeSectionLoading || Boolean(activeSectionError)" @aplicar="applyFavorite" />
 
     <nav class="reports-tabs" aria-label="Categorías de reportes">
-      <button v-for="tab in tabs" :key="tab.id" type="button" :class="{ active: activeTab === tab.id }" :aria-current="activeTab === tab.id ? 'page' : undefined" @click="selectTab(tab.id)">
+      <button v-for="tab in tabs" :key="tab.id" type="button" :disabled="activeSectionLoading" :class="{ active: activeTab === tab.id }" :aria-current="activeTab === tab.id ? 'page' : undefined" @click="selectTab(tab.id)">
         {{ tab.label }}
       </button>
     </nav>
@@ -149,7 +152,7 @@
               <div v-else-if="cajaDetalles[caja.id]?.movimientos?.length" class="cash-history-movements-wrap">
                 <table class="cash-history-movements">
                   <thead>
-                    <tr><th>Fecha</th><th>Tipo</th><th>Medio</th><th>Descripción</th><th>Importe</th></tr>
+                    <tr><th>Fecha</th><th>Tipo</th><th>Medio</th><th>Descripción</th><th>Importe</th><th>Detalle</th></tr>
                   </thead>
                   <tbody>
                     <tr v-for="movimiento in cajaDetalles[caja.id].movimientos" :key="movimiento.id">
@@ -158,6 +161,7 @@
                       <td>{{ movimiento.medio }}</td>
                       <td>{{ movimiento.descripcion || movimiento.pago_numero_recibo || 'Sin descripción' }}</td>
                       <td>{{ money(movimiento.importe) }}</td>
+                      <td><button type="button" class="secondary-button" @click="selectedOperation = movimiento">Ver detalle</button></td>
                     </tr>
                   </tbody>
                 </table>
@@ -177,6 +181,7 @@
       </div>
     </Transition>
     </template>
+    <OperacionDetalle :operacion="selectedOperation" @close="selectedOperation = null" />
   </section>
 </template>
 
@@ -193,6 +198,10 @@ import ReporteResumen from '@/components/reportes/ReporteResumen.vue'
 import PagosListado from '@/components/reportes/PagosListado.vue'
 import AppPageState from '@/components/ui/AppPageState.vue'
 import MotionList from '@/components/ui/MotionList.vue'
+import ConsultasFavoritas from '@/components/ui/ConsultasFavoritas.vue'
+import OperacionDetalle from '@/components/ui/OperacionDetalle.vue'
+import AyudaContextual from '@/components/ui/AyudaContextual.vue'
+import { favoritaReporte, filtrosFavorita } from '@/lib/consultas'
 import { animateSectionEnter, animateSectionLeave } from '@/lib/motion'
 import { vRevealOnScroll } from '@/directives/motion'
 import { formatDate, formatDateTime, toLocalISODate } from '@/lib/formatters'
@@ -213,6 +222,7 @@ const {
   loadCobranzasUsuarios,
   loadCajasHistorial,
   loadCajaDetalle,
+  loadCajeros,
   exportarExcel,
 } = useReportes()
 const toast = useToast()
@@ -224,6 +234,7 @@ const activeSectionLoading = ref(false)
 const activeSectionError = ref('')
 const loadedResources = new Set()
 let sectionRequestId = 0
+let applyingFavorite = false
 const reportSections = ['resumen', 'cobranzas', 'morosidad', 'caja', 'alumnos']
 const activeTab = ref(reportSections.includes(route.query.seccion) ? route.query.seccion : 'resumen')
 const cajeros = ref([])
@@ -231,6 +242,9 @@ const openCajaId = ref(null)
 const cajaDetalles = ref({})
 const loadingCajaId = ref(null)
 const cajaDetailErrors = ref({})
+const selectedOperation = ref(null)
+const appliedPeriodo = ref('mes')
+const pendingProposal = ref(null)
 const canFilterCajaUser = computed(() => ['superadmin', 'administracion', 'tesoreria'].includes(auth.user.value?.perfil?.rol))
 const canViewCajaHistory = computed(() => canFilterCajaUser.value || auth.user.value?.perfil?.rol === 'caja')
 const tabs = [
@@ -254,7 +268,8 @@ watch(
 )
 
 watch(activeTab, (section, previousSection) => {
-  if (!pageReady.value || section === previousSection) return
+  if (!pageReady.value || section === previousSection || applyingFavorite) return
+  pendingProposal.value = null
   void fetchReportData().catch(() => {})
 })
 
@@ -280,15 +295,22 @@ const filtros = reactive({
   medio: '',
   usuario: '',
 })
+const favoriteConfig = computed(() => favoritaReporte(activeTab.value, { ...filtros, usuario: activeTab.value === 'caja' && !canFilterCajaUser.value ? '' : filtros.usuario }, appliedPeriodo.value))
+async function applyFavorite(config) {
+  const next = filtrosFavorita(config)
+  // Cambiar sección antes de la consulta evita ejecutar la favorita en otra pestaña.
+  applyingFavorite = true
+  try {
+    activeTab.value = config.seccion
+    await router.replace({ path: route.path, query: { ...route.query, seccion: config.seccion } })
+    await aplicarFiltros(next, config.periodo)
+  } finally { applyingFavorite = false }
+}
 
 function rangoPorDefecto() {
   const hoy = new Date()
   const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
   return { desde: toLocalISODate(primero), hasta: toLocalISODate(hoy) }
-}
-
-function updateFiltros(nextFilters) {
-  Object.assign(filtros, nextFilters)
 }
 
 onMounted(loadPage)
@@ -307,19 +329,20 @@ async function loadPage() {
   }
 }
 
-async function fetchReportData({ force = false } = {}) {
+async function fetchReportData({ force = false, filters = filtros } = {}) {
   const section = activeTab.value
   const payload = {
-    desde: filtros.desde || undefined,
-    hasta: filtros.hasta || undefined,
-    sucursal: filtros.sucursal || undefined,
-    medio: filtros.medio || undefined,
-    usuario: filtros.usuario || undefined,
+    desde: filters.desde || undefined,
+    hasta: filters.hasta || undefined,
+    sucursal: filters.sucursal || undefined,
+    medio: section === 'caja' ? undefined : filters.medio || undefined,
+    usuario: ['caja', 'cobranzas'].includes(section) ? filters.usuario || undefined : undefined,
   }
   const resourceLoaders = {
     resumen: () => loadResumen(payload),
     pagos: () => loadPagos(payload),
     cobranzasUsuarios: () => loadCobranzasUsuarios(payload),
+    cajeros: async () => { cajeros.value = await loadCajeros(payload) },
     cajasHistorial: () => loadCajasHistorial({
       ...payload,
       usuario: canFilterCajaUser.value ? payload.usuario : undefined,
@@ -327,7 +350,7 @@ async function fetchReportData({ force = false } = {}) {
   }
   const cajaHistoryRequired = section === 'caja' && canViewCajaHistory.value
   const requiredResources = section === 'cobranzas'
-    ? ['resumen', 'pagos', 'cobranzasUsuarios']
+    ? ['resumen', 'pagos', 'cobranzasUsuarios', ...(loadCajeros ? ['cajeros'] : [])]
     : section === 'resumen'
       ? ['resumen']
       : section === 'caja'
@@ -363,16 +386,22 @@ async function fetchReportData({ force = false } = {}) {
 }
 
 function retryActiveSection() {
+  if (pendingProposal.value) return aplicarFiltros(pendingProposal.value.filters, pendingProposal.value.periodo)
   return fetchReportData({ force: true }).catch(() => {})
 }
 
-async function aplicarFiltros() {
+async function aplicarFiltros(nextFilters = pendingProposal.value?.filters || { ...filtros }, periodo = appliedPeriodo.value) {
+  const candidate = { ...nextFilters }
+  pendingProposal.value = { filters: candidate, periodo }
   try {
     loadedResources.clear()
     cajaDetalles.value = {}
     cajaDetailErrors.value = {}
     openCajaId.value = null
-    await fetchReportData({ force: true })
+    await fetchReportData({ force: true, filters: candidate })
+    Object.assign(filtros, candidate)
+    appliedPeriodo.value = periodo
+    pendingProposal.value = null
   } catch (err) {
     toast.error(err.message || 'No se pudieron actualizar los reportes.')
   }
@@ -434,8 +463,8 @@ async function exportarActual() {
     desde: filtros.desde || undefined,
     hasta: filtros.hasta || undefined,
     sucursal: filtros.sucursal || undefined,
-    medio: filtros.medio || undefined,
-    usuario: filtros.usuario || undefined,
+    medio: activeTab.value === 'caja' ? undefined : filtros.medio || undefined,
+    usuario: ['cobranzas', 'caja'].includes(activeTab.value) ? (activeTab.value !== 'caja' || canFilterCajaUser.value ? filtros.usuario || undefined : undefined) : undefined,
   }
   try {
     const reportType = activeTab.value === 'morosidad'
