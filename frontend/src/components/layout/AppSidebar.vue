@@ -253,6 +253,7 @@ const modules = computed(() => {
       children: [
         { id: 'configuracion-sucursales', label: 'Sucursales', to: '/sucursales' },
         { id: 'configuracion-conceptos', label: 'Conceptos cobrables', to: '/conceptos' },
+        { id: 'configuracion-carreras', label: 'Carreras y cursos', to: '/carreras' },
         { id: 'configuracion-ajustes', label: 'Descuentos y recargos', to: '/ajustes-cuotas' },
         { id: 'configuracion-usuarios', label: 'Usuarios y permisos', to: '/usuarios' },
         { id: 'configuracion-importaciones', label: 'Importar datos', to: '/importaciones' },
