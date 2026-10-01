@@ -17,3 +17,17 @@ backups/
 # Fuentes de importación con datos personales; se cargan localmente y no se versionan.
 Alumnos IPAC- Posadas.xlsx
 CARRERAS Y CURSOS 2026.xlsx
+
+# Entornos virtuales alternativos (el local .venv/ ya estaba arriba).
+.venv2/
+
+# Worktrees de git y carpetas de verificación usadas en revisiones de PR.
+.worktrees/
+.verificacion-pr-2/
+
+# Artefactos locales de debugging y capturas de pruebas visuales.
+frontend/.issue47-debug/
+frontend/.issue47-screenshots/
+
+# Contrato del cliente: documento con datos personales, se maneja fuera del repo.
+contratos/contrato servicio.pdf
