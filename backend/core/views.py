@@ -26,6 +26,10 @@ from .contexts.importacion.application.import_ipac_workbook import IPACWorkbookI
 from .contexts.cobranzas.application.registrar_pago import RegistrarPago
 from .contexts.cobranzas.application.generar_cuotas import GeneracionCuotasError, GenerarCuotas
 from .contexts.cobranzas.application.evaluar_generacion_cuotas import EvaluarGeneracionCuotas
+from .contexts.cobranzas.application.planificacion_desde_payload import (
+    PayloadDeCuotasInvalido,
+    planificacion_desde_payload,
+)
 from .contexts.cobranzas.application.anular_pago import AnularPago, PagoAnulacionError
 from .contexts.caja.application.validar_caja import CajaCerradaError, asegurar_caja_abierta
 from .contexts.caja.application.gestionar_caja import CerrarCaja, GestionarSaldoAnterior
@@ -768,24 +772,38 @@ class CuotaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="evaluar-generacion")
     def evaluar_generacion(self, request):
-        sucursal_id = request.data.get("sucursal")
-        carrera_id = request.data.get("carrera")
-        concepto_id = request.data.get("concepto")
-        periodo = request.data.get("periodo")
-        if not all([sucursal_id, concepto_id, periodo]):
+        # Se reenvian solo los campos del lote. La traduccion a periodos la
+        # hace la capa de aplicacion, igual que en la generacion, para que
+        # previsualizar y generar no puedan discrepar.
+        payload = {
+            "sucursal": request.data.get("sucursal"),
+            "carrera": request.data.get("carrera"),
+            "concepto": request.data.get("concepto"),
+            "cantidad": request.data.get("cantidad"),
+            "mes_inicial": request.data.get("mes_inicial"),
+            "anio_inicial": request.data.get("anio_inicial"),
+            "dia_vencimiento": request.data.get("dia_vencimiento"),
+            "periodo": request.data.get("periodo"),
+            "fecha_vencimiento": request.data.get("fecha_vencimiento"),
+        }
+        if not all([payload["sucursal"], payload["concepto"]]):
             return Response(
-                {"detail": "Sucursal, concepto y periodo son obligatorios."},
+                {"detail": "Sucursal y concepto son obligatorios."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        try:
+            planificacion = planificacion_desde_payload(payload)
+        except PayloadDeCuotasInvalido as exc:
+            return Response({"detail": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
 
         use_case = EvaluarGeneracionCuotas(DjangoAlumnoElegibleCuotaReader())
         try:
             preview = use_case.execute(
                 actor=request.user,
-                sucursal_id=sucursal_id,
-                carrera_id=carrera_id,
-                concepto_id=concepto_id,
-                periodo=periodo,
+                sucursal_id=payload["sucursal"],
+                carrera_id=payload["carrera"],
+                concepto_id=payload["concepto"],
+                planificacion=planificacion,
             )
         except DatosGeneracionCuotasInvalidos as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -795,19 +813,36 @@ class CuotaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
     def generar(self, request):
         try:
             with transaction.atomic():
-                cuotas = GenerarCuotas(DjangoCuotaGenerator()).execute(
+                resultado = GenerarCuotas(DjangoCuotaGenerator()).execute(
                     actor=request.user,
                     payload=request.data,
                 )
-                description = "Generación individual de cuota" if len(cuotas) == 1 else "Generación masiva de cuotas"
-                for cuota in cuotas:
-                    self._audit(action="alta", instance=cuota, after=snapshot(cuota), description=description)
+                if resultado.total_creadas == 1:
+                    descripcion = "Generación individual de cuota"
+                elif resultado.total_omitidas:
+                    descripcion = "Generación de lote de cuotas"
+                else:
+                    descripcion = "Generación masiva de cuotas"
+                for cuota in resultado.creadas:
+                    self._audit(action="alta", instance=cuota, after=snapshot(cuota), description=descripcion)
         except GeneracionCuotasError as exc:
-            payload = {"detail": exc.detail}
+            cuerpo_error = {"detail": exc.detail}
             if exc.alumnos is not None:
-                payload["alumnos"] = exc.alumnos
-            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
-        return Response(CuotaSerializer(cuotas, many=True).data, status=status.HTTP_201_CREATED)
+                cuerpo_error["alumnos"] = exc.alumnos
+            return Response(cuerpo_error, status=status.HTTP_400_BAD_REQUEST)
+
+        cuerpo = {
+            "cuotas": CuotaSerializer(resultado.creadas, many=True).data,
+            "resumen": {
+                "creadas": resultado.total_creadas,
+                "omitidas": resultado.total_omitidas,
+            },
+        }
+        # 201 solo cuando se creo algo. Si el lote ya estaba completo la
+        # operacion termino bien y no hay error que reportar: un 201 sobre un
+        # cuerpo vacio seria mentir sobre lo que paso.
+        estado = status.HTTP_201_CREATED if resultado.creadas else status.HTTP_200_OK
+        return Response(cuerpo, status=estado)
 
 class AplicacionPagoViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
     audit_module = "cobranzas"

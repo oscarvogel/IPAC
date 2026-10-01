@@ -166,7 +166,8 @@ export function confirmGeneracionCuotasMasivas({
   sucursal,
   carrera,
   concepto,
-  periodo,
+  periodos,
+  cuotaTotal = 0,
   importe,
   descuento = 0,
   recargo = 0,
@@ -175,14 +176,15 @@ export function confirmGeneracionCuotasMasivas({
 }) {
   return swalIpac.fire({
     icon: 'warning',
-    title: `Generar ${cantidad} cuotas`,
+    title: `Generar ${cuotaTotal} cuotas para ${cantidad} alumnos`,
     html: `
       <p>La operación afectará múltiples estados de cuenta.</p>
       <dl class="ipac-swal-details">
         <div><dt>Sucursal</dt><dd>${escapeHtml(sucursal)}</dd></div>
         <div><dt>Carrera/curso</dt><dd>${escapeHtml(carrera || 'Todas')}</dd></div>
         <div><dt>Concepto</dt><dd>${escapeHtml(concepto)}</dd></div>
-        <div><dt>Período</dt><dd>${escapeHtml(periodo)}</dd></div>
+        <div><dt>Períodos</dt><dd>${escapeHtml(periodos)}</dd></div>
+        <div><dt>Cuotas a generar</dt><dd>${cuotaTotal}</dd></div>
         <div><dt>Alumnos elegibles</dt><dd>${cantidad}</dd></div>
         <div><dt>Alumnos omitidos</dt><dd>${omitidas}</dd></div>
         <div><dt>Importe unitario</dt><dd>$ ${formatMoney(importe)}</dd></div>

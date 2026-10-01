@@ -1611,7 +1611,7 @@ class ApiInicialTests(APITestCase):
 
         response = self.client.post("/api/cuotas/generar/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(len(response.data), 2)
+        self.assertEqual(len(response.data["cuotas"]), 2)
         self.assertEqual(Cuota.objects.filter(periodo="2026-09").count(), 2)
         self.assertEqual(
             EventoAuditoria.objects.filter(entidad="core.Cuota").values_list("descripcion", flat=True).distinct().get(),
@@ -1619,7 +1619,11 @@ class ApiInicialTests(APITestCase):
         )
 
         repetida = self.client.post("/api/cuotas/generar/", payload, format="json")
-        self.assertEqual(repetida.status_code, status.HTTP_400_BAD_REQUEST)
+        # Repetir el lote no es un error: se saltea lo que ya existe y lo
+        # reporta. Asi el operador puede reintentar sin miedo.
+        self.assertEqual(repetida.status_code, status.HTTP_200_OK)
+        self.assertEqual(repetida.data["resumen"]["creadas"], 0)
+        self.assertEqual(repetida.data["resumen"]["omitidas"], 2)
         self.assertEqual(Cuota.objects.filter(periodo="2026-09").count(), 2)
 
     def test_fee_generation_allows_assigned_branch_and_rejects_other_branch_without_effects(self):
@@ -1691,6 +1695,8 @@ class ApiInicialTests(APITestCase):
                     "nombre_completo": "Lopez, Ana",
                     "carrera_nombre": "",
                     "estado": "activo",
+                    "faltantes": ["2026-10"],
+                    "existentes": [],
                     "motivo": "",
                 },
                 {
@@ -1699,7 +1705,9 @@ class ApiInicialTests(APITestCase):
                     "nombre_completo": "Perez, Pedro",
                     "carrera_nombre": "",
                     "estado": "activo",
-                    "motivo": "Ya existe una cuota para este concepto y período.",
+                    "faltantes": [],
+                    "existentes": ["2026-10"],
+                    "motivo": "Ya tiene todas las cuotas del lote.",
                 },
             ],
         )

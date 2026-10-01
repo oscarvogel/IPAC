@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from django.db import transaction
 
 from ....access_scope import scoped_queryset_for_user
@@ -11,7 +9,10 @@ from ....models import (
     Matricula,
     TipoDescuento,
 )
-from ..application.generar_cuotas import GeneracionCuotasError
+from ..application.generar_cuotas import (
+    GeneracionCuotasError,
+    ResultadoGeneracionCuotas,
+)
 from ..domain.desglose_cuota import DesgloseCuotaError, calcular_desglose
 
 
@@ -53,18 +54,30 @@ class DjangoCuotaGenerator:
         if any(alumno.sucursal_id != concepto.sucursal_id for alumno in alumnos):
             raise GeneracionCuotasError("El concepto debe pertenecer a la sucursal de todos los alumnos.")
 
-        existentes = list(
-            Cuota.objects.select_for_update().filter(
+        planificacion = solicitud.planificacion
+
+        # Las cuotas que ya existen se bloquean antes de decidir qué falta. Sin
+        # este lock, dos operadores que presionan el botón a la vez en temporada
+        # de rematriculacion corren la misma operacion y la segunda choca contra
+        # el unique (alumno, concepto, periodo) con un 500 en vez de saltarse
+        # los duplicados.
+        #
+        # Ojo: esta consulta no puede combinarse con la de alumnos mediante
+        # select_related. Alumno.carrera es nullable, asi que el join es un
+        # LEFT OUTER, y PostgreSQL rechaza el FOR UPDATE sobre el lado nullable
+        # de un outer join. Ademas en SQLite el select_for_update es un no-op,
+        # por lo que el error solo aparece en PostgreSQL. Las carreras se cargan
+        # en su propia consulta: una sola vez, sin N+1 y sin tocar el bloqueo.
+        ya_cubiertas = {
+            (alumno_id, periodo)
+            for alumno_id, periodo in Cuota.objects.select_for_update()
+            .filter(
                 alumno_id__in=solicitud.alumno_ids,
                 concepto=concepto,
-                periodo=solicitud.periodo,
-            ).values_list("alumno_id", flat=True)
-        )
-        if existentes:
-            raise GeneracionCuotasError(
-                "Ya existen cuotas para este concepto y período.",
-                alumnos=existentes,
+                periodo__in=planificacion.nombres,
             )
+            .values_list("alumno_id", "periodo")
+        }
 
         importe = solicitud.importe if solicitud.importe is not None else concepto.importe
         descuento = solicitud.descuento
@@ -98,12 +111,8 @@ class DjangoCuotaGenerator:
         # temporada de inscripcion las matriculas se cargan mas tarde que las
         # cuotas y sin ese respaldo el comprobante saldria sin desglose.
         #
-        # Ojo: esta consulta no puede combinarse con la de alumnos mediante
-        # select_related. Alumno.carrera es nullable, asi que el join es un
-        # LEFT OUTER, y PostgreSQL rechaza el FOR UPDATE sobre el lado nullable
-        # de un outer join. Ademas en SQLite el select_for_update es un no-op,
-        # por lo que el error solo aparece en PostgreSQL. Las carreras se cargan
-        # en su propia consulta: una sola vez, sin N+1 y sin tocar el bloqueo.
+        # Se consulta una sola vez para todo el lote, no una vez por periodo: la
+        # carrera no cambia entre las cuotas de un mismo alumno.
         carrera_por_alumno = {
             alumno_id: carrera_id
             for alumno_id, carrera_id in Matricula.objects.filter(
@@ -124,8 +133,11 @@ class DjangoCuotaGenerator:
 
         # El desglose se congela aqui con los precios del catalogo vigentes en el
         # momento de generar la cuota. Si el catalogo cambia despues, los recibos
-        # ya emitidos conservan el reparto con el que se cobraron.
-        cuotas = []
+        # ya emitidos conservan el reparto con el que se cobraron. Es el mismo
+        # reparto para todos los periodos del lote: el importe y el catalogo no
+        # cambian entre cuotas del mismo alumno.
+        omitidas = []
+        a_crear = []
         for alumno in alumnos:
             carrera = carreras.get(carrera_por_alumno.get(alumno.id))
             try:
@@ -137,22 +149,29 @@ class DjangoCuotaGenerator:
             except DesgloseCuotaError as exc:
                 # Un error de catalogo no debe llegar al usuario como 500.
                 raise GeneracionCuotasError(str(exc)) from exc
-            cuotas.append(
-                Cuota(
-                    alumno=alumno,
-                    concepto=concepto,
-                    sucursal_id=alumno.sucursal_id,
-                    periodo=solicitud.periodo,
-                    fecha_emision=solicitud.fecha_emision,
-                    fecha_vencimiento=solicitud.fecha_vencimiento,
-                    importe=importe,
-                    descuento=descuento,
-                    tipo_descuento=tipo_descuento,
-                    motivo_descuento=motivo_descuento,
-                    descuento_registrado_por=actor if descuento > 0 else None,
-                    recargo=recargo,
-                    importe_programatico=(desglose.importe_programatico if desglose else None),
-                    importe_extraprogramatica=(desglose.importe_extraprogramatica if desglose else None),
+
+            for periodo in planificacion.periodos:
+                if (alumno.id, periodo.periodo) in ya_cubiertas:
+                    omitidas.append({"alumno_id": alumno.id, "periodo": periodo.periodo})
+                    continue
+                a_crear.append(
+                    Cuota(
+                        alumno=alumno,
+                        concepto=concepto,
+                        sucursal_id=alumno.sucursal_id,
+                        periodo=periodo.periodo,
+                        fecha_emision=solicitud.fecha_emision,
+                        fecha_vencimiento=periodo.fecha_vencimiento,
+                        importe=importe,
+                        descuento=descuento,
+                        tipo_descuento=tipo_descuento,
+                        motivo_descuento=motivo_descuento,
+                        descuento_registrado_por=actor if descuento > 0 else None,
+                        recargo=recargo,
+                        importe_programatico=(desglose.importe_programatico if desglose else None),
+                        importe_extraprogramatica=(desglose.importe_extraprogramatica if desglose else None),
+                    )
                 )
-            )
-        return Cuota.objects.bulk_create(cuotas)
+
+        creadas = Cuota.objects.bulk_create(a_crear) if a_crear else []
+        return ResultadoGeneracionCuotas(creadas=creadas, omitidas=omitidas)

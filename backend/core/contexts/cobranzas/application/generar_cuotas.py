@@ -1,7 +1,14 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Protocol
+
+from ..domain.planificacion_cuotas import (
+    ErrorPlanificacionCuotas,
+    PlanificacionCuotas,
+    exigir_vencimientos,
+)
+from .planificacion_desde_payload import PayloadDeCuotasInvalido, planificacion_desde_payload
 
 
 class GeneracionCuotasError(ValueError):
@@ -15,9 +22,8 @@ class GeneracionCuotasError(ValueError):
 class SolicitudGeneracionCuotas:
     alumno_ids: tuple[int, ...]
     concepto_id: int
-    periodo: str
+    planificacion: PlanificacionCuotas
     fecha_emision: date
-    fecha_vencimiento: date
     importe: Decimal | None
     descuento: Decimal
     recargo: Decimal
@@ -25,8 +31,29 @@ class SolicitudGeneracionCuotas:
     motivo_descuento: str
 
 
+@dataclass(frozen=True)
+class ResultadoGeneracionCuotas:
+    """Qué se creó y qué se salteó.
+
+    ``omitidas`` no es un error: son los pares (alumno, período) que ya tenían
+    cuota. Devolverlos permite que el operador vuelva a correr la misma
+    operación sin miedo y vea qué quedó afuera y por qué.
+    """
+
+    creadas: list = field(default_factory=list)
+    omitidas: list = field(default_factory=list)
+
+    @property
+    def total_creadas(self) -> int:
+        return len(self.creadas)
+
+    @property
+    def total_omitidas(self) -> int:
+        return len(self.omitidas)
+
+
 class CuotaGenerator(Protocol):
-    def generar(self, *, actor, solicitud: SolicitudGeneracionCuotas) -> list: ...
+    def generar(self, *, actor, solicitud: SolicitudGeneracionCuotas) -> ResultadoGeneracionCuotas: ...
 
 
 def _identifier(value, label):
@@ -60,6 +87,13 @@ def _amount(value, label, *, default=Decimal("0")):
     return amount
 
 
+def _planificar(payload):
+    try:
+        return planificacion_desde_payload(payload)
+    except PayloadDeCuotasInvalido as exc:
+        raise GeneracionCuotasError(exc.detail) from exc
+
+
 class GenerarCuotas:
     """Valida la solicitud y delega la operación transaccional al puerto de Cobranzas."""
 
@@ -72,9 +106,16 @@ class GenerarCuotas:
             raise GeneracionCuotasError("Debe indicar al menos un alumno.")
         alumno_ids = tuple(dict.fromkeys(_identifier(item, "Alumno") for item in raw_alumnos))
 
-        required = (payload.get("concepto"), payload.get("periodo"), payload.get("fecha_emision"), payload.get("fecha_vencimiento"))
-        if not all(required):
-            raise GeneracionCuotasError("Concepto, periodo y fechas son obligatorios.")
+        if not all((payload.get("concepto"), payload.get("fecha_emision"))):
+            raise GeneracionCuotasError("Concepto y fecha de emisión son obligatorios.")
+
+        planificacion = _planificar(payload)
+        # La fecha es opcional en la previsualización, pero acá sí o sí hace
+        # falta: se está por escribir la cuota.
+        try:
+            exigir_vencimientos(planificacion)
+        except ErrorPlanificacionCuotas as exc:
+            raise GeneracionCuotasError(exc.detail) from exc
 
         importe = None if payload.get("importe") in (None, "") else _amount(payload["importe"], "Importe")
         descuento = _amount(payload.get("descuento", 0), "Descuento")
@@ -91,15 +132,12 @@ class GenerarCuotas:
         solicitud = SolicitudGeneracionCuotas(
             alumno_ids=alumno_ids,
             concepto_id=_identifier(payload.get("concepto"), "Concepto"),
-            periodo=str(payload.get("periodo")).strip(),
+            planificacion=planificacion,
             fecha_emision=_date(payload.get("fecha_emision"), "La fecha de emisión"),
-            fecha_vencimiento=_date(payload.get("fecha_vencimiento"), "La fecha de vencimiento"),
             importe=importe,
             descuento=descuento,
             recargo=recargo,
             tipo_descuento_id=tipo_descuento_id,
             motivo_descuento=str(payload.get("motivo_descuento") or "").strip(),
         )
-        if not solicitud.periodo:
-            raise GeneracionCuotasError("El período es obligatorio.")
         return self._generator.generar(actor=actor, solicitud=solicitud)
