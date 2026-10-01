@@ -32,6 +32,11 @@ MESES = (
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 )
 
+#: Día de vencimiento por defecto. Es el que declaró IPAC en la reunión del
+#: 24/09/2026: las cuotas vencen el día 10, aunque los intereses se calculen
+#: desde el día 1 del mes.
+DIA_VENCIMIENTO_POR_DEFECTO = 10
+
 
 class ErrorPlanificacionCuotas(ValueError):
     def __init__(self, detail):
@@ -193,6 +198,34 @@ def planificar_periodo_unico(*, periodo, fecha_vencimiento=None):
 
     return PlanificacionCuotas(
         periodos=(PeriodoCuota(periodo=str(periodo).strip(), fecha_vencimiento=fecha_vencimiento),)
+    )
+
+
+def planificacion_sugerida(
+    *,
+    plan_cuotas,
+    fecha_inicio,
+    dia_vencimiento=DIA_VENCIMIENTO_POR_DEFECTO,
+):
+    """Plan por defecto de una reinscripción: tantas cuotas como el plan, desde
+    el mes en que arranca la matrícula.
+
+    Devuelve ``None`` cuando la carrera no tiene plan configurado. No se inventa
+    un número: si el catálogo no dice cuántas cuotas tiene el plan, el operador
+    tiene que decidirlo, y un número inventado sería una deuda que el alumno no
+    Debe.
+
+    El lote puede cruzar el año: una reinscripción de noviembre con plan de 10
+    produce de noviembre a agosto del año siguiente, que es como funciona una
+    cohorte anual.
+    """
+    if not plan_cuotas or int(plan_cuotas) <= 0:
+        return None
+    return planificar_secuencia(
+        cantidad=plan_cuotas,
+        mes_inicial=fecha_inicio.month,
+        anio_inicial=fecha_inicio.year,
+        dia_vencimiento=dia_vencimiento,
     )
 
 

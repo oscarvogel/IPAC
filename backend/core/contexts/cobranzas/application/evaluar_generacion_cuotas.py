@@ -12,6 +12,7 @@ class AlumnoElegibleCuotaReader(Protocol):
         carrera_id,
         concepto_id,
         periodos,
+        alumno_id=None,
     ) -> list[dict]: ...
 
 
@@ -29,7 +30,7 @@ class EvaluarGeneracionCuotas:
     def __init__(self, reader: AlumnoElegibleCuotaReader):
         self._reader = reader
 
-    def execute(self, *, actor, sucursal_id, carrera_id, concepto_id, planificacion):
+    def execute(self, *, actor, sucursal_id, carrera_id, concepto_id, planificacion, alumno_id=None):
         periodos = list(planificacion.nombres)
         candidatos = self._reader.obtener_candidatos(
             actor=actor,
@@ -37,6 +38,7 @@ class EvaluarGeneracionCuotas:
             carrera_id=carrera_id,
             concepto_id=concepto_id,
             periodos=periodos,
+            alumno_id=alumno_id,
         )
 
         detalle_alumnos = []

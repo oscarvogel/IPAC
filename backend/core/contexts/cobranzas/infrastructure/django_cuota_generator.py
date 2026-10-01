@@ -54,6 +54,24 @@ class DjangoCuotaGenerator:
         if any(alumno.sucursal_id != concepto.sucursal_id for alumno in alumnos):
             raise GeneracionCuotasError("El concepto debe pertenecer a la sucursal de todos los alumnos.")
 
+        # La matricula se bloquea tambien: dos reinscripciones simultaneas del
+        # mismo alumno sobre la misma matricula generarian el mismo lote dos
+        # veces, y la segunda terminaria saltandose todo sin avisar. Sin esta
+        # consulta el bloque de alumnos ya alcanza, porque el lote se decide
+        # sobre las cuotas existentes, no sobre la matricula.
+        matricula = None
+        if solicitud.matricula_id is not None:
+            matricula = Matricula.objects.select_for_update().filter(
+                pk=solicitud.matricula_id,
+                alumno_id__in=solicitud.alumno_ids,
+            ).first()
+            if not matricula:
+                raise GeneracionCuotasError("La matrícula no pertenece a los alumnos indicados.")
+            if matricula.estado != Matricula.Estado.ACTIVA:
+                raise GeneracionCuotasError(
+                    "Solo se pueden generar cuotas desde una matrícula activa."
+                )
+
         planificacion = solicitud.planificacion
 
         # Las cuotas que ya existen se bloquean antes de decidir qué falta. Sin
@@ -157,6 +175,7 @@ class DjangoCuotaGenerator:
                 a_crear.append(
                     Cuota(
                         alumno=alumno,
+                        matricula=matricula,
                         concepto=concepto,
                         sucursal_id=alumno.sucursal_id,
                         periodo=periodo.periodo,

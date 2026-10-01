@@ -30,6 +30,11 @@ from .contexts.cobranzas.application.planificacion_desde_payload import (
     PayloadDeCuotasInvalido,
     planificacion_desde_payload,
 )
+from .contexts.cobranzas.application.reinscripcion_cuotas import (
+    GenerarCuotasDeMatricula,
+    MatriculaReinscribible,
+    sugerir_plan,
+)
 from .contexts.cobranzas.application.anular_pago import AnularPago, PagoAnulacionError
 from .contexts.caja.application.validar_caja import CajaCerradaError, asegurar_caja_abierta
 from .contexts.caja.application.gestionar_caja import CerrarCaja, GestionarSaldoAnterior
@@ -707,6 +712,119 @@ class MatriculaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
         alumno_id = self.request.query_params.get("alumno")
         return queryset.filter(alumno_id=alumno_id) if alumno_id else queryset
 
+    def get_permissions(self):
+        """Escribir cuotas es permiso de Cobranzas, no de Trayectoria.
+
+        La accion vive en este viewset porque la matricula es el disparador,
+        pero el permiso que la habilita tiene que ser el de gestion de cuotas.
+        Con AcademicManagementPermission un rol de Cobranzas no podria
+        reinscribir, y con CuotaPermission un administrador de trayectoria
+        podria generar deuda.
+        """
+        if getattr(self, "action", None) in ("generar_cuotas", "plan_cuotas"):
+            return [CuotaPermission()]
+        return super().get_permissions()
+
+    @staticmethod
+    def _matricula_reinscribible(matricula):
+        """Traduce la matrícula de Trayectoria al DTO que Cobranzas consume.
+
+        El DTO, y no el modelo: Cobranzas no importa el modelo de Matricula ni
+        lo persiste. Solo usa el id, la fecha de inicio y el plan de la carrera.
+        """
+        return MatriculaReinscribible(
+            matricula_id=matricula.pk,
+            alumno_id=matricula.alumno_id,
+            fecha_inicio=matricula.fecha_inicio,
+            plan_cuotas=matricula.carrera.plan_cuotas,
+        )
+
+    @action(detail=True, methods=["get"], url_path="plan-cuotas")
+    def plan_cuotas(self, request, pk=None):
+        """Periodos que se generarian por defecto para esta reinscripcion.
+
+        La regla vive en el dominio y la pantalla solo la muestra. Si la carrera
+        no tiene plan cargado, se responde con la razon para que el operador
+        entienda por que tiene que escribir la cantidad a mano, en vez de
+        mostrarle un numero que el sistema no sabe.
+        """
+        matricula = self.get_object()
+        planificacion = sugerir_plan(
+            matricula=self._matricula_reinscribible(matricula),
+            dia_vencimiento=request.query_params.get("dia_vencimiento"),
+        )
+        conceptos = ConceptoCobrable.objects.filter(
+            sucursal_id=matricula.sucursal_id,
+            carrera_id=matricula.carrera_id,
+            tipo=ConceptoCobrable.Tipo.CUOTA,
+            activo=True,
+        ).order_by("nombre")
+        return Response({
+            "matricula": matricula.pk,
+            "alumno": matricula.alumno_id,
+            "carrera": matricula.carrera_id,
+            "carrera_nombre": matricula.carrera.nombre,
+            "plan_cuotas": matricula.carrera.plan_cuotas,
+            "periodos": planificacion.nombres if planificacion else [],
+            "etiquetas_periodo": planificacion.etiquetas if planificacion else [],
+            "motivo_sin_plan": (
+                "" if planificacion
+                else "La carrera no tiene un plan de cuotas configurado. Indicá cuántas se generan."
+            ),
+            "conceptos": [
+                {"id": concepto.pk, "nombre": concepto.nombre, "importe": concepto.importe}
+                for concepto in conceptos
+            ],
+        })
+
+    @action(detail=True, methods=["post"], url_path="generar-cuotas")
+    def generar_cuotas(self, request, pk=None):
+        matricula = self.get_object()
+        concepto_id = request.data.get("concepto")
+        if not concepto_id:
+            return Response(
+                {"detail": "Elegí el concepto de las cuotas."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            resultado = GenerarCuotasDeMatricula(DjangoCuotaGenerator()).execute(
+                actor=request.user,
+                matricula=self._matricula_reinscribible(matricula),
+                concepto_id=concepto_id,
+                cantidad=request.data.get("cantidad"),
+                dia_vencimiento=request.data.get("dia_vencimiento"),
+                fecha_emision=request.data.get("fecha_emision") or timezone.localdate(),
+                importe=request.data.get("importe"),
+                descuento=request.data.get("descuento") or 0,
+                recargo=request.data.get("recargo") or 0,
+                tipo_descuento_id=request.data.get("tipo_descuento"),
+                motivo_descuento=request.data.get("motivo_descuento") or "",
+            )
+        except GeneracionCuotasError as exc:
+            cuerpo_error = {"detail": exc.detail}
+            if exc.alumnos is not None:
+                cuerpo_error["alumnos"] = exc.alumnos
+            return Response(cuerpo_error, status=status.HTTP_400_BAD_REQUEST)
+
+        for cuota in resultado.creadas:
+            self._audit(
+                action="alta",
+                instance=cuota,
+                after=snapshot(cuota),
+                description=f"Reinscripción: cuota {cuota.periodo} de la matrícula {matricula.pk}",
+            )
+        return Response(
+            {
+                "cuotas": CuotaSerializer(resultado.creadas, many=True).data,
+                "resumen": {
+                    "creadas": resultado.total_creadas,
+                    "omitidas": resultado.total_omitidas,
+                    "matricula": matricula.pk,
+                },
+            },
+            status=status.HTTP_201_CREATED if resultado.creadas else status.HTTP_200_OK,
+        )
+
     @action(detail=True, methods=["post"], url_path="finalizar")
     def finalizar(self, request, pk=None):
         matricula = self.get_object()
@@ -786,6 +904,8 @@ class CuotaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
             "periodo": request.data.get("periodo"),
             "fecha_vencimiento": request.data.get("fecha_vencimiento"),
         }
+        # La reinscripcion previsualiza un alumno; la masiva, el grupo.
+        alumno_id = request.data.get("alumno")
         if not all([payload["sucursal"], payload["concepto"]]):
             return Response(
                 {"detail": "Sucursal y concepto son obligatorios."},
@@ -804,6 +924,7 @@ class CuotaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
                 carrera_id=payload["carrera"],
                 concepto_id=payload["concepto"],
                 planificacion=planificacion,
+                alumno_id=alumno_id,
             )
         except DatosGeneracionCuotasInvalidos as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)

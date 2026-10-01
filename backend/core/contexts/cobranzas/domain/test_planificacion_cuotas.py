@@ -8,6 +8,7 @@ from .planificacion_cuotas import (
     PeriodoCuota,
     PlanificacionCuotas,
     exigir_vencimientos,
+    planificacion_sugerida,
     planificar_periodo_unico,
     planificar_secuencia,
 )
@@ -155,6 +156,44 @@ class PlanificarPeriodoUnicoTests(unittest.TestCase):
         )
 
         self.assertIs(exigir_vencimientos(plan), plan)
+
+
+class PlanificacionSugeridaTests(unittest.TestCase):
+    def test_arma_el_lote_desde_el_plan_y_la_fecha_de_inicio(self):
+        plan = planificacion_sugerida(
+            plan_cuotas=10, fecha_inicio=date(2026, 3, 1)
+        )
+
+        self.assertEqual(plan.cantidad, 10)
+        self.assertEqual(plan.nombres[0], "2026-03")
+        self.assertEqual(plan.nombres[-1], "2026-12")
+        self.assertEqual(plan.primero.fecha_vencimiento, date(2026, 3, 10))
+
+    def test_una_reinscripcion_de_noviembre_atraviesa_el_ano(self):
+        """La cohorte anual no coincide con el año calendario."""
+        plan = planificacion_sugerida(
+            plan_cuotas=10, fecha_inicio=date(2026, 11, 1)
+        )
+
+        self.assertEqual(plan.primero.periodo, "2026-11")
+        self.assertEqual(plan.ultimo.periodo, "2027-08")
+
+    def test_acepta_un_dia_de_vencimiento_distinto(self):
+        plan = planificacion_sugerida(
+            plan_cuotas=2, fecha_inicio=date(2026, 3, 1), dia_vencimiento=5
+        )
+
+        self.assertEqual(plan.primero.fecha_vencimiento, date(2026, 3, 5))
+
+    def test_sin_plan_no_inventa_una_cantidad(self):
+        """Sin plan cargado el operador tiene que decidir, no el sistema."""
+        for plan_cuotas in (None, 0, -1):
+            with self.subTest(plan_cuotas=plan_cuotas):
+                self.assertIsNone(
+                    planificacion_sugerida(
+                        plan_cuotas=plan_cuotas, fecha_inicio=date(2026, 3, 1)
+                    )
+                )
 
 
 class PlanificacionCuotasTests(unittest.TestCase):

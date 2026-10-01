@@ -20,6 +20,7 @@ class DjangoAlumnoElegibleCuotaReader(AlumnoElegibleCuotaReader):
         carrera_id,
         concepto_id,
         periodos,
+        alumno_id=None,
     ):
         periodos = list(periodos or [])
         sucursal = scoped_queryset_for_user(Sucursal.objects.all(), actor).filter(pk=sucursal_id).first()
@@ -44,6 +45,13 @@ class DjangoAlumnoElegibleCuotaReader(AlumnoElegibleCuotaReader):
             if not carrera:
                 raise DatosGeneracionCuotasInvalidos("Carrera invalida o sin acceso.")
             alumnos = alumnos.filter(carrera_id=carrera.id)
+
+        # La reinscripcion necesita previsualizar un alumno en concreto, no el
+        # grupo entero de la carrera. Sin este filtro la pantalla de
+        # renovacion mostraria el total de la carrera y el operador no veria
+        # cuales de esos periodos ya tiene pagos su alumno.
+        if alumno_id:
+            alumnos = alumnos.filter(pk=alumno_id)
 
         rows = list(
             alumnos.select_related("carrera")

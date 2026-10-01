@@ -225,6 +225,38 @@ export function confirmImportacion({ archivo, nuevos, actualizados, conceptos = 
   })
 }
 
+export function confirmReinscripcionCuotas({
+  alumno,
+  carrera,
+  concepto,
+  periodos,
+  cantidad,
+  importe,
+  omitidas = 0,
+}) {
+  return swalIpac.fire({
+    icon: 'warning',
+    title: `Generar ${cantidad} cuotas`,
+    html: `
+      <p>Se generan solo para este alumno y quedan enlazadas a su matrícula.</p>
+      <dl class="ipac-swal-details">
+        <div><dt>Alumno</dt><dd>${escapeHtml(alumno)}</dd></div>
+        <div><dt>Carrera</dt><dd>${escapeHtml(carrera)}</dd></div>
+        <div><dt>Concepto</dt><dd>${escapeHtml(concepto)}</dd></div>
+        <div><dt>Períodos</dt><dd>${escapeHtml(periodos)}</dd></div>
+        <div><dt>Cuotas a generar</dt><dd>${cantidad}</dd></div>
+        <div><dt>Ya existentes</dt><dd>${omitidas}</dd></div>
+        <div><dt>Importe unitario</dt><dd>$ ${formatMoney(importe)}</dd></div>
+      </dl>
+    `,
+    showCancelButton: true,
+    confirmButtonText: 'Generar cuotas',
+    cancelButtonText: 'Cancelar',
+    reverseButtons: true,
+    focusCancel: true,
+  })
+}
+
 export function showResultadoCuotasMasivas({ creadas, omitidas, errores, detalle = '' }) {
   return swalIpac.fire({
     icon: errores ? 'error' : 'info',

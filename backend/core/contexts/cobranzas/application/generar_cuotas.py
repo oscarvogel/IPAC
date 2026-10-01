@@ -29,6 +29,10 @@ class SolicitudGeneracionCuotas:
     recargo: Decimal
     tipo_descuento_id: int | None
     motivo_descuento: str
+    #: Matrícula a la que quedan enlazadas las cuotas, si la generación viene
+    #: de una reinscripción. Antes este campo existía en el modelo y nunca se
+    #: llenaba, así que las cuotas quedaban huérfanas de la trayectoria.
+    matricula_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -129,6 +133,12 @@ class GenerarCuotas:
         else:
             tipo_descuento_id = _identifier(tipo_descuento_id, "Tipo de descuento")
 
+        matricula_id = payload.get("matricula")
+        if matricula_id in (None, ""):
+            matricula_id = None
+        else:
+            matricula_id = _identifier(matricula_id, "Matrícula")
+
         solicitud = SolicitudGeneracionCuotas(
             alumno_ids=alumno_ids,
             concepto_id=_identifier(payload.get("concepto"), "Concepto"),
@@ -139,5 +149,6 @@ class GenerarCuotas:
             recargo=recargo,
             tipo_descuento_id=tipo_descuento_id,
             motivo_descuento=str(payload.get("motivo_descuento") or "").strip(),
+            matricula_id=matricula_id,
         )
         return self._generator.generar(actor=actor, solicitud=solicitud)

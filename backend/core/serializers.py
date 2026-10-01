@@ -306,10 +306,16 @@ class CuotaSerializer(serializers.ModelSerializer):
     total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     total_pagado = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     saldo = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    # La cuota sobrevive a la anulacion de su matricula, asi que el estado
+    # de esa matricula viaja con la cuota: sin esto la pantalla de cuenta
+    # corriente no puede marcar de que cohorte es cada cuota.
+    matricula_estado = serializers.CharField(
+        source="matricula.estado", read_only=True, allow_null=True, default=None
+    )
 
     class Meta:
         model = Cuota
-        fields = ["id", "alumno", "alumno_nombre", "matricula", "concepto", "concepto_nombre", "sucursal", "periodo", "fecha_emision", "fecha_vencimiento", "importe", "descuento", "tipo_descuento", "motivo_descuento", "descuento_registrado_por", "recargo", "regla_recargo", "recargo_calculado_en", "total", "total_pagado", "saldo", "estado"]
+        fields = ["id", "alumno", "alumno_nombre", "matricula", "concepto", "concepto_nombre", "sucursal", "periodo", "fecha_emision", "fecha_vencimiento", "importe", "descuento", "tipo_descuento", "motivo_descuento", "descuento_registrado_por", "recargo", "regla_recargo", "recargo_calculado_en", "total", "total_pagado", "saldo", "estado", "matricula_estado"]
         read_only_fields = ["estado", "descuento_registrado_por", "regla_recargo", "recargo_calculado_en"]
 
     def validate(self, attrs):
