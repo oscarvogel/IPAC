@@ -242,6 +242,8 @@ class Cuota(TimeStampedModel):
     recargo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     regla_recargo = models.ForeignKey(ReglaRecargo, on_delete=models.PROTECT, related_name="cuotas", blank=True, null=True)
     recargo_calculado_en = models.DateTimeField(blank=True, null=True)
+    importe_programatico = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    importe_extraprogramatica = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.PENDIENTE)
 
     class Meta:
@@ -251,6 +253,14 @@ class Cuota(TimeStampedModel):
     @property
     def total(self):
         return self.importe - self.descuento + self.recargo
+
+    @property
+    def desglose_disponible(self):
+        """Indica si la cuota quedo con el desglose congelado desde el catalogo."""
+        return (
+            self.importe_programatico is not None
+            and self.importe_extraprogramatica is not None
+        )
 
     @property
     def total_pagado(self):
@@ -475,6 +485,14 @@ class MovimientoCaja(TimeStampedModel):
         blank=True,
         null=True,
     )
+    numero_comprobante = models.CharField(max_length=30, unique=True, blank=True, null=True, editable=False)
+    recibido_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="movimientos_caja_recibidos",
+        blank=True,
+        null=True,
+    )
 
     class Meta:
         ordering = ["-creado", "-id"]
@@ -486,6 +504,25 @@ class MovimientoCaja(TimeStampedModel):
         if self.tipo in {self.Tipo.EGRESO, self.Tipo.RETIRO, self.Tipo.PASE, self.Tipo.REVERSO}:
             return -self.importe
         return self.importe
+
+    def save(self, *args, **kwargs):
+        """Numera el comprobante de los movimientos que lo exigen.
+
+        El numero se deriva del id, igual que el recibo de pago, para que ningun
+        pase ni retiro pueda quedar sin numerar sin importar por que camino se
+        haya creado el movimiento.
+        """
+        from .contexts.caja.domain.comprobante_caja import (
+            numero_comprobante,
+            requiere_comprobante,
+        )
+
+        super().save(*args, **kwargs)
+        if requiere_comprobante(self.tipo) and not self.numero_comprobante:
+            self.numero_comprobante = numero_comprobante(self.pk)
+            type(self).objects.filter(pk=self.pk).update(
+                numero_comprobante=self.numero_comprobante
+            )
 
     def __str__(self):
         return f"{self.get_tipo_display()} - {self.importe}"

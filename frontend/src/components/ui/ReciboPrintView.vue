@@ -21,11 +21,19 @@
         <tr><th>Concepto</th><th>Periodo</th><th>Importe</th></tr>
       </thead>
       <tbody>
-        <tr v-for="(app, i) in recibo?.aplicaciones || []" :key="i" :class="{ 'recibo-application-cancelled': app.activa === false }">
-          <td>{{ app.concepto }}</td>
-          <td>{{ app.periodo }}</td>
-          <td>$ {{ formatMoney(app.importe) }}</td>
-        </tr>
+        <template v-for="(app, i) in recibo?.aplicaciones || []" :key="i">
+          <tr :class="{ 'recibo-application-cancelled': app.activa === false }">
+            <td>{{ app.concepto }}</td>
+            <td>{{ app.periodo }}</td>
+            <td>$ {{ formatMoney(app.importe) }}</td>
+          </tr>
+          <tr v-if="app.desglose_completo" class="recibo-desglose">
+            <td colspan="2">Parte programática / extraprogramática</td>
+            <td>
+              $ {{ formatMoney(app.importe_programatico) }} / $ {{ formatMoney(app.importe_extraprogramatica) }}
+            </td>
+          </tr>
+        </template>
         <tr v-if="!(recibo?.aplicaciones?.length)">
           <td colspan="3">{{ recibo?.pago?.concepto_nombre || 'Pago a cuenta' }}</td>
         </tr>
@@ -107,6 +115,18 @@ defineProps({
 
   .recibo-application-cancelled {
     text-decoration: line-through;
+  }
+
+  .recibo-desglose td {
+    background: #f9fafb;
+    color: #4b5563;
+    font-size: 11px;
+  }
+
+  .recibo-desglose td[colspan] {
+    text-transform: none;
+    font-weight: 400;
+    letter-spacing: 0;
   }
 
   .recibo-void-reason {

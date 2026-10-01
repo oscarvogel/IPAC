@@ -32,6 +32,17 @@ from .contexts.caja.application.gestionar_caja import CerrarCaja, GestionarSaldo
 from .contexts.caja.application.consultar_historial_cajas import ConsultarHistorialCajas
 from .contexts.caja.domain.resumen_caja import CajaOperacionError
 from .contexts.caja.infrastructure.django_caja_repository import DjangoCajaRepository
+from .contexts.caja.application.registrar_movimiento_caja import (
+    RegistrarMovimientoCaja,
+    SolicitudMovimientoCaja,
+)
+from .contexts.caja.domain.comprobante_caja import (
+    ComprobanteCajaError,
+    requiere_comprobante,
+)
+from .contexts.caja.infrastructure.django_movimiento_caja_repository import (
+    DjangoMovimientoCajaRepository,
+)
 from .contexts.alumnos.application.gestionar_matricula import GestionarMatricula, MatriculaError
 from .contexts.auditoria.presentation.mixins import AuditableViewSetMixin, snapshot
 from .contexts.auditoria.application.registrar_evento import RegistrarEventoAuditoria
@@ -960,24 +971,34 @@ class PagoViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="recibo")
     def recibo(self, request, pk=None):
         pago = self.get_object()
+        # El desglose programatico/extraprogramatico solo se expone para las
+        # cuotas que la aplicacion cubre por completo. En un pago parcial el
+        # reparto no esta definido por el negocio, asi que el comprobante no lo
+        # inventa y la linea sale sin desglose.
+        aplicaciones = []
+        for aplicacion in pago.aplicaciones.select_related("cuota__concepto"):
+            cuota = aplicacion.cuota
+            desglose_completo = bool(cuota.desglose_disponible and cuota.saldo <= 0)
+            aplicaciones.append(
+                {
+                    "cuota_id": cuota.id,
+                    "periodo": cuota.periodo,
+                    "concepto": cuota.concepto.nombre,
+                    "importe": aplicacion.importe,
+                    "activa": aplicacion.activa,
+                    "desglose_completo": desglose_completo,
+                    "importe_programatico": cuota.importe_programatico if desglose_completo else None,
+                    "importe_extraprogramatica": cuota.importe_extraprogramatica if desglose_completo else None,
+                }
+            )
         return Response(
             {
                 "numero": pago.numero_recibo,
                 "emitido_en": pago.creado,
                 "pago": self.get_serializer(pago).data,
-                "aplicaciones": [
-                    {
-                        "cuota_id": aplicacion.cuota_id,
-                        "periodo": aplicacion.cuota.periodo,
-                        "concepto": aplicacion.cuota.concepto.nombre,
-                        "importe": aplicacion.importe,
-                        "activa": aplicacion.activa,
-                    }
-                    for aplicacion in pago.aplicaciones.select_related("cuota__concepto")
-                ],
+                "aplicaciones": aplicaciones,
             }
         )
-
     @action(detail=False, methods=["get"], url_path="exportar-csv")
     def exportar_csv(self, request):
         response = HttpResponse(content_type="text/csv; charset=utf-8")
@@ -1026,6 +1047,39 @@ class CajaDiariaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
         if profile and profile.rol == PerfilUsuario.Rol.CONSULTA:
             return CajaConsultaSerializer
         return super().get_serializer_class()
+
+    @action(detail=False, methods=["get"], url_path="receptores")
+    def receptores(self, request):
+        """Usuarios que pueden recibir un pase o un retiro de caja.
+
+        Hace falta un endpoint propio porque un cajero no tiene acceso a
+        /usuarios/, que es solo de administracion, y aun asi debe poder
+        conformar el comprobante del pase.
+        """
+        sucursales = scoped_queryset_for_user(Sucursal.objects.all(), request.user)
+        sucursal_id = request.query_params.get("sucursal")
+        if sucursal_id:
+            sucursales = sucursales.filter(pk=sucursal_id)
+
+        perfiles = (
+            PerfilUsuario.objects.filter(
+                sucursal__in=sucursales,
+                rol__in=CASH_ROLES,
+                user__is_active=True,
+            )
+            .select_related("user")
+            .order_by("user__username")
+        )
+        return Response([
+            {
+                "id": perfil.user_id,
+                "username": perfil.user.username,
+                "rol": perfil.rol,
+                "rol_label": perfil.get_rol_display(),
+                "sucursal": perfil.sucursal_id,
+            }
+            for perfil in perfiles
+        ])
 
     @action(detail=False, methods=["get"], url_path="historial")
     def historial(self, request):
@@ -1227,6 +1281,45 @@ class MovimientoCajaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
                 except CajaCerradaError as exc:
                     raise ValidationError({"caja": str(exc)}) from exc
         return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        """Delega la escritura al caso de uso de Caja.
+
+        El controlador no persiste: arma la solicitud y la pasa al caso de uso,
+        que valida la invariante del comprobante y abre la transaccion.
+        """
+        datos = serializer.validated_data
+        recibido_por = datos.get("recibido_por")
+        try:
+            movimiento = RegistrarMovimientoCaja(
+                DjangoMovimientoCajaRepository()
+            ).execute(
+                actor=self.request.user,
+                solicitud=SolicitudMovimientoCaja(
+                    caja_id=datos["caja"].pk,
+                    tipo=datos["tipo"],
+                    medio=datos["medio"],
+                    importe=datos["importe"],
+                    descripcion=datos.get("descripcion", ""),
+                    recibido_por_id=recibido_por.pk if recibido_por else None,
+                ),
+            )
+        except (ComprobanteCajaError, CajaOperacionError, CajaCerradaError) as exc:
+            raise ValidationError({"detail": str(exc)}) from exc
+        serializer.instance = movimiento
+
+    @action(detail=True, methods=["get"], url_path="comprobante")
+    def comprobante(self, request, pk=None):
+        """Comprobante digital del movimiento. La impresion es opcional."""
+        movimiento = self.get_object()
+        return Response(
+            {
+                "numero": movimiento.numero_comprobante,
+                "emitido_en": movimiento.creado,
+                "requiere_comprobante": requiere_comprobante(movimiento.tipo),
+                "movimiento": self.get_serializer(movimiento).data,
+            }
+        )
 
 
 class EventoAuditoriaViewSet(viewsets.ReadOnlyModelViewSet):

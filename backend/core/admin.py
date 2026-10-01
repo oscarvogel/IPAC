@@ -51,8 +51,18 @@ class CajaDiariaAdmin(admin.ModelAdmin):
 
 @admin.register(MovimientoCaja)
 class MovimientoCajaAdmin(admin.ModelAdmin):
-    list_display = ("caja", "tipo", "medio", "importe", "descripcion", "pago")
+    list_display = (
+        "caja",
+        "tipo",
+        "medio",
+        "importe",
+        "descripcion",
+        "numero_comprobante",
+        "recibido_por",
+        "pago",
+    )
     list_filter = ("tipo", "medio", "caja__sucursal")
+    search_fields = ("numero_comprobante", "descripcion", "recibido_por__username")
 
 
 @admin.register(Matricula)
@@ -63,7 +73,16 @@ class MatriculaAdmin(admin.ModelAdmin):
 
 @admin.register(Cuota)
 class CuotaAdmin(admin.ModelAdmin):
-    list_display = ("alumno", "concepto", "periodo", "fecha_vencimiento", "importe", "estado")
+    list_display = (
+        "alumno",
+        "concepto",
+        "periodo",
+        "fecha_vencimiento",
+        "importe",
+        "importe_programatico",
+        "importe_extraprogramatica",
+        "estado",
+    )
     list_filter = ("sucursal", "estado", "periodo")
 
 

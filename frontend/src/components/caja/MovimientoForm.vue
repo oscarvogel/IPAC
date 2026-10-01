@@ -45,6 +45,15 @@
             </label>
             <label>Importe<input v-model.number="form.importe" type="number" min="0" step="0.01" required /></label>
             <label>Descripcion<input v-model="form.descripcion" required /></label>
+            <label v-if="requiereConformidad">
+              Recibe el dinero
+              <select v-model="form.recibido_por" required>
+                <option value="">Seleccionar quien recibe</option>
+                <option v-for="persona in receptores" :key="persona.id" :value="persona.id">
+                  {{ persona.username }} - {{ persona.rol_label }}
+                </option>
+              </select>
+            </label>
           </div>
         </section>
         <footer class="modal-actions">
@@ -60,17 +69,22 @@
 </template>
 
 <script setup>
-import { reactive, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import AppButtonContent from '@/components/ui/AppButtonContent.vue'
 import AppModalTransition from '@/components/ui/AppModalTransition.vue'
 import { vFocusTrap, vFormValidation } from '@/directives/accessibility'
+
+// El pase y el retiro exigen saber quien recibe el dinero: sin esa conformidad
+// el comprobante no queda auditable.
+const TIPOS_CON_COMPROBANTE = ['pase', 'retiro']
 
 const props = defineProps({
   open: { type: Boolean, default: false },
   cajaHoy: { type: Object, default: null },
   loading: { type: Boolean, default: false },
   tipoInicial: { type: String, default: 'egreso' },
+  receptores: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['close', 'submit'])
@@ -80,7 +94,10 @@ const form = reactive({
   medio: 'efectivo',
   importe: '',
   descripcion: '',
+  recibido_por: '',
 })
+
+const requiereConformidad = computed(() => TIPOS_CON_COMPROBANTE.includes(form.tipo))
 
 watch(
   () => props.open,
@@ -90,6 +107,7 @@ watch(
     form.medio = 'efectivo'
     form.importe = ''
     form.descripcion = ''
+    form.recibido_por = ''
   },
 )
 
@@ -104,6 +122,7 @@ function submit() {
     medio: form.medio,
     importe: form.importe,
     descripcion: form.descripcion,
+    recibido_por: requiereConformidad.value && form.recibido_por ? Number(form.recibido_por) : null,
   })
 }
 </script>

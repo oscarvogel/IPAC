@@ -95,12 +95,14 @@ class CajaPermission(RolePermission):
         "historial": CASH_ROLES,
         "cerrar": CASH_ROLES,
         "saldo_anterior": CASH_ROLES,
+        "receptores": CASH_ROLES,
     }
 
 
 class MovimientoCajaPermission(RolePermission):
     action_roles = {
         "create": CASH_ROLES,
+        "comprobante": CASH_ROLES,
     }
 
 
