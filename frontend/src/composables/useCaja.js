@@ -11,6 +11,7 @@ import { useCatalogos } from '@/composables/useCatalogos'
 
 const cajaHoy = ref(null)
 const saldoAnterior = ref(null)
+const cajaReceptores = ref([])
 const loading = ref(false)
 const error = ref('')
 
@@ -35,10 +36,26 @@ async function loadCajaHoy(sucursalId) {
     cajaHoy.value = await apiRequest('/cajas/hoy/', { query: { sucursal: id } })
     const saldo = await apiRequest(`/cajas/${cajaHoy.value.id}/saldo-anterior/`)
     saldoAnterior.value = saldo?.disponible ? saldo : null
+    // Los receptores solo se piden una vez por sesion: es una lista corta y no
+    // tiene por que volver a travels en cada movimiento registrado.
+    if (!cajaReceptores.value.length) await loadReceptores(id)
   } catch (err) {
     error.value = err.message
   } finally {
     loading.value = false
+  }
+}
+
+async function loadReceptores(sucursalId) {
+  const id = resolveSucursalId(sucursalId)
+  try {
+    cajaReceptores.value = await apiRequest('/cajas/receptores/', {
+      query: id ? { sucursal: id } : {},
+    })
+  } catch (err) {
+    // Si la lista no se puede cargar, el formulario igual permite registrar
+    // ingresos y egresos; solo bloquea el pase y el retiro.
+    cajaReceptores.value = []
   }
 }
 
@@ -135,11 +152,13 @@ export function useCaja() {
   return {
     cajaHoy: readonly(cajaHoy),
     saldoAnterior: readonly(saldoAnterior),
+    cajaReceptores: readonly(cajaReceptores),
     cajaMovimientos,
     cajaTotales,
     loading: readonly(loading),
     error: readonly(error),
     loadCajaHoy,
+    loadReceptores,
     createMovimiento,
     aplicarSaldoAnterior,
     cerrarCaja,

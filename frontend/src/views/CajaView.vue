@@ -97,6 +97,7 @@
       :caja-hoy="cajaHoy"
       :loading="loading"
       :tipo-inicial="movimientoTipoInicial"
+      :receptores="cajaReceptores"
       @close="closeMovimiento"
       @submit="submitMovimiento"
     />
@@ -143,7 +144,7 @@ const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 
-const { cajaHoy, saldoAnterior, cajaMovimientos, cajaTotales, loading, error: cajaError } = caja
+const { cajaHoy, saldoAnterior, cajaReceptores, cajaMovimientos, cajaTotales, loading, error: cajaError } = caja
 
 const showMovimiento = ref(false)
 const showCerrar = ref(false)

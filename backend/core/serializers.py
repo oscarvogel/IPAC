@@ -522,6 +522,7 @@ class MovimientoCajaSerializer(serializers.ModelSerializer):
     tipo_label = serializers.CharField(source="get_tipo_display", read_only=True)
     usuario_nombre = serializers.CharField(source="caja.usuario.username", read_only=True)
     pago_numero_recibo = serializers.CharField(source="pago.numero_recibo", read_only=True)
+    recibido_por_nombre = serializers.CharField(source="recibido_por.username", read_only=True, allow_null=True)
 
     class Meta:
         model = MovimientoCaja
@@ -536,10 +537,13 @@ class MovimientoCajaSerializer(serializers.ModelSerializer):
             "pago",
             "pago_numero_recibo",
             "movimiento_origen",
+            "numero_comprobante",
+            "recibido_por",
+            "recibido_por_nombre",
             "usuario_nombre",
             "creado",
         ]
-        read_only_fields = ["pago", "movimiento_origen"]
+        read_only_fields = ["pago", "movimiento_origen", "numero_comprobante"]
 
     def validate(self, attrs):
         caja = attrs.get("caja") or getattr(self.instance, "caja", None)

@@ -3,7 +3,12 @@
     <h3>Recibo N.º {{ recibo.numero }}</h3>
     <p v-if="recibo.pago?.estado === 'anulado'" role="status">Pago anulado</p>
     <dl><div><dt>Alumno</dt><dd>{{ recibo.pago?.alumno_nombre }}</dd></div><div><dt>Importe</dt><dd>$ {{ formatMoney(recibo.pago?.importe) }}</dd></div><div><dt>Medio</dt><dd>{{ medioLabel(recibo.pago?.medio) }}</dd></div><div><dt>Fecha</dt><dd>{{ formatDate(recibo.pago?.fecha) }}</dd></div><div><dt>Cajero</dt><dd>{{ recibo.pago?.usuario_nombre || 'No informado' }}</dd></div></dl>
-    <ul><li v-for="(item, i) in recibo.aplicaciones || []" :key="i">{{ item.concepto }} · {{ item.periodo }} · $ {{ formatMoney(item.importe) }} {{ item.activa === false ? '(anulada)' : '' }}</li></ul>
+    <ul>
+      <li v-for="(item, i) in recibo.aplicaciones || []" :key="i">
+        {{ item.concepto }} · {{ item.periodo }} · $ {{ formatMoney(item.importe) }} {{ item.activa === false ? '(anulada)' : '' }}
+        <small v-if="item.desglose_completo">Programática $ {{ formatMoney(item.importe_programatico) }} · Extraprogramática $ {{ formatMoney(item.importe_extraprogramatica) }}</small>
+      </li>
+    </ul>
     <p v-if="!recibo.aplicaciones?.length">Pago a cuenta.</p>
     <p v-if="recibo.pago?.observacion">{{ recibo.pago.observacion }}</p>
     <button type="button" class="primary-button" @click="imprimir">Imprimir recibo</button>

@@ -20,6 +20,7 @@
 
 <script setup>
 import {
+  AcademicCapIcon,
   ArrowUpTrayIcon,
   BuildingOffice2Icon,
   ChevronRightIcon,
@@ -32,6 +33,7 @@ import {
 const items = [
   { to: '/sucursales', title: 'Sucursales', description: 'Sedes y alcance operativo.', icon: BuildingOffice2Icon },
   { to: '/conceptos', title: 'Conceptos cobrables', description: 'Aranceles disponibles para cuotas y matrículas.', icon: TagIcon },
+  { to: '/carreras', title: 'Carreras y cursos', description: 'Planes de cuotas y desglose programático de cada carrera.', icon: AcademicCapIcon },
   { to: '/ajustes-cuotas', title: 'Descuentos y recargos', description: 'Beneficios autorizados y reglas automáticas de mora.', icon: ReceiptPercentIcon },
   { to: '/usuarios', title: 'Usuarios y permisos', description: 'Roles, sucursales y acceso al sistema.', icon: UserGroupIcon },
   { to: '/importaciones', title: 'Importar datos', description: 'Plantillas y carga controlada desde Excel o CSV.', icon: ArrowUpTrayIcon },

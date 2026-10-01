@@ -13,6 +13,7 @@ const AlumnosView = () => import('@/views/AlumnosView.vue')
 const DeudoresView = () => import('@/views/DeudoresView.vue')
 const CajaView = () => import('@/views/CajaView.vue')
 const ConceptosView = () => import('@/views/ConceptosView.vue')
+const CarrerasView = () => import('@/views/CarrerasView.vue')
 const ReportesView = () => import('@/views/ReportesView.vue')
 const SucursalesView = () => import('@/views/SucursalesView.vue')
 const UsuariosView = () => import('@/views/UsuariosView.vue')
@@ -70,6 +71,12 @@ const routes = [
         path: 'conceptos',
         name: 'conceptos',
         component: ConceptosView,
+        meta: { roles: ['superadmin', 'administracion', 'tesoreria', 'caja', 'consulta'] },
+      },
+      {
+        path: 'carreras',
+        name: 'carreras',
+        component: CarrerasView,
         meta: { roles: ['superadmin', 'administracion', 'tesoreria', 'caja', 'consulta'] },
       },
       {

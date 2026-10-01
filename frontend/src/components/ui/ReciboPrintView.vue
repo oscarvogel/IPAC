@@ -1,3 +1,39 @@
+<!--
+  ============================================================================
+  FORMATO PROVISIONAL DEL RECIBO — NO CERRAR REQUISITOS DE MAQUETADO
+  ============================================================================
+
+  El layout de esta plantilla (orden de secciones, titulos literales, que
+  datos del alumno van y cuales no) esta hardcodeado aca y es PROVISIONAL.
+
+  Motivo: IPAC todavia no entrego su modelo de recibo. Es el punto 2 del
+  mail de solicitud de entregables del 01/10/2026:
+  `docs/SOLICITUD_ENTREGABLES_IPAC_2026-10-01.md`
+
+  Que NO hay que tocar cuando llegue el modelo real (sale de los datos):
+    - importes, desglose programatico / extraprogramatico
+    - alumno, legajo, medio de pago
+    - fechas (pago, emision)
+    - total, saldo pendiente posterior
+    - observacion, motivo de anulacion
+    - usuario emisor, sucursal, numero de recibo
+
+  Unico elemento con requisito externo abierto: la POSICION de la linea de
+  desglose. Hoy es una sub-linea debajo de la fila de la cuota
+  (ver `.recibo-desglose`, mas abajo). Cuando llegue el modelo puede tener
+  que ir arriba del detalle, en un bloque aparte, o al pie. Ese es el
+  unico motivo de cambio que hoy no tenemos por escrito.
+
+  Aclaracion sobre el PDF: el encabezado y el pie con "Vogel Consultoria"
+  que salen en el PDF exportado vienen del navegador que imprime, no de
+  esta plantilla. No se controlan desde aca.
+
+  Al recibir el modelo de IPAC, ajustar SOLO maquetado. Si hay que cambiar
+  un dato, ese es un bug, no un ajuste de formato.
+
+  Nota de operacion: al cliente se le puede mandar este recibo actual como
+  referencia de contenido, aclarando que el formato es provisional.
+-->
 <template>
   <section class="print-recibo" :data-has-receipt="Boolean(recibo)" aria-hidden="true">
     <header>
@@ -21,11 +57,19 @@
         <tr><th>Concepto</th><th>Periodo</th><th>Importe</th></tr>
       </thead>
       <tbody>
-        <tr v-for="(app, i) in recibo?.aplicaciones || []" :key="i" :class="{ 'recibo-application-cancelled': app.activa === false }">
-          <td>{{ app.concepto }}</td>
-          <td>{{ app.periodo }}</td>
-          <td>$ {{ formatMoney(app.importe) }}</td>
-        </tr>
+        <template v-for="(app, i) in recibo?.aplicaciones || []" :key="i">
+          <tr :class="{ 'recibo-application-cancelled': app.activa === false }">
+            <td>{{ app.concepto }}</td>
+            <td>{{ app.periodo }}</td>
+            <td>$ {{ formatMoney(app.importe) }}</td>
+          </tr>
+          <tr v-if="app.desglose_completo" class="recibo-desglose">
+            <td colspan="2">Parte programática / extraprogramática</td>
+            <td>
+              $ {{ formatMoney(app.importe_programatico) }} / $ {{ formatMoney(app.importe_extraprogramatica) }}
+            </td>
+          </tr>
+        </template>
         <tr v-if="!(recibo?.aplicaciones?.length)">
           <td colspan="3">{{ recibo?.pago?.concepto_nombre || 'Pago a cuenta' }}</td>
         </tr>
@@ -107,6 +151,18 @@ defineProps({
 
   .recibo-application-cancelled {
     text-decoration: line-through;
+  }
+
+  .recibo-desglose td {
+    background: #f9fafb;
+    color: #4b5563;
+    font-size: 11px;
+  }
+
+  .recibo-desglose td[colspan] {
+    text-transform: none;
+    font-weight: 400;
+    letter-spacing: 0;
   }
 
   .recibo-void-reason {
