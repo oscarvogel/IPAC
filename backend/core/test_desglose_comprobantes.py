@@ -563,7 +563,7 @@ class DesgloseCuotaApiTests(FixturesCajaMixin, APITestCase):
         self.assertIsNone(cuota.importe_programatico)
 
     def test_el_recibo_muestra_el_desglose_de_la_cuota_totalmente_cubierta(self):
-        cuota_id = self._generar().data[0]["id"]
+        cuota_id = self._generar().data["cuotas"][0]["id"]
         self.client.force_authenticate(self.admin)
         respuesta = self.client.post(
             "/api/pagos/cobrar/",
@@ -584,7 +584,7 @@ class DesgloseCuotaApiTests(FixturesCajaMixin, APITestCase):
         self.assertEqual(Decimal(linea["importe_extraprogramatica"]), Decimal("20000.00"))
 
     def test_el_recibo_no_inventa_el_reparto_de_un_pago_parcial(self):
-        cuota_id = self._generar().data[0]["id"]
+        cuota_id = self._generar().data["cuotas"][0]["id"]
         self.client.force_authenticate(self.admin)
         respuesta = self.client.post(
             "/api/pagos/cobrar/",

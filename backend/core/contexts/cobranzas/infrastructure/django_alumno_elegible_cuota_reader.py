@@ -1,4 +1,4 @@
-from django.db.models import Exists, OuterRef
+from collections import defaultdict
 
 from ....access_scope import scoped_queryset_for_user
 from ....models import Alumno, CarreraCurso, ConceptoCobrable, Cuota, Sucursal
@@ -19,8 +19,10 @@ class DjangoAlumnoElegibleCuotaReader(AlumnoElegibleCuotaReader):
         sucursal_id,
         carrera_id,
         concepto_id,
-        periodo,
+        periodos,
+        alumno_id=None,
     ):
+        periodos = list(periodos or [])
         sucursal = scoped_queryset_for_user(Sucursal.objects.all(), actor).filter(pk=sucursal_id).first()
         if not sucursal:
             raise DatosGeneracionCuotasInvalidos("Sucursal invalida o sin acceso.")
@@ -44,14 +46,15 @@ class DjangoAlumnoElegibleCuotaReader(AlumnoElegibleCuotaReader):
                 raise DatosGeneracionCuotasInvalidos("Carrera invalida o sin acceso.")
             alumnos = alumnos.filter(carrera_id=carrera.id)
 
-        cuota_existente = Cuota.objects.filter(
-            alumno_id=OuterRef("pk"),
-            concepto_id=concepto.id,
-            periodo=periodo,
-        )
+        # La reinscripcion necesita previsualizar un alumno en concreto, no el
+        # grupo entero de la carrera. Sin este filtro la pantalla de
+        # renovacion mostraria el total de la carrera y el operador no veria
+        # cuales de esos periodos ya tiene pagos su alumno.
+        if alumno_id:
+            alumnos = alumnos.filter(pk=alumno_id)
+
         rows = list(
-            alumnos.annotate(cuota_existente=Exists(cuota_existente))
-            .select_related("carrera")
+            alumnos.select_related("carrera")
             .order_by("apellido", "nombre", "id")
             .values(
                 "id",
@@ -60,9 +63,26 @@ class DjangoAlumnoElegibleCuotaReader(AlumnoElegibleCuotaReader):
                 "apellido",
                 "carrera__nombre",
                 "estado",
-                "cuota_existente",
             )
         )
+
+        # Los períodos que el alumno ya tiene se resuelven en una sola consulta
+        # para todo el lote. Con un lote de 10 períodos, un Exists por período
+        # hubiera multiplicado las consultas por diez sin agregar información:
+        # lo que importa es el conjunto, no la existencia aislada de cada uno.
+        existentes_por_alumno = defaultdict(list)
+        if rows and periodos:
+            for alumno_id, periodo in (
+                Cuota.objects.filter(
+                    alumno_id__in=[row["id"] for row in rows],
+                    concepto_id=concepto.id,
+                    periodo__in=periodos,
+                )
+                .order_by("periodo")
+                .values_list("alumno_id", "periodo")
+            ):
+                existentes_por_alumno[alumno_id].append(periodo)
+
         return [
             {
                 "id": row["id"],
@@ -70,7 +90,7 @@ class DjangoAlumnoElegibleCuotaReader(AlumnoElegibleCuotaReader):
                 "nombre_completo": f'{row["apellido"]}, {row["nombre"]}',
                 "carrera_nombre": row["carrera__nombre"] or "",
                 "estado": row["estado"],
-                "cuota_existente": row["cuota_existente"],
+                "periodos_existentes": sorted(existentes_por_alumno[row["id"]]),
             }
             for row in rows
         ]

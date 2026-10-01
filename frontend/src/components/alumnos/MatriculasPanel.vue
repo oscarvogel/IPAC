@@ -22,6 +22,12 @@
           <p v-if="activeMatricula.observacion">{{ activeMatricula.observacion }}</p>
         </div>
         <div v-if="canManage" class="matricula-actions">
+          <button
+            v-if="puedeGenerarCuotas"
+            type="button"
+            class="matricula-reinscripcion"
+            @click="openReinscripcion"
+          >Reinscripción: cuotas del año</button>
           <button type="button" @click="openEdit(activeMatricula)">Editar</button>
           <button type="button" @click="openCareerChange(activeMatricula)">Cambiar carrera</button>
           <button type="button" @click="requestFinalize(activeMatricula)">Finalizar</button>
@@ -58,13 +64,24 @@
       @close="closeForm"
       @saved="onSaved"
     />
+
+    <ReinscripcionCuotasModal
+      :open="showReinscripcion"
+      :alumno="alumno"
+      :matricula="activeMatricula"
+      @close="showReinscripcion = false"
+      @saved="$emit('changed')"
+    />
   </section>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
 import MatriculaForm from '@/components/alumnos/MatriculaForm.vue'
+import ReinscripcionCuotasModal from '@/components/alumnos/ReinscripcionCuotasModal.vue'
 import { useMatriculas } from '@/composables/useMatriculas'
+import { useAuth } from '@/composables/useAuth'
+import { can } from '@/lib/permissions'
 import { useToast } from '@/composables/useToast'
 import { confirmAnularMatricula, confirmFinalizarMatricula } from '@/lib/swal'
 import { formatDate } from '@/lib/formatters'
@@ -81,6 +98,18 @@ const toast = useToast()
 const showForm = ref(false)
 const editingMatricula = ref(null)
 const changingCareer = ref(false)
+const showReinscripcion = ref(false)
+const { user } = useAuth()
+
+// Emitir cuotas es permiso de Cobranzas, no de Trayectoria: la misma
+// capability que gobierna la generacion masiva. Si se usara canManage, un
+// administrador de trayectoria veria un boton que el backend le va a
+// rechazar con 403.
+const puedeGenerarCuotas = computed(() => can(user.value, 'manage-fees'))
+
+function openReinscripcion() {
+  showReinscripcion.value = true
+}
 
 const activeMatricula = computed(() => matriculas.value.find((matricula) => matricula.estado === 'activa') || null)
 const history = computed(() => matriculas.value.filter((matricula) => matricula.estado !== 'activa'))

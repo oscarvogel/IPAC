@@ -51,7 +51,25 @@ async function cambiarCarrera(id, payload) {
 
 async function anularMatricula(id, motivo) {
   const saved = await apiRequest(`/matriculas/${id}/anular/`, { method: 'POST', body: { motivo } })
+  const index = matriculas.value.findIndex((matricula) => matricula.id === id)
+  if (index >= 0) matriculas.value[index] = saved
   return saved
+}
+
+/**
+ * Periodos que se generarian por defecto al reinscribir esta matricula.
+ *
+ * La regla vive en el backend: el plan de la carrera y la fecha de inicio.
+ * Acá no se recalcula nada, se muestra lo que el sistema propone. Si la carrera
+ * no tiene plan cargado viene `motivo_sin_plan` y la pantalla deja que el
+ * operador escriba la cantidad, en vez de inventar un numero.
+ */
+async function cargarPlanCuotas(matriculaId) {
+  return apiRequest(`/matriculas/${matriculaId}/plan-cuotas/`)
+}
+
+async function generarCuotasDeMatricula(matriculaId, payload) {
+  return apiRequest(`/matriculas/${matriculaId}/generar-cuotas/`, { method: 'POST', body: payload })
 }
 
 export function useMatriculas() {
@@ -65,5 +83,7 @@ export function useMatriculas() {
     finalizarMatricula,
     cambiarCarrera,
     anularMatricula,
+    cargarPlanCuotas,
+    generarCuotasDeMatricula,
   }
 }
