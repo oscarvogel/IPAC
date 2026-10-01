@@ -27,6 +27,9 @@ from core.contexts.cobranzas.domain.desglose_cuota import (
     DesgloseCuotaError,
     calcular_desglose,
 )
+from core.contexts.cobranzas.infrastructure.django_cuota_generator import (
+    alumnos_bloqueados,
+)
 from core.models import (
     CajaDiaria,
     CarreraCurso,
@@ -401,6 +404,69 @@ class ComprobanteCajaApiTests(FixturesCajaMixin, APITestCase):
 
 
 # ------------------------------------------------------------------- desglose
+
+
+class BloqueoDeAlumnosRegresionTests(FixturesCajaMixin, APITestCase):
+    """Cubre un error que solo se manifiesta con PostgreSQL.
+
+    ``select_for_update`` es un no-op en SQLite, asi que la suite completa
+    pasaba en verde mientras que en produccion la generacion de cuotas
+    devolvia 500. Estos tests miran la forma del SQL para que el problema no
+    vuelva a colarse por el camino del motor de pruebas.
+    """
+
+    def setUp(self):
+        self.posadas = Sucursal.objects.create(codigo="POS", nombre="Posadas")
+        self.admin = self._user("admin-bloqueo", PerfilUsuario.Rol.ADMINISTRACION, self.posadas, todas=True)
+
+    def test_la_consulta_bloqueada_no_une_ninguna_relacion(self):
+        sql = str(alumnos_bloqueados(alumno_ids=[1, 2], actor=self.admin).query).upper()
+
+        self.assertNotIn("JOIN", sql)
+        self.assertIn('"CORE_ALUMNO"', sql)
+        # El bloqueo de fila tiene que seguir pedido: sin el, dos personas
+        # pueden generar la misma cuota al mismo tiempo.
+        self.assertTrue(alumnos_bloqueados(alumno_ids=[1], actor=self.admin).query.select_for_update)
+
+    def test_un_catalogo_invalido_responde_400_y_no_500(self):
+        carrera = CarreraCurso.objects.create(
+            nombre="Carrera con desglose negativo",
+            sucursal=self.posadas,
+            cuota_programatica=Decimal("-1.00"),
+            cuota_extraprogramatica=Decimal("20000.00"),
+        )
+        concepto = ConceptoCobrable.objects.create(
+            nombre="Cuota mensual",
+            tipo=ConceptoCobrable.Tipo.CUOTA,
+            importe=Decimal("25000.00"),
+            sucursal=self.posadas,
+            carrera=carrera,
+        )
+        alumno = Alumno.objects.create(
+            legajo="L-9001",
+            nombre="Elida",
+            apellido="Aguilar",
+            sucursal=self.posadas,
+            carrera=carrera,
+        )
+
+        self.client.force_authenticate(self.admin)
+        respuesta = self.client.post(
+            "/api/cuotas/generar/",
+            {
+                "alumnos": [alumno.pk],
+                "concepto": concepto.pk,
+                "periodo": "2026-10",
+                "fecha_emision": "2026-10-01",
+                "fecha_vencimiento": "2026-10-10",
+                "descuento": "0",
+                "recargo": "0",
+            },
+            format="json",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", respuesta.data)
 
 
 class DesgloseCuotaApiTests(FixturesCajaMixin, APITestCase):
