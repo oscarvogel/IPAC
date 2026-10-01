@@ -27,10 +27,6 @@ class DjangoCajaRepository:
         cajas_visibles = CajaDiaria.objects.filter(
             sucursal_id__in=sucursal_ids,
         )
-        if desde:
-            cajas_visibles = cajas_visibles.filter(fecha__gte=desde)
-        if hasta:
-            cajas_visibles = cajas_visibles.filter(fecha__lte=hasta)
         if propietario_id:
             cajas_visibles = cajas_visibles.filter(usuario_id=propietario_id)
 
@@ -42,6 +38,10 @@ class DjangoCajaRepository:
         )
 
         cajas_filtradas = cajas_visibles
+        if desde:
+            cajas_filtradas = cajas_filtradas.filter(fecha__gte=desde)
+        if hasta:
+            cajas_filtradas = cajas_filtradas.filter(fecha__lte=hasta)
         if usuario_id:
             cajas_filtradas = cajas_filtradas.filter(usuario_id=usuario_id)
         cajas_filtradas = cajas_filtradas.select_related(

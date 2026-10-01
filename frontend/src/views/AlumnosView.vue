@@ -214,6 +214,9 @@
       :conceptos="conceptos"
       @close="closePagoForm"
       @saved="onPagoSaved"
+      :refresh-error="paymentRefreshError"
+      :refresh-loading="paymentRefreshLoading"
+      @retry-refresh="onPagoSaved"
     />
 
     <EstadoCuentaModal
@@ -329,6 +332,7 @@ const currentPage = ref(1)
 const showAlumnoForm = ref(false)
 const editingAlumno = ref(null)
 const showPagoForm = ref(false)
+const paymentRefreshError = ref(''), paymentRefreshLoading = ref(false)
 const showEstadoCuenta = ref(false)
 const mobileDetailMode = ref(false)
 const mobileBackButton = ref(null)
@@ -455,6 +459,7 @@ function onAlumnoSaved(saved) {
 
 function openPagoForm() {
   if (!selectedAlumno.value) return
+  paymentRefreshError.value = ''
   showPagoForm.value = true
 }
 
@@ -463,8 +468,14 @@ function closePagoForm() {
 }
 
 async function onPagoSaved() {
-  if (selectedAlumno.value) await loadPagos({ alumno: selectedAlumno.value.id })
-  await loadStudentsPage()
+  if (paymentRefreshLoading.value) return
+  paymentRefreshLoading.value = true; paymentRefreshError.value = ''
+  try {
+    if (selectedAlumno.value) await loadPagos({ alumno: selectedAlumno.value.id })
+    await loadStudentsPage()
+    if (alumnosError.value) throw new Error(alumnosError.value)
+  } catch (err) { paymentRefreshError.value = err.message }
+  finally { paymentRefreshLoading.value = false }
 }
 
 function openEstadoCuenta() {

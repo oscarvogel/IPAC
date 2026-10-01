@@ -2,6 +2,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { printDocument } from './print'
 
 describe('printDocument', () => {
+  it('imprime solo el recibo seleccionado entre varios documentos montados', () => {
+    const first = document.createElement('section'), second = document.createElement('section')
+    first.className = second.className = 'print-recibo'
+    document.body.append(first, second)
+    vi.spyOn(window, 'print').mockImplementation(() => {})
+    printDocument('receipt', second)
+    expect(first.dataset.printExcluded).toBe('true')
+    expect(second.dataset.printExcluded).toBeUndefined()
+    window.dispatchEvent(new Event('afterprint'))
+    expect(first.dataset.printExcluded).toBeUndefined()
+    first.remove(); second.remove()
+  })
   afterEach(() => {
     delete document.documentElement.dataset.printTarget
     vi.restoreAllMocks()

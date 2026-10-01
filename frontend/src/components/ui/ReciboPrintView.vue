@@ -1,5 +1,5 @@
 <template>
-  <section class="print-recibo" aria-hidden="true">
+  <section class="print-recibo" :data-has-receipt="Boolean(recibo)" aria-hidden="true">
     <header>
       <strong>IPAC</strong>
       <span>Recibo de pago</span>
@@ -13,7 +13,7 @@
       <tbody>
         <tr><td>Alumno</td><td><strong>{{ recibo?.pago?.alumno_nombre || '—' }}</strong></td></tr>
         <tr><td>Legajo</td><td><strong>{{ recibo?.pago?.alumno_legajo || '—' }}</strong></td></tr>
-        <tr><td>Medio</td><td><strong>{{ recibo?.pago?.medio || '—' }}</strong></td></tr>
+        <tr><td>Medio</td><td><strong>{{ medios[recibo?.pago?.medio] || recibo?.pago?.medio || '—' }}</strong></td></tr>
       </tbody>
     </table>
     <table class="recibo-detalle">
@@ -53,6 +53,8 @@
 
 <script setup>
 import { formatDate, formatDateTime, formatMoney } from '@/lib/formatters'
+
+const medios = { efectivo: 'Efectivo', transferencia: 'Transferencia', mercado_pago: 'Mercado Pago', tarjeta: 'Tarjeta', otro: 'Otro' }
 
 defineProps({
   recibo: { type: Object, default: null },

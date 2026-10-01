@@ -2524,6 +2524,15 @@ class AuditoriaApiTests(APITestCase):
 
 
 class CajaHistorialApiTests(APITestCase):
+    def test_cajeros_disponibles_no_desaparecen_en_un_periodo_sin_movimientos(self):
+        self._caja(self.cajero, days_ago=10)
+        self.client.force_authenticate(self.admin)
+        today = timezone.localdate().isoformat()
+        response = self.client.get('/api/cajas/historial/', {'desde': today, 'hasta': today})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 0)
+        self.assertEqual(response.data['usuarios'], [{'id': self.cajero.id, 'nombre': self.cajero.username}])
+
     def setUp(self):
         self.posadas = Sucursal.objects.create(codigo="POS", nombre="Posadas")
         self.eldorado = Sucursal.objects.create(codigo="ELD", nombre="Eldorado")

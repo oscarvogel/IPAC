@@ -20,11 +20,12 @@ describe('experiencia de reportes', () => {
     await wrapper.findAll('select')[1].setValue('efectivo')
     await wrapper.get('.reports-apply-action').trigger('click')
 
-    expect(wrapper.emitted('update:filtros')[0][0]).toEqual({
+    expect(wrapper.emitted('aplicar')[0][0]).toEqual({
       desde: '2026-07-01',
       hasta: '2026-07-31',
       sucursal: 1,
       medio: 'efectivo',
+      usuario: '',
     })
     expect(wrapper.emitted('aplicar')).toHaveLength(1)
   })

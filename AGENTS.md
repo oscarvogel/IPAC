@@ -50,7 +50,7 @@ Estos límites son la propuesta de trabajo basada en el estado actual del sistem
 
 | Contexto | Responsabilidad | Modelo actual relacionado | Clasificación inicial |
 |---|---|---|---|
-| Identidad y Acceso | Autenticación, usuario, rol y permisos | `User`, `PerfilUsuario`, `LoginView`, `CurrentUserView` | Genérico / supporting |
+| Identidad y Acceso | Autenticación, usuario, rol, permisos y preferencias personales | `User`, `PerfilUsuario`, `ConsultaFavorita`, `LoginView`, `CurrentUserView` | Genérico / supporting |
 | Organización y Sucursales | Sucursales, estado y alcance operativo | `Sucursal`, visibilidad por sucursal | Supporting |
 | Alumnos y Trayectoria Académica | Alumno, carrera/curso y matrícula | `Alumno`, `CarreraCurso`, `Matricula` | Core operativo |
 | Conceptos y Cobranzas | Conceptos cobrables, cuotas, pagos, aplicaciones y saldos | `ConceptoCobrable`, `Cuota`, `Pago`, `AplicacionPago` | Core operativo |
@@ -76,6 +76,8 @@ Contextos de backend ──API estable──> Experiencia Web
 ```
 
 Reglas del mapa:
+
+- `ConsultaFavorita` pertenece a Identidad y Acceso. Experiencia Web consume su contrato de preferencias (`pantalla`, `configuracion`); Reportes y Caja conservan la autorización de sus consultas. Los identificadores guardados se validan contra el alcance vigente, sin conceder permisos. Este intercambio usa Published Language. Las preferencias no importan modelos internos de Reportes o Caja.
 
 - `Pago` pertenece semánticamente a Cobranzas. Caja consume el hecho de que un pago fue registrado y crea su movimiento correspondiente; no debe duplicar la regla de cobro.
 - Los contextos no deben importar modelos internos de otro contexto para ejecutar su lógica. Se usan IDs, DTOs, puertos o eventos de integración.

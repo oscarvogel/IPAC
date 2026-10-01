@@ -25,6 +25,7 @@ function buildQuery(filtros) {
   if (filtros?.hasta) query.hasta = filtros.hasta
   if (filtros?.sucursal) query.sucursal = filtros.sucursal
   if (filtros?.medio) query.medio = filtros.medio
+  if (filtros?.usuario) query.usuario = filtros.usuario
   return query
 }
 
@@ -35,6 +36,7 @@ async function loadResumen(filtros = {}) {
     resumen.value = await apiRequest('/reportes/resumen/', { query: buildQuery(filtros) })
   } catch (err) {
     error.value = err.message
+    throw err
   } finally {
     loading.value = false
   }
@@ -48,6 +50,7 @@ async function loadPagos(filtros = {}) {
     pagos.value = data.results || []
   } catch (err) {
     error.value = err.message
+    throw err
   } finally {
     loading.value = false
   }
@@ -87,6 +90,11 @@ async function loadCajasHistorial(filtros = {}, page = 1) {
 
 function loadCajaDetalle(id) {
   return apiRequest('/cajas/' + id + '/')
+}
+
+async function loadCajeros(filtros = {}) {
+  const data = await apiRequest('/reportes/cobranzas-usuarios/', { query: buildQuery({ sucursal: filtros.sucursal }) })
+  return (data.resultados || []).filter(item => item.usuario_id).map(item => ({ id: item.usuario_id, nombre: item.usuario }))
 }
 
 function exportarCsv(filtros = {}) {
@@ -161,6 +169,7 @@ export function useReportes() {
     loadCobranzasUsuarios,
     loadCajasHistorial,
     loadCajaDetalle,
+    loadCajeros,
     exportarCsv,
     exportarExcel,
     clearError,

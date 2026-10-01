@@ -26,8 +26,13 @@
             $ {{ formatMoney(pago.importe, { fractionDigits: 2 }) }}
           </td>
           <td class="payment-actions">
-            <button type="button" aria-label="Más opciones">
-              <EllipsisVerticalIcon aria-hidden="true" />
+            <button
+              type="button"
+              class="secondary-button dashboard-payment-detail-button"
+              :aria-label="`Ver detalle del pago ${pago.numero_recibo || ''}`.trim()"
+              @click="selectedPayment = pago"
+            >
+              Ver detalle
             </button>
           </td>
         </tr>
@@ -51,6 +56,14 @@
         <component :is="paymentIcon(pago.medio)" aria-hidden="true" />
         {{ paymentLabel(pago.medio) }}
       </span>
+      <button
+        type="button"
+        class="secondary-button dashboard-payment-detail-button"
+        :aria-label="`Ver detalle del pago ${pago.numero_recibo || ''}`.trim()"
+        @click="selectedPayment = pago"
+      >
+        Ver detalle
+      </button>
     </article>
   </div>
 
@@ -59,20 +72,25 @@
     <strong>Todavía no hay pagos este mes</strong>
     <p>Las próximas cobranzas aparecerán acá automáticamente.</p>
   </div>
+
+  <OperacionDetalle :operacion="selectedPayment" tipo="pago" @close="selectedPayment = null" />
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import {
   BanknotesIcon,
   CreditCardIcon,
   DocumentMagnifyingGlassIcon,
-  EllipsisVerticalIcon,
 } from '@heroicons/vue/24/outline'
 import { formatDate, formatMoney } from '@/lib/formatters'
+import OperacionDetalle from '@/components/ui/OperacionDetalle.vue'
 
 defineProps({
   pagos: { type: Array, default: () => [] },
 })
+
+const selectedPayment = ref(null)
 
 function paymentLabel(medio) {
   const labels = {
