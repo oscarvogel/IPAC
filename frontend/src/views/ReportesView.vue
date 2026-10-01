@@ -165,6 +165,34 @@
                     </tr>
                   </tbody>
                 </table>
+                <div class="cash-history-mobile-list" role="list" aria-label="Movimientos de esta caja">
+                  <article
+                    v-for="movimiento in cajaDetalles[caja.id].movimientos"
+                    :key="`mobile-${movimiento.id}`"
+                    class="cash-history-mobile-item"
+                    role="listitem"
+                  >
+                    <header class="cash-history-mobile-heading">
+                      <div>
+                        <strong>{{ movimiento.tipo_label || movimiento.tipo || 'Movimiento' }}</strong>
+                        <time :datetime="movimiento.creado || undefined">{{ formatDateTime(movimiento.creado) }}</time>
+                      </div>
+                      <span class="cash-history-mobile-amount"><small>Importe</small><strong>{{ money(movimiento.importe) }}</strong></span>
+                    </header>
+                    <dl class="cash-history-mobile-meta">
+                      <div><dt>Medio</dt><dd>{{ movimiento.medio_label || movimiento.medio || 'No informado' }}</dd></div>
+                      <div><dt>Descripción</dt><dd>{{ movimiento.descripcion || movimiento.pago_numero_recibo || 'Sin descripción' }}</dd></div>
+                    </dl>
+                    <button
+                      type="button"
+                      class="secondary-button"
+                      :aria-label="`Ver detalle del movimiento ${movimiento.pago_numero_recibo || movimiento.id}`"
+                      @click="selectedOperation = movimiento"
+                    >
+                      Ver detalle
+                    </button>
+                  </article>
+                </div>
               </div>
               <p v-else>No hay movimientos registrados en esta caja.</p>
             </div>
@@ -521,6 +549,17 @@ function money(value) {
 .cash-history-movements-wrap { overflow-x: auto; }
 .cash-history-movements { min-width: 650px; margin: 0; }
 .cash-history-movements th, .cash-history-movements td { padding: .65rem .75rem; }
+.cash-history-mobile-list { display: none; }
+.cash-history-mobile-item { min-width: 0; padding: .9rem; border: 1px solid var(--border); border-radius: .75rem; background: var(--surface); }
+.cash-history-mobile-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; }
+.cash-history-mobile-heading > div { display: grid; gap: .3rem; min-width: 0; }
+.cash-history-mobile-heading time, .cash-history-mobile-amount small { color: var(--text-secondary); font-size: .8rem; }
+.cash-history-mobile-amount { display: grid; gap: .25rem; text-align: right; }
+.cash-history-mobile-meta { display: grid; gap: .65rem; margin: .85rem 0 0; }
+.cash-history-mobile-meta > div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: .65rem; }
+.cash-history-mobile-meta dt { color: var(--text-secondary); font-size: .85rem; }
+.cash-history-mobile-meta dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.cash-history-mobile-item > button { width: 100%; min-height: 44px; margin-top: .85rem; }
 .cash-history-error { display: flex; justify-content: space-between; align-items: center; gap: .75rem; color: var(--danger); }
 .cash-history-error button, .cash-history-pagination button { min-height: 44px; padding: .45rem .75rem; border: 1px solid var(--border); border-radius: .6rem; color: var(--text-primary); background: var(--surface); font-weight: 700; cursor: pointer; }
 .cash-history-pagination { display: flex; justify-content: center; align-items: center; gap: .8rem; }
@@ -529,11 +568,14 @@ function money(value) {
 .cash-history-empty { padding: 1.2rem; border: 1px dashed var(--border); border-radius: .75rem; color: var(--text-secondary); text-align: center; }
 @media (max-width: 700px) { .report-category-callout { align-items: stretch; flex-direction: column; } }
 @media (max-width: 760px) {
-  .reports-tabs { overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scroll-snap-type: x proximity; scrollbar-width: thin; }
-  .reports-tabs button { flex: 0 0 auto; min-width: max-content; scroll-snap-align: start; }
+  .reports-tabs { overflow: visible; flex-wrap: wrap; }
+  .reports-tabs button { flex: 1 1 auto; min-width: max-content; }
   .reports-cobranzas-table-wrap { display: none; }
   .reports-cobranzas-mobile-list { display: grid; }
   .reports-cobranzas-mobile-empty { display: block; margin: 0; padding: 1.25rem; border: 1px solid var(--border); border-radius: 1rem; color: var(--text-secondary); background: var(--surface); text-align: center; }
+  .cash-history-movements-wrap { overflow: visible; }
+  .cash-history-movements { display: none; }
+  .cash-history-mobile-list { display: grid; gap: .65rem; }
   .cash-history-toggle { grid-template-columns: 1fr; }
   .cash-history-amounts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
   .cash-history-open-label { grid-column: 1 / -1; }

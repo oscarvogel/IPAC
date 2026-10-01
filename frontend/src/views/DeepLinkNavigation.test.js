@@ -12,6 +12,9 @@ const routeState = vi.hoisted(() => ({
   alumnosRef: null,
   selectedAlumnoRef: null,
   paginationRef: null,
+  cajasHistorialRef: null,
+  cajasHistorialPaginacionRef: null,
+  cajaMovimientos: [],
 }))
 
 vi.mock('@/composables/useAuth', async () => {
@@ -116,13 +119,17 @@ vi.mock('@/composables/useCaja', async () => {
 
 vi.mock('@/composables/useReportes', async () => {
   const { ref } = await import('vue')
+  const cajasHistorial = ref([])
+  const cajasHistorialPaginacion = ref({ count: 0, page: 1, page_size: 10, next: null, previous: null })
+  routeState.cajasHistorialRef = cajasHistorial
+  routeState.cajasHistorialPaginacionRef = cajasHistorialPaginacion
   return {
     useReportes: () => ({
       resumen: ref({ cajas: {} }),
       pagos: ref([]),
       cobranzasUsuarios: ref([]),
-      cajasHistorial: ref([]),
-      cajasHistorialPaginacion: ref({ count: 0, page: 1, page_size: 10, next: null, previous: null }),
+      cajasHistorial,
+      cajasHistorialPaginacion,
       cajasHistorialUsuarios: ref([]),
       loading: ref(false),
       error: ref(''),
@@ -130,7 +137,7 @@ vi.mock('@/composables/useReportes', async () => {
       loadPagos: vi.fn(async () => {}),
       loadCobranzasUsuarios: vi.fn(async () => {}),
       loadCajasHistorial: vi.fn(async () => {}),
-      loadCajaDetalle: vi.fn(async () => ({ movimientos: [] })),
+      loadCajaDetalle: vi.fn(async () => ({ movimientos: routeState.cajaMovimientos })),
       exportarExcel: vi.fn(),
     }),
   }
@@ -270,6 +277,15 @@ describe('acciones profundas de Caja', () => {
 })
 
 describe('secciones profundas de Reportes', () => {
+  beforeEach(() => {
+    routeState.role = 'administracion'
+    if (routeState.cajasHistorialRef) routeState.cajasHistorialRef.value = []
+    if (routeState.cajasHistorialPaginacionRef) {
+      routeState.cajasHistorialPaginacionRef.value = { count: 0, page: 1, page_size: 10, next: null, previous: null }
+    }
+    routeState.cajaMovimientos = []
+  })
+
   it('sincroniza seccion con pestañas y navegación atrás/adelante', async () => {
     const { wrapper, router } = await mountAt(ReportesView, '/reportes?seccion=caja')
     const tab = (label) => wrapper.findAll('.reports-tabs button').find((button) => button.text() === label)
@@ -283,5 +299,54 @@ describe('secciones profundas de Reportes', () => {
     await router.push('/reportes?seccion=morosidad')
     await flushPromises()
     expect(tab('Morosidad').classes()).toContain('active')
+  })
+
+  it('mantiene visibles las cinco categorías y muestra Caja como activa', async () => {
+    const { wrapper } = await mountAt(ReportesView, '/reportes?seccion=caja')
+    const tabs = wrapper.findAll('.reports-tabs button')
+
+    expect(tabs.map((tab) => tab.text())).toEqual(['Resumen', 'Cobranzas', 'Morosidad', 'Caja', 'Alumnos'])
+    expect(tabs.filter((tab) => tab.attributes('aria-current') === 'page').map((tab) => tab.text())).toEqual(['Caja'])
+  })
+
+  it('muestra los seis datos del movimiento móvil y abre su detalle seleccionado', async () => {
+    routeState.cajasHistorialRef.value = [{
+      id: 12,
+      fecha: '2026-08-22',
+      sucursal_nombre: 'Posadas',
+      usuario_nombre: 'Cajero QA',
+      cantidad_movimientos: 1,
+      estado: 'cerrada',
+      total_esperado: '25000',
+      diferencia: '0',
+    }]
+    routeState.cajasHistorialPaginacionRef.value = { count: 1, page: 1, page_size: 10, next: null, previous: null }
+    routeState.cajaMovimientos = [{
+      id: 91,
+      tipo: 'INGRESO',
+      tipo_label: 'Cobranza',
+      medio: 'efectivo',
+      creado: '2026-08-22T14:30:00Z',
+      descripcion: 'Cuota de agosto',
+      importe: '25000',
+      pago: 3,
+      pago_numero_recibo: 'REC-00000003',
+    }]
+
+    const { wrapper } = await mountAt(ReportesView, '/reportes?seccion=caja')
+    await wrapper.get('.cash-history-toggle').trigger('click')
+    await flushPromises()
+
+    const card = wrapper.get('.cash-history-mobile-item')
+    for (const detail of ['Cobranza', '2026', 'efectivo', 'Cuota de agosto', '$ 25.000,00', 'Ver detalle']) {
+      expect(card.text().replace(/\u00a0/g, ' ')).toContain(detail)
+    }
+
+    await card.get('button').trigger('click')
+    const detailPanel = wrapper.getComponent({ name: 'OperacionDetalle' })
+    expect(detailPanel.props('operacion').id).toBe(91)
+
+    routeState.cajasHistorialRef.value = []
+    routeState.cajaMovimientos = []
   })
 })
