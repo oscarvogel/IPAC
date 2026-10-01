@@ -3808,6 +3808,28 @@ body.sidebar-scroll-locked {
   gap: 9px;
 }
 
+/* Por encima de 2000px el toolbar vuelve a flex row y los chips de filtros
+   activos comparten la fila con los filtros, comprimiendo el campo de busqueda
+   hasta 155px a 2001px, con recorte del texto (Issue #56). Se les da fila
+   propia para igualar el comportamiento del layout columna que ya aplica por
+   debajo del breakpoint, y se fija un min-width de defensa en el campo.
+   Deudores no se ve afectado: .debtors-toolbar redefine el toolbar como grid,
+   donde flex-wrap es inerte. */
+@media (min-width: 2001px) {
+  .students-toolbar {
+    flex-wrap: wrap;
+    row-gap: 16px;
+  }
+
+  .students-filter-chips {
+    flex: 0 0 100%;
+  }
+
+  .students-search-field {
+    min-width: 180px;
+  }
+}
+
 .students-search-field,
 .students-branch-field {
   position: relative;
