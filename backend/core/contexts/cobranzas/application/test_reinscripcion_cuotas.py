@@ -40,6 +40,37 @@ class SugerirPlanTests(unittest.TestCase):
     def test_devuelve_none_si_la_carrera_no_tiene_plan(self):
         self.assertIsNone(sugerir_plan(matricula=matricula(plan_cuotas=None)))
 
+    def test_un_dia_cero_no_cae_al_dia_por_defecto(self):
+        """Con `or`, el 0 se tomaba por "no informado" y vencia el 10.
+
+        El operador escribio 0: eso es un dato invalido y tiene que rechazarlo
+        el dominio, no caer al 10 en silencio.
+        """
+        from .generar_cuotas import GeneracionCuotasError
+
+        with self.assertRaises(GeneracionCuotasError) as caso:
+            GenerarCuotasDeMatricula(GeneratorFalso()).execute(
+                actor=object(),
+                matricula=matricula(),
+                concepto_id=3,
+                dia_vencimiento=0,
+                fecha_emision=date(2026, 2, 20),
+            )
+
+        self.assertIn("1 y 28", str(caso.exception))
+
+    def test_un_dia_29_tambien_se_rechaza(self):
+        from .generar_cuotas import GeneracionCuotasError
+
+        with self.assertRaises(GeneracionCuotasError):
+            GenerarCuotasDeMatricula(GeneratorFalso()).execute(
+                actor=object(),
+                matricula=matricula(),
+                concepto_id=3,
+                dia_vencimiento=29,
+                fecha_emision=date(2026, 2, 20),
+            )
+
 
 class GenerarCuotasDeMatriculaTests(unittest.TestCase):
     def test_genera_el_lote_del_plan_desde_el_mes_de_la_matricula(self):

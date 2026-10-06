@@ -324,6 +324,100 @@ class ReinscripcionApiTests(FixturesReinscripcionMixin, APITestCase):
             detalle.data["results"][0]["matricula_estado"], Matricula.Estado.ANULADA
         )
 
+    def test_una_cantidad_manual_genera_although_la_carrera_no_tenga_plan(self):
+        """Sin plan la cantidad la decide el operador, y tiene que servir."""
+        self.carrera.plan_cuotas = None
+        self.carrera.save()
+
+        respuesta = self.client.post(
+            f"/api/matriculas/{self.matricula.pk}/generar-cuotas/",
+            {
+                "concepto": self.concepto.pk,
+                "cantidad": 3,
+                "fecha_emision": "2026-02-20",
+            },
+            format="json",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED, respuesta.data)
+        self.assertEqual(respuesta.data["resumen"]["creadas"], 3)
+        self.assertEqual(
+            sorted(Cuota.objects.values_list("periodo", flat=True)),
+            ["2026-03", "2026-04", "2026-05"],
+        )
+
+    def test_sin_plan_y_sin_cantidad_responde_400_con_el_motivo(self):
+        self.carrera.plan_cuotas = None
+        self.carrera.save()
+
+        respuesta = self.client.post(
+            f"/api/matriculas/{self.matricula.pk}/generar-cuotas/",
+            {"concepto": self.concepto.pk, "fecha_emision": "2026-02-20"},
+            format="json",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("plan", respuesta.data["detail"].lower())
+        self.assertEqual(Cuota.objects.count(), 0)
+
+    def test_dia_de_vencimiento_invalido_responde_400_y_no_500(self):
+        """Un dia que escribio el operador es un dato malo, no una falla."""
+        for dia in (0, 29, 31):
+            with self.subTest(dia=dia):
+                respuesta = self.client.post(
+                    f"/api/matriculas/{self.matricula.pk}/generar-cuotas/",
+                    {
+                        "concepto": self.concepto.pk,
+                        "cantidad": 2,
+                        "dia_vencimiento": dia,
+                        "fecha_emision": "2026-02-20",
+                    },
+                    format="json",
+                )
+
+                self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("1 y 28", respuesta.data["detail"])
+
+        self.assertEqual(Cuota.objects.count(), 0)
+
+    def test_dia_28_es_valido_para_que_febrero_siempre_tenga_fecha(self):
+        respuesta = self.client.post(
+            f"/api/matriculas/{self.matricula.pk}/generar-cuotas/",
+            {
+                "concepto": self.concepto.pk,
+                "cantidad": 1,
+                "dia_vencimiento": 28,
+                "fecha_emision": "2026-02-20",
+            },
+            format="json",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED, respuesta.data)
+        self.assertEqual(
+            Cuota.objects.get().fecha_vencimiento.isoformat(), "2026-03-28"
+        )
+
+    def test_plan_cuotas_con_dia_invalido_responde_400_y_no_500(self):
+        """El mismo dato, por el endpoint de previsualizacion."""
+        for dia in (0, 29, 31):
+            with self.subTest(dia=dia):
+                respuesta = self.client.get(
+                    f"/api/matriculas/{self.matricula.pk}/plan-cuotas/",
+                    {"dia_vencimiento": dia},
+                )
+
+                self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("1 y 28", respuesta.data["detail"])
+
+    def test_plan_cuotas_con_dia_28_sigue_respondiendo_200(self):
+        respuesta = self.client.get(
+            f"/api/matriculas/{self.matricula.pk}/plan-cuotas/",
+            {"dia_vencimiento": 28},
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
+        self.assertIn("vence el 28", respuesta.data["etiquetas_periodo"][0])
+
     def test_la_previsualizacion_puede_filtrar_por_alumno(self):
         bruno = self._alumno("L-0002", "Bruno", "Diaz")
 
@@ -346,3 +440,48 @@ class ReinscripcionApiTests(FixturesReinscripcionMixin, APITestCase):
         self.assertEqual(respuesta.data["alumnos_encontrados"], 1)
         self.assertEqual(respuesta.data["alumnos_elegibles"], [self.ana.pk])
         self.assertNotIn(bruno.pk, respuesta.data["alumnos_elegibles"])
+
+    def test_la_previsualizacion_de_un_alumno_no_contabiliza_a_sus_companeros(self):
+        """El caso del QA: contarlo sin filtro multiplicaba las cuotas.
+
+        Ana y Bruno comparten carrera. Sin `alumno` la previsualizacion cuenta
+        los dos y dice que se generan 6; elGenerar desde la matricula solo
+        toca a Ana, y el operadorfirmaba un numero tres veces mayor.
+        """
+        self._alumno("L-0002", "Bruno", "Diaz")
+        cuerpo = {
+            "sucursal": self.posadas.pk,
+            "carrera": self.carrera.pk,
+            "concepto": self.concepto.pk,
+            "cantidad": 3,
+            "mes_inicial": 3,
+            "anio_inicial": 2026,
+            "dia_vencimiento": 10,
+        }
+
+        grupo = self.client.post("/api/cuotas/evaluar-generacion/", cuerpo, format="json")
+        de_alumno = self.client.post(
+            "/api/cuotas/evaluar-generacion/",
+            {**cuerpo, "alumno": self.ana.pk},
+            format="json",
+        )
+
+        self.assertEqual(grupo.data["alumnos_encontrados"], 2)
+        self.assertEqual(grupo.data["cuotas_a_generar"], 6)
+        self.assertEqual(de_alumno.data["alumnos_encontrados"], 1)
+        self.assertEqual(de_alumno.data["cuotas_a_generar"], 3)
+
+        generado = self.client.post(
+            f"/api/matriculas/{self.matricula.pk}/generar-cuotas/",
+            {
+                "concepto": self.concepto.pk,
+                "cantidad": 3,
+                "fecha_emision": "2026-02-20",
+            },
+            format="json",
+        )
+        self.assertEqual(generado.data["resumen"]["creadas"], 3)
+        # El numero que se previsualiza es el que se genera.
+        self.assertEqual(de_alumno.data["cuotas_a_generar"], generado.data["resumen"]["creadas"])
+        self.assertEqual(Cuota.objects.filter(alumno=self.ana).count(), 3)
+        self.assertEqual(Cuota.objects.count(), 3)
