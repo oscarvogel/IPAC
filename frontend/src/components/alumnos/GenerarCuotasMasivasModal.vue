@@ -52,19 +52,70 @@
                 </option>
               </select>
             </label>
-            <label>
-              Mes correspondiente
-              <input v-model="form.periodo" type="date" required />
-              <small class="field-help">Elegí cualquier fecha del mes al que corresponde la cuota; el día no modifica el período.</small>
-            </label>
-            <label>
-              Fecha de emisión
-              <input v-model="form.fecha_emision" type="date" required />
-            </label>
-            <label>
-              Vencimiento
-              <input v-model="form.fecha_vencimiento" type="date" required />
-            </label>
+            <fieldset class="cuotas-plan-modo">
+              <legend>Cuántas cuotas generar</legend>
+              <label class="cuotas-plan-radio">
+                <input v-model="form.modo" type="radio" value="lote" />
+                Varias cuotas (lote)
+              </label>
+              <label class="cuotas-plan-radio">
+                <input v-model="form.modo" type="radio" value="mes" />
+                Un solo mes
+              </label>
+            </fieldset>
+
+            <template v-if="form.modo === 'lote'">
+              <div class="cuotas-plan-presets" role="group" aria-label="Atajos de cantidad">
+                <button type="button" @click="aplicarPreset(6)">Semestre (6)</button>
+                <button type="button" @click="aplicarPreset(10)">Año lectivo (10)</button>
+                <button type="button" @click="aplicarPreset(12)">Año completo (12)</button>
+              </div>
+              <label>
+                Cantidad de cuotas
+                <input v-model.number="form.cantidad" type="number" min="1" max="24" required />
+              </label>
+              <label>
+                Mes inicial
+                <select v-model.number="form.mes_inicial">
+                  <option v-for="(nombre, indice) in nombresMeses" :key="indice + 1" :value="indice + 1">
+                    {{ nombre }}
+                  </option>
+                </select>
+              </label>
+              <label>
+                Año inicial
+                <input v-model.number="form.anio_inicial" type="number" min="2000" max="2100" required />
+              </label>
+              <label>
+                Día de vencimiento
+                <input v-model.number="form.dia_vencimiento" type="number" min="1" max="28" required />
+                <small class="field-help">El 10 es el día que hoy maneja IPAC. Máximo 28 para que febrero siempre tenga fecha.</small>
+              </label>
+              <label>
+                Fecha de emisión
+                <input v-model="form.fecha_emision" type="date" required />
+              </label>
+            </template>
+
+            <template v-else>
+              <label>
+                Mes correspondiente
+                <input v-model="form.periodo" type="date" required />
+                <small class="field-help">Elegí cualquier fecha del mes al que corresponde la cuota; el día no modifica el período.</small>
+              </label>
+              <label>
+                Fecha de emisión
+                <input v-model="form.fecha_emision" type="date" required />
+              </label>
+              <label>
+                Vencimiento
+                <input v-model="form.fecha_vencimiento" type="date" required />
+              </label>
+            </template>
+
+            <ul v-if="etiquetasPeriodo.length" class="cuotas-plan-periodos" aria-label="Períodos del lote">
+              <li v-for="etiqueta in etiquetasPeriodo" :key="etiqueta">{{ etiqueta }}</li>
+            </ul>
             <label>
               Importe
               <input v-model="form.importe" type="number" min="0" step="0.01" required />
@@ -92,16 +143,20 @@
         </section>
 
         <section class="massive-fee-summary" aria-live="polite">
-          <strong v-if="loading">Calculando alumnos activos…</strong>
+          <strong v-if="loading">Calculando alumnos activos.</strong>
           <template v-else>
             <strong>{{ alumnosElegibles.length }} alumnos elegibles · {{ omitidas }} omitidos</strong>
+            <p v-if="periodos.length" class="cuotas-plan-resumen">
+              {{ periodos.length }} {{ periodos.length === 1 ? 'período' : 'períodos' }} ·
+              <strong>{{ cuotasAGenerar }} cuotas a generar</strong>
+            </p>
             <dl class="massive-fee-summary-details">
               <div><dt>Sucursal</dt><dd>{{ sucursalSeleccionada?.nombre || 'Elegí una sucursal' }}</dd></div>
               <div><dt>Carrera/curso</dt><dd>{{ carreraSeleccionada?.nombre || 'Todas' }}</dd></div>
-              <div><dt>Concepto</dt><dd>{{ conceptoSeleccionado?.nombre || 'Sin seleccionar' }}</dd></div>
-              <div><dt>Período</dt><dd>{{ periodoParaBackend(form.periodo) || 'Sin seleccionar' }}</dd></div>
+              <div><dt>Concepto</dt><dd>{{ conceptoSeleccionado?.nombre || 'Sin concepto' }}</dd></div>
+              <div><dt>{{ form.modo === 'lote' ? 'Períodos' : 'Período' }}</dt><dd>{{ resumenPeriodos }}</dd></div>
               <div><dt>Importe unitario</dt><dd>{{ formatCurrency(form.importe) }}</dd></div>
-              <div><dt>Descuento</dt><dd>− {{ formatCurrency(form.descuento) }}</dd></div>
+              <div><dt>Descuento</dt><dd>- {{ formatCurrency(form.descuento) }}</dd></div>
               <div><dt>Recargo</dt><dd>+ {{ formatCurrency(form.recargo) }}</dd></div>
               <div><dt>Total estimado</dt><dd>{{ formatCurrency(totalEstimado) }}</dd></div>
             </dl>
@@ -138,6 +193,9 @@
               <span class="massive-fee-preview-identity">
                 <strong>{{ alumno.nombre_completo }}</strong>
                 <small>Legajo {{ alumno.legajo }} · {{ alumno.carrera_nombre || 'Sin carrera asignada' }} · {{ alumno.estado }}</small>
+                <small v-if="periodos.length > 1 && alumno.faltantes" class="massive-fee-preview-progress">
+                  Le faltan {{ alumno.faltantes.length }} de {{ periodos.length }} cuotas
+                </small>
               </span>
               <span v-if="previewTab === 'omitidos'" class="massive-fee-omission">{{ alumno.motivo }}</span>
             </li>
@@ -252,6 +310,43 @@
   .massive-fee-preview-list li { align-items: flex-start; flex-direction: column; }
   .massive-fee-omission { max-width: none; text-align: left; }
 }
+
+.cuotas-plan-modo {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.cuotas-plan-modo legend { padding: 0 6px; color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.cuotas-plan-radio { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; color: var(--text-primary); font-weight: 600; }
+.cuotas-plan-radio input { min-height: auto; }
+
+.cuotas-plan-presets { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.cuotas-plan-presets button { min-height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); background: var(--surface-soft); font-weight: 700; }
+.cuotas-plan-presets button:hover { border-color: var(--primary); color: var(--primary); }
+.cuotas-plan-presets button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+.cuotas-plan-periodos {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cuotas-plan-periodos li { padding: 4px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); background: var(--surface-soft); font-size: 12px; }
+
+.cuotas-plan-resumen { margin: 4px 0 0; color: var(--text-primary); }
+.cuotas-plan-resumen strong { color: var(--primary); }
+
+.massive-fee-preview-progress { color: var(--primary); font-weight: 700; }
 </style>
 
 <script setup>
@@ -278,7 +373,24 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'saved'])
 const toast = useToast()
-const { alumnosElegibles, alumnosEncontrados, omitidas, detalleAlumnos, loading, error, evaluar, generar } = useCuotasMasivas()
+const {
+  alumnosElegibles,
+  alumnosEncontrados,
+  omitidas,
+  detalleAlumnos,
+  periodos,
+  etiquetasPeriodo,
+  cuotasAGenerar,
+  loading,
+  error,
+  evaluar,
+  generar,
+} = useCuotasMasivas()
+
+const nombresMeses = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+]
 const { tiposDescuento } = useCatalogos()
 const { user } = useAuth()
 const isDiscountCatalogLoading = computed(() => props.tiposDescuentoLoading)
@@ -288,14 +400,44 @@ const form = reactive({
   sucursal: '',
   carrera: '',
   concepto: '',
+  modo: 'lote',
   periodo: '',
   fecha_emision: '',
   fecha_vencimiento: '',
+  cantidad: 10,
+  mes_inicial: 3,
+  anio_inicial: new Date().getFullYear(),
+  dia_vencimiento: 10,
   importe: '',
   descuento: 0,
   tipo_descuento: '',
   motivo_descuento: '',
   recargo: 0,
+})
+
+const planActual = computed(() => {
+  if (form.modo === 'lote') {
+    const cantidad = Number(form.cantidad)
+    const mes = Number(form.mes_inicial)
+    const anio = Number(form.anio_inicial)
+    const dia = Number(form.dia_vencimiento)
+    if (!cantidad || !mes || !anio || !dia) return null
+    return {
+      cantidad,
+      mes_inicial: mes,
+      anio_inicial: anio,
+      dia_vencimiento: dia,
+    }
+  }
+  const periodo = periodoParaBackend(form.periodo)
+  if (!periodo || !form.fecha_vencimiento) return null
+  return { periodo, fecha_vencimiento: form.fecha_vencimiento }
+})
+
+const resumenPeriodos = computed(() => {
+  if (!periodos.value.length) return 'Sin seleccionar'
+  if (periodos.value.length === 1) return periodos.value[0]
+  return `${periodos.value[0]} a ${periodos.value[periodos.value.length - 1]} (${periodos.value.length})`
 })
 const saving = ref(false)
 const previewTab = ref('elegibles')
@@ -341,12 +483,18 @@ function todayStr() {
 
 function resetForm() {
   const profileBranchId = user.value?.perfil?.sucursal?.id
+  const anioActual = new Date().getFullYear()
   form.sucursal = props.sucursales.find((item) => String(item.id) === String(profileBranchId))?.id || ''
   form.carrera = ''
   form.concepto = conceptosFiltrados.value[0]?.id || ''
+  form.modo = 'lote'
   form.periodo = ''
   form.fecha_emision = todayStr()
   form.fecha_vencimiento = ''
+  form.cantidad = 10
+  form.mes_inicial = 3
+  form.anio_inicial = anioActual
+  form.dia_vencimiento = 10
   form.importe = conceptoSeleccionado.value?.importe || ''
   form.descuento = 0
   form.tipo_descuento = ''
@@ -354,6 +502,15 @@ function resetForm() {
   form.recargo = 0
   previewTab.value = 'elegibles'
   previewPage.value = 1
+}
+
+/**
+ * Los atajos solo prellenan la cantidad. No fuerzan un calendario: el operador
+ * puede necesitar 6 cuotas arrancando en agosto, y un preset que lo impida
+ * obligaria a generar de a un mes, que es lo que este formulario reemplaza.
+ */
+function aplicarPreset(cantidad) {
+  form.cantidad = cantidad
 }
 
 function setPreviewTab(tab) {
@@ -417,14 +574,29 @@ watch(
 )
 
 watch(
-  () => [props.open, form.sucursal, form.carrera, form.concepto, form.periodo],
+  () => [
+    props.open,
+    form.sucursal,
+    form.carrera,
+    form.concepto,
+    form.modo,
+    form.periodo,
+    form.cantidad,
+    form.mes_inicial,
+    form.anio_inicial,
+    form.dia_vencimiento,
+  ],
   async ([isOpen]) => {
     if (!isOpen) return
+    if (!planActual.value) {
+      alumnosElegibles.value = []
+      return
+    }
     await evaluar({
       sucursal: form.sucursal,
       carrera: form.carrera,
       concepto: form.concepto,
-      periodo: periodoParaBackend(form.periodo),
+      plan: planActual.value,
     })
   },
 )
@@ -436,37 +608,41 @@ watch([previewRows], () => {
 async function handleSubmit() {
   const sucursal = props.sucursales.find((item) => String(item.id) === String(form.sucursal))
   const carrera = carrerasFiltradas.value.find((item) => String(item.id) === String(form.carrera))
-  const confirmation = await confirmGeneracionCuotasMasivas({
+  const confirmacion = await confirmGeneracionCuotasMasivas({
     cantidad: alumnosElegibles.value.length,
     sucursal: sucursal?.nombre || 'Sin sucursal',
     carrera: carrera?.nombre || 'Todas',
     concepto: conceptoSeleccionado.value?.nombre || 'Sin concepto',
-    periodo: form.periodo,
+    periodos: etiquetasPeriodo.value.length
+      ? `${periodos.value[0]} a ${periodos.value[periodos.value.length - 1]} (${etiquetasPeriodo.value.length})`
+      : form.periodo,
+    cuotaTotal: cuotasAGenerar.value,
     importe: form.importe,
     descuento: form.descuento,
     recargo: form.recargo,
     totalEstimado: totalEstimado.value,
     omitidas: omitidas.value,
   })
-  if (!confirmation.isConfirmed) return
+  if (!confirmacion.isConfirmed) return
 
   saving.value = true
   try {
     const response = await generar({
       alumnos: alumnosElegibles.value.map((alumno) => alumno.id),
       concepto: form.concepto,
-      periodo: periodoParaBackend(form.periodo),
       fecha_emision: form.fecha_emision,
-      fecha_vencimiento: form.fecha_vencimiento,
       importe: form.importe,
       descuento: form.descuento || 0,
       tipo_descuento: form.tipo_descuento || null,
       motivo_descuento: form.motivo_descuento,
       recargo: form.recargo || 0,
+      ...planActual.value,
     })
-    const creadas = Array.isArray(response) ? response.length : alumnosElegibles.value.length
-    const resultado = { creadas, omitidas: omitidas.value, errores: 0 }
-    if (resultado.omitidas) {
+    const resumen = response?.resumen || {}
+    const creadas = Number(resumen.creadas ?? 0)
+    const omitidasCreacion = Number(resumen.omitidas ?? 0)
+    const resultado = { creadas, omitidas: omitidasCreacion, errores: 0 }
+    if (omitidasCreacion) {
       await showResultadoCuotasMasivas(resultado)
     } else {
       toast.success(`${creadas} cuotas generadas correctamente.`)

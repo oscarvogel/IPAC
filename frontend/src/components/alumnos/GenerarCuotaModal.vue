@@ -208,7 +208,7 @@ async function handleSubmit() {
   if (!props.alumno) return
   saving.value = true
   try {
-    await generarCuota({
+    const respuesta = await generarCuota({
       alumnos: [props.alumno.id],
       concepto: form.concepto,
       // La UI usa DD-MM-YYYY; el backend conserva la clave mensual YYYY-MM.
@@ -221,7 +221,15 @@ async function handleSubmit() {
       motivo_descuento: form.motivo_descuento,
       recargo: form.recargo || 0,
     })
-    toast.success('Cuota generada')
+    // Repetir la cuota ya no es un error: el backend saltea la que existe y
+    // devuelve 200 con cero creadas. Anunciar "Cuota generada" en ese caso
+    // seria mentirle al operador sobre lo que paso.
+    const creadas = Number(respuesta?.resumen?.creadas ?? 0)
+    if (!creadas) {
+      toast.warning('La cuota ya existia y no se genero de nuevo.')
+    } else {
+      toast.success('Cuota generada')
+    }
     emit('saved')
     emit('close')
   } catch (err) {
