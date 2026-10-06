@@ -53,7 +53,7 @@
                 <label class="reinscripcion-mes-inicial">
                   Mes inicial
                   <input :value="mesInicialLegible" disabled />
-                  <small class="field-help">Sale de la fecha de inicio de la matrícula ({{ formatDate(plan?.fecha_inicio) || '—' }}).</small>
+                  <small class="field-help">Sale de la fecha de inicio de la matrícula ({{ formatDate(matricula?.fecha_inicio) || '—' }}).</small>
                 </label>
                 <label>
                   Día de vencimiento
@@ -93,7 +93,14 @@
                   No se pudo calcular el preview. Podés generar igual: lo que ya exista se saltea.
                 </p>
               </template>
-              <span v-else class="reinscripcion-estado">Calculando los períodos del lote.</span>
+              <!--
+                Sin periodos no hay nada calculando: falta la cantidad. Decirlo
+                es lo que evita el "Calculando..." eterno de una carrera sin plan.
+              -->
+              <span v-else-if="cantidadInvalida" class="reinscripcion-estado">
+                Indicá cuántas cuotas se generan para ver los períodos.
+              </span>
+              <span v-else class="reinscripcion-estado">Sin períodos para este lote.</span>
             </template>
             <p v-if="error" class="students-inline-error" role="alert">{{ error }}</p>
           </section>
@@ -155,8 +162,17 @@ const planSinPlan = computed(() => Boolean(plan.value && !plan.value.periodos.le
  * previsualizacion: cuando se abre el formulario la previsualizacion todavia
  * no corrio, y leerla aca dejaria el formulario sin mes hasta que el operador
  * tocara algo.
+ *
+ * Cuando la carrera no tiene plan el backend no propone ningun periodo, pero
+ * la reinscripcion igual arranca en el mes de la matricula: es la misma regla
+ * que aplica al generar. Sin este fallback el formulario se quedaba sin mes,
+ * sin previsualizacion y con "Calculando..." para siempre.
  */
-const periodoInicial = computed(() => plan.value?.periodos?.[0] || '')
+const periodoInicial = computed(() => {
+  const propuesto = plan.value?.periodos?.[0]
+  if (propuesto) return propuesto
+  return primerPeriodoDe(props.matricula?.fecha_inicio)
+})
 const mesInicialLegible = computed(() => {
   const primero = periodoInicial.value
   if (!primero) return 'Sin determinar'
@@ -170,17 +186,36 @@ const omitidas = computed(() => {
   const total = periodos.value.length
   return Math.max(0, total - cuotasAGenerar.value)
 })
+const cantidadInvalida = computed(() => !Number(form.cantidad))
+/**
+ * No alcanza con que haya una cantidad escrita: tiene que haber una
+ * previsualizacion que produjo periodos. Sin eso el boton dejaba confirmar
+ * "Generar 0 cuotas" contra una carrera sin plan, que es deuda que el alumno
+ * no contrajo. Un error de calculo tambien bloquea: si no sabemos que se va
+ * a generar, no se envia nada.
+ */
 const puedeGenerar = computed(() => Boolean(
   props.matricula
   && conceptosDisponibles.value.length
   && form.concepto
   && Number(form.cantidad) > 0
+  && periodos.value.length > 0
   && !previewLoading.value
+  && !error.value
   && !loading.value,
 ))
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(Number(value || 0))
+}
+
+/**
+ * `YYYY-MM-DD` (o `YYYY-MM`) a `YYYY-MM`. La fecha de inicio de la matrícula
+ * es la que define el arranque del lote, haya plan de carrera o no.
+ */
+function primerPeriodoDe(fecha) {
+  if (typeof fecha !== 'string' || fecha.length < 7) return ''
+  return fecha.slice(0, 7)
 }
 
 /**
@@ -220,7 +255,10 @@ async function cargar() {
   try {
     const data = await cargarPlanCuotas(props.matricula.id)
     plan.value = data
-    form.cantidad = data.periodos.length || data.plan_cuotas || 1
+    // Sin plan no se inventa una cantidad: el campo queda vacio y el operador
+    // decide. Prefijarla con 1 hacia que la previsualizacion corriera sobre un
+    // numero que el sistema no sabe.
+    form.cantidad = data.periodos.length || data.plan_cuotas || ''
     form.concepto = data.conceptos[0]?.id || ''
     form.dia_vencimiento = 10
     form.fecha_emision = toLocalISODate()
