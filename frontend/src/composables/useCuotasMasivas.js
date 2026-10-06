@@ -33,7 +33,14 @@ export function useCuotasMasivas() {
     error.value = ''
   }
 
-  async function evaluar({ sucursal, carrera, concepto, plan }) {
+  /**
+   * `alumno` es opcional y acota la previsualizacion a una persona.
+   *
+   * Sin el, el backend evalua el grupo entero de la carrera: la reinscripcion
+   * tiene que poder mostrar las cuotas de *este* alumno, porque es lo que va
+   * a generar. La masiva no lo pasa y sigue viendo el grupo.
+   */
+  async function evaluar({ sucursal, carrera, concepto, alumno = null, plan }) {
     limpiar()
     if (!sucursal || !concepto || !plan) return
 
@@ -41,7 +48,13 @@ export function useCuotasMasivas() {
     try {
       const data = await apiRequest('/cuotas/evaluar-generacion/', {
         method: 'POST',
-        body: { sucursal, carrera: carrera || null, concepto, ...plan },
+        body: {
+          sucursal,
+          carrera: carrera || null,
+          concepto,
+          ...(alumno ? { alumno } : {}),
+          ...plan,
+        },
       })
       alumnosEncontrados.value = Number(data.alumnos_encontrados || 0)
       omitidas.value = Number(data.omitidas || 0)
