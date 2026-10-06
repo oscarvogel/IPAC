@@ -59,6 +59,18 @@ class MatriculaReinscribible:
             object.__setattr__(self, "fecha_inicio", coerced)
 
 
+def _dia(valor):
+    """Dia de vencimiento a usar, o el que maneja IPAC si no vino.
+
+    Solo "sin dato" trae el default. Un ``0`` es un dato escrito y es invalido:
+    con ``or`` caeria al dia 10 en silencio y el operador veria un vencimiento
+    que nunca eligio, que es justo lo que el dominio quiere evitar.
+    """
+    if valor is None or valor == "":
+        return DIA_VENCIMIENTO_POR_DEFECTO
+    return valor
+
+
 def sugerir_plan(*, matricula: MatriculaReinscribible, dia_vencimiento=None):
     """Plan por defecto de la reinscripción, o ``None`` si la carrera no tiene plan.
 
@@ -69,8 +81,22 @@ def sugerir_plan(*, matricula: MatriculaReinscribible, dia_vencimiento=None):
     return planificacion_sugerida(
         plan_cuotas=matricula.plan_cuotas,
         fecha_inicio=matricula.fecha_inicio,
-        dia_vencimiento=dia_vencimiento or DIA_VENCIMIENTO_POR_DEFECTO,
+        dia_vencimiento=_dia(dia_vencimiento),
     )
+
+
+def _plan_sugerido(matricula: MatriculaReinscribible, dia):
+    """Sugerencia del plan, con los errores ya traducidos.
+
+    Mismo criterio que ``_plan_para``: el dominio lanza
+    ``ErrorPlanificacionCuotas`` y quien llama al caso de uso —la vista—
+    maneja ``GeneracionCuotasError``. Sin esta traduccion, un dia de
+    vencimiento invalido escapaba hasta Django y salia un 500.
+    """
+    try:
+        return sugerir_plan(matricula=matricula, dia_vencimiento=dia)
+    except ErrorPlanificacionCuotas as exc:
+        raise GeneracionCuotasError(exc.detail) from exc
 
 
 class GenerarCuotasDeMatricula:
@@ -94,8 +120,8 @@ class GenerarCuotasDeMatricula:
         tipo_descuento_id=None,
         motivo_descuento="",
     ) -> ResultadoGeneracionCuotas:
-        dia = dia_vencimiento or DIA_VENCIMIENTO_POR_DEFECTO
-        sugerencia = sugerir_plan(matricula=matricula, dia_vencimiento=dia)
+        dia = _dia(dia_vencimiento)
+        sugerencia = _plan_sugerido(matricula, dia)
 
         if cantidad in (None, ""):
             if sugerencia is None:

@@ -35,6 +35,7 @@ from .contexts.cobranzas.application.reinscripcion_cuotas import (
     MatriculaReinscribible,
     sugerir_plan,
 )
+from .contexts.cobranzas.domain.planificacion_cuotas import ErrorPlanificacionCuotas
 from .contexts.cobranzas.application.anular_pago import AnularPago, PagoAnulacionError
 from .contexts.caja.application.validar_caja import CajaCerradaError, asegurar_caja_abierta
 from .contexts.caja.application.gestionar_caja import CerrarCaja, GestionarSaldoAnterior
@@ -749,10 +750,17 @@ class MatriculaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
         mostrarle un numero que el sistema no sabe.
         """
         matricula = self.get_object()
-        planificacion = sugerir_plan(
-            matricula=self._matricula_reinscribible(matricula),
-            dia_vencimiento=request.query_params.get("dia_vencimiento"),
-        )
+        try:
+            planificacion = sugerir_plan(
+                matricula=self._matricula_reinscribible(matricula),
+                dia_vencimiento=request.query_params.get("dia_vencimiento"),
+            )
+        except ErrorPlanificacionCuotas as exc:
+            # El dia de vencimiento lo elige el operador: un 31 es un dato
+            # invalido, no una falla del servidor. Sin esto el error de dominio
+            # escapaba y Django devolvia 500 en vez de un 400 que la pantalla
+            # puede mostrar.
+            return Response({"detail": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
         conceptos = ConceptoCobrable.objects.filter(
             sucursal_id=matricula.sucursal_id,
             carrera_id=matricula.carrera_id,
