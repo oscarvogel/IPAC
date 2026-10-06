@@ -48,16 +48,30 @@ const PLAN_CON_PLAN = {
   conceptos: [{ id: 5, nombre: 'Cuota mensual', importe: 82000 }],
 }
 
-function montar(plan = PLAN_CON_PLAN) {
+const PLAN_SIN_PLAN = {
+  ...PLAN_CON_PLAN,
+  plan_cuotas: null,
+  periodos: [],
+  motivo_sin_plan: 'La carrera no tiene un plan de cuotas configurado. Indicá cuántas se generan.',
+}
+
+function montar(plan = PLAN_CON_PLAN, matricula = {}) {
   cargarPlanCuotas.mockResolvedValue(plan)
   return mount(ReinscripcionCuotasModal, {
     props: {
       open: true,
       alumno: { id: 12, nombre: 'Ana', apellido: 'López' },
-      matricula: { id: 3, sucursal: 1, carrera: 7, estado: 'activa' },
+      matricula: { id: 3, sucursal: 1, carrera: 7, estado: 'activa', fecha_inicio: '2026-03-01', ...matricula },
     },
     global: { stubs: { Teleport: true } },
   })
+}
+
+/** Deja el estado de la previsualizacion como lo devuelve el backend. */
+function preview({ periodos: ps = [], etiquetas = [], aGenerar = 0 } = {}) {
+  previsualizacion.periodos.value = ps
+  previsualizacion.etiquetasPeriodo.value = etiquetas.length ? etiquetas : ps
+  previsualizacion.cuotasAGenerar.value = aGenerar
 }
 
 describe('ReinscripcionCuotasModal', () => {
@@ -113,10 +127,100 @@ describe('ReinscripcionCuotasModal', () => {
   })
 
   it('explica por qué hay que escribir la cantidad si la carrera no tiene plan', async () => {
-    const wrapper = montar({ ...PLAN_CON_PLAN, plan_cuotas: null, periodos: [], motivo_sin_plan: 'La carrera no tiene un plan de cuotas configurado. Indicá cuántas se generan.' })
+    const wrapper = montar(PLAN_SIN_PLAN)
     await flushPromises()
 
     expect(wrapper.text()).toContain('no tiene un plan de cuotas configurado')
+  })
+
+  it('sin plan no deja la cantidad inventada: pide que la escriban', async () => {
+    const wrapper = montar(PLAN_SIN_PLAN)
+    await flushPromises()
+
+    expect(wrapper.get('input[type="number"]').element.value).toBe('')
+    expect(wrapper.text()).not.toContain('Calculando los períodos del lote.')
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+    expect(evaluar).not.toHaveBeenCalled()
+  })
+
+  it('sin plan, la cantidad que escribe el operador recalcula los períodos', async () => {
+    const wrapper = montar(PLAN_SIN_PLAN)
+    await flushPromises()
+
+    await wrapper.get('input[type="number"]').setValue(3)
+    await flushPromises()
+
+    expect(evaluar).toHaveBeenCalledWith({
+      sucursal: 1,
+      carrera: 7,
+      concepto: 5,
+      alumno: 12,
+      plan: { cantidad: 3, mes_inicial: 3, anio_inicial: 2026, dia_vencimiento: 10 },
+    })
+  })
+
+  it('sin plan muestra los períodos calculados y habilita el envío', async () => {
+    preview({ periodos: ['2026-03', '2026-04', '2026-05'], aGenerar: 3 })
+    const wrapper = montar(PLAN_SIN_PLAN)
+    await flushPromises()
+    await wrapper.get('input[type="number"]').setValue(3)
+    await flushPromises()
+
+    expect(wrapper.findAll('.reinscripcion-periodos li')).toHaveLength(3)
+    expect(wrapper.text()).toContain('Se generan')
+    expect(wrapper.text()).toContain('3')
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('bloquea el envío mientras la previsualización está en curso', async () => {
+    previsualizacion.periodos.value = PLAN_CON_PLAN.periodos
+    previsualizacion.cuotasAGenerar.value = 10
+    previsualizacion.loading.value = true
+    const wrapper = montar()
+    await flushPromises()
+
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('bloquea el envío si la previsualización falla', async () => {
+    const wrapper = montar()
+    await flushPromises()
+    previsualizacion.error.value = 'El día de vencimiento debe estar entre 1 y 28.'
+    await flushPromises()
+
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(confirmReinscripcionCuotas).not.toHaveBeenCalled()
+  })
+
+  it('no deja confirmar cuando el preview no produjo períodos', async () => {
+    const wrapper = montar()
+    await flushPromises()
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(confirmReinscripcionCuotas).not.toHaveBeenCalled()
+    expect(generarCuotasDeMatricula).not.toHaveBeenCalled()
+  })
+
+  it('sin plan, la confirmación dice cuántas cuotas se van a generar', async () => {
+    preview({ periodos: ['2026-03', '2026-04', '2026-05'], aGenerar: 3 })
+    const wrapper = montar(PLAN_SIN_PLAN)
+    await flushPromises()
+
+    await wrapper.get('input[type="number"]').setValue(3)
+    await flushPromises()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(confirmReinscripcionCuotas).toHaveBeenCalledWith(
+      expect.objectContaining({ cantidad: 3, periodos: '2026-03 a 2026-05 (3)' }),
+    )
+    expect(generarCuotasDeMatricula).toHaveBeenCalledWith(3, expect.objectContaining({ cantidad: 3 }))
   })
 
   it('bloquea el envío si la carrera no tiene concepto de cuota', async () => {
@@ -128,6 +232,7 @@ describe('ReinscripcionCuotasModal', () => {
   })
 
   it('genera contra la matrícula, no contra el endpoint masivo', async () => {
+    preview({ periodos: PLAN_CON_PLAN.periodos, aGenerar: 10 })
     const wrapper = montar()
     await flushPromises()
 
@@ -145,6 +250,10 @@ describe('ReinscripcionCuotasModal', () => {
 
   it('si el alumno ya tenía todo, lo dice y no promete que generó', async () => {
     generarCuotasDeMatricula.mockResolvedValue({ resumen: { creadas: 0, omitidas: 10 } })
+    // El preview devuelve los periodos del lote aunque no haya nada que
+    // generar: lo que ya existe se saltea, y eso sigue siendo una operacion
+    // valida que el operador puede querer confirmar.
+    preview({ periodos: PLAN_CON_PLAN.periodos, aGenerar: 0 })
     const wrapper = montar()
     await flushPromises()
 
