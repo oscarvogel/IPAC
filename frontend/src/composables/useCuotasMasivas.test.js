@@ -51,6 +51,29 @@ describe('useCuotasMasivas', () => {
     })
   })
 
+  it('manda el alumno cuando la reinscripcion acota la previsualizacion a uno', async () => {
+    apiRequest.mockResolvedValueOnce({ alumnos_encontrados: 1, alumnos_elegibles: [284], cuotas_a_generar: 10 })
+
+    const { evaluar } = useCuotasMasivas()
+    await evaluar({ sucursal: 1, carrera: 4, concepto: 7, alumno: 284, plan: LOTE })
+
+    expect(apiRequest).toHaveBeenCalledWith('/cuotas/evaluar-generacion/', {
+      method: 'POST',
+      body: { sucursal: 1, carrera: 4, concepto: 7, alumno: 284, ...LOTE },
+    })
+  })
+
+  it('omite el filtro cuando no viene alumno, para no romper la masiva', async () => {
+    apiRequest.mockResolvedValueOnce({ alumnos_encontrados: 3, alumnos_elegibles: [1, 2, 3] })
+
+    const { evaluar } = useCuotasMasivas()
+    await evaluar({ sucursal: 1, carrera: 4, concepto: 7, plan: LOTE })
+
+    const body = apiRequest.mock.calls[0][1].body
+    expect(body).not.toHaveProperty('alumno')
+    expect(body.carrera).toBe(4)
+  })
+
   it('sigue soportando el camino de un solo periodo', async () => {
     apiRequest.mockResolvedValueOnce({
       periodos: ['2026-08'],
