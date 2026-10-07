@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.sqlite3
 db.sqlite3
+db.sqlite3.bak*
 .env
 .env.*
 !.env.example
@@ -28,6 +29,12 @@ CARRERAS Y CURSOS 2026.xlsx
 # Artefactos locales de debugging y capturas de pruebas visuales.
 frontend/.issue47-debug/
 frontend/.issue47-screenshots/
+.playwright-cli/
+output/
+
+# Archivos de bloqueo de Office: los crea Word al abrir un .docx y no son
+# documento. Sin esto, un ~$archivo.docx abierto se termina commiteando.
+~$*
 
 # Contrato del cliente: documento con datos personales, se maneja fuera del repo.
 contratos/contrato servicio.pdf
