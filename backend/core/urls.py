@@ -25,6 +25,7 @@ from .views import (
     EventoAuditoriaViewSet,
     TipoDescuentoViewSet,
     ReglaRecargoViewSet,
+    TasaInteresViewSet,
 )
 from .views import (
     ImportacionPlantillaCsvView,
@@ -49,6 +50,7 @@ router.register("movimientos-caja", MovimientoCajaViewSet, basename="movimiento-
 router.register("auditoria", EventoAuditoriaViewSet, basename="auditoria")
 router.register("tipos-descuento", TipoDescuentoViewSet, basename="tipo-descuento")
 router.register("reglas-recargo", ReglaRecargoViewSet, basename="regla-recargo")
+router.register("tasas-interes", TasaInteresViewSet, basename="tasa-interes")
 
 urlpatterns = [
     path("health/", HealthView.as_view(), name="api-health"),
