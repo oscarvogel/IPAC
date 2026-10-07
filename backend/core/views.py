@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 
 from django.contrib.auth.models import User
 
-from .access_scope import scoped_queryset_for_user
+from .access_scope import scoped_cajas_for_user, scoped_queryset_for_user
 from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, EventoAuditoria, Matricula, MovimientoCaja, Pago, PerfilUsuario, ReglaRecargo, Sucursal, TipoDescuento
 from .contexts.importacion.application.import_ipac_workbook import IPACWorkbookImporter
 from .contexts.cobranzas.application.registrar_pago import RegistrarPago
@@ -219,7 +219,9 @@ class ReporteResumenView(APIView):
         if usuario := request.query_params.get("usuario"):
             pagos = pagos.filter(registrado_por_id=usuario)
         cuotas = Cuota.objects.filter(sucursal__in=sucursales).exclude(estado=Cuota.Estado.ANULADA).prefetch_related("aplicaciones")
-        cajas = CajaDiaria.objects.filter(sucursal__in=sucursales, fecha__range=(desde, hasta))
+        cajas = scoped_cajas_for_user(
+            CajaDiaria.objects.filter(fecha__range=(desde, hasta)), request.user
+        )
         deuda = sum((cuota.saldo for cuota in cuotas), Decimal("0"))
         cuotas_con_saldo = [cuota for cuota in cuotas if cuota.saldo > 0]
         alumnos_con_deuda = len({cuota.alumno_id for cuota in cuotas_con_saldo})
@@ -1191,18 +1193,21 @@ class CajaDiariaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [CajaPermission]
 
     def get_queryset(self):
-        queryset = scoped_queryset_for_user(
+        # La regla "el rol caja sólo ve la suya" vive en `scoped_cajas_for_user`
+        # y la comparten el listado y el reporte exportable. Estaba escrita
+        # acá a mano y sólo en el reporte faltaba.
+        queryset = scoped_cajas_for_user(
             CajaDiaria.objects.select_related("sucursal", "usuario").prefetch_related("movimientos"),
             self.request.user,
         )
         profile = getattr(self.request.user, "perfil", None)
         if not profile:
             return queryset.none()
-        if profile.rol == PerfilUsuario.Rol.CAJA:
-            queryset = queryset.filter(usuario=self.request.user)
-        elif profile.rol == PerfilUsuario.Rol.CONSULTA:
-            return queryset.none()
-        elif self.action in {"cerrar", "saldo_anterior"} and self.request.method == "POST":
+        if (
+            profile.rol != PerfilUsuario.Rol.CAJA
+            and self.action in {"cerrar", "saldo_anterior"}
+            and self.request.method == "POST"
+        ):
             queryset = queryset.filter(usuario=self.request.user)
         return queryset
 

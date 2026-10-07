@@ -12,7 +12,10 @@ class DjangoRecargoRepository:
             estado__in=[Cuota.Estado.PENDIENTE, Cuota.Estado.PARCIAL],
         ).select_related("concepto")
         reglas = ReglaRecargo.objects.filter(activo=True).order_by("-concepto_id", "-vigencia_desde", "id")
-        if sucursal_ids:
+        # `is not None` y no truthiness: un usuario sin sucursales en alcance
+        # llega con `sucursal_ids=[]`, y `if sucursal_ids:` lo tomaría como
+        # "sin filtro" y recalcularía los recargos de todas las sucursales.
+        if sucursal_ids is not None:
             cuotas = cuotas.filter(sucursal_id__in=sucursal_ids)
             reglas = reglas.filter(sucursal_id__in=sucursal_ids)
         rules_by_branch = {}

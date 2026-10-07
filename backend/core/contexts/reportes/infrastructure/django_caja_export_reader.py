@@ -1,4 +1,4 @@
-from ....access_scope import scoped_queryset_for_user
+from ....access_scope import scoped_cajas_for_user
 from ....models import CajaDiaria
 
 
@@ -6,7 +6,9 @@ class DjangoCajaExportReader:
     """Adaptador de lectura XLSX para cajas, limitado por el alcance del actor."""
 
     def leer_cajas(self, *, actor, filtros):
-        cajas = scoped_queryset_for_user(
+        # `scoped_cajas_for_user` y no `scoped_queryset_for_user`: el rol `caja`
+        # sólo ve la suya, no todas las de su sucursal.
+        cajas = scoped_cajas_for_user(
             CajaDiaria.objects.select_related("sucursal", "usuario"),
             actor,
         )
