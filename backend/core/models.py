@@ -1,7 +1,16 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db.models.functions import Lower
 from decimal import Decimal
+
+from .contexts.cobranzas.domain.intereses import (
+    BASE_DESDE_DIA_1,
+    BASE_DESDE_VENCIMIENTO,
+    UNIDAD_DIAS,
+    UNIDAD_MESES,
+)
 
 
 class TimeStampedModel(models.Model):
@@ -191,6 +200,60 @@ class ReglaRecargo(TimeStampedModel):
 
     def __str__(self):
         return self.nombre
+
+
+class TasaInteres(TimeStampedModel):
+    """Tasa mensual de interés de mora, parametrizable por vigencia.
+
+    La regla de cálculo vive en el dominio
+    (`contexts.cobranzas.domain.intereses`); este modelo sólo la persiste. Los
+    valores de base y de unidad se importan de ese módulo para que el
+    vocabulario tenga un solo dueño: si el dominio renombra una modalidad, la
+    base rompe acá en vez de dejar dos listas que meanings divergen.
+
+    No se carga ninguna tasa por omisión. El número exacto y la fecha desde la
+    que rige los tiene que confirmar IPAC: un interés mal aplicado se devuelve
+    con nota de crédito o con demanda.
+    """
+
+    class Base(models.TextChoices):
+        DIA_1_DEL_MES = BASE_DESDE_DIA_1, "Desde el día 1 del mes del período"
+        VENCIMIENTO = BASE_DESDE_VENCIMIENTO, "Desde la fecha de vencimiento"
+
+    class Unidad(models.TextChoices):
+        MESES = UNIDAD_MESES, "Meses completos"
+        DIAS = UNIDAD_DIAS, "Días prorrateados (30 por mes)"
+
+    sucursal = models.ForeignKey(Sucursal, on_delete=models.PROTECT, related_name="tasas_interes")
+    porcentaje_mensual = models.DecimalField(
+        max_digits=6,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    vigencia_desde = models.DateField()
+    vigencia_hasta = models.DateField(blank=True, null=True)
+    base_calculo = models.CharField(
+        max_length=30, choices=Base.choices, default=BASE_DESDE_DIA_1
+    )
+    unidad_calculo = models.CharField(
+        max_length=20, choices=Unidad.choices, default=UNIDAD_MESES
+    )
+    descripcion = models.CharField(max_length=160, blank=True)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["-vigencia_desde", "id"]
+        verbose_name = "tasa de interés"
+        verbose_name_plural = "tasas de interés"
+
+    def clean(self):
+        if self.vigencia_hasta and self.vigencia_desde and self.vigencia_hasta < self.vigencia_desde:
+            raise ValidationError(
+                {"vigencia_hasta": "La vigencia no puede terminar antes de empezar."}
+            )
+
+    def __str__(self):
+        return f"{self.porcentaje_mensual}% desde {self.vigencia_desde}"
 
 
 class Matricula(TimeStampedModel):
