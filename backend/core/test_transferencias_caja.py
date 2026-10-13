@@ -463,3 +463,64 @@ class TransferenciaCajaApiTests(TestCase):
         self.assertEqual(self.client.post(self.url, self.payload, format="json").status_code, 403)
         self.assertEqual(TransferenciaCaja.objects.count(), 0)
         self.assertEqual(MovimientoCaja.objects.count(), 0)
+
+    def test_auditoria_transferencia_entre_sucursales_exige_alcance_global_en_lista_y_detalle(self):
+        from .models import EventoAuditoria
+
+        respuesta = self.client.post(self.url, self.payload, format="json")
+        self.assertEqual(respuesta.status_code, 201)
+        evento = EventoAuditoria.objects.get(
+            entidad="core.TransferenciaCaja", entidad_id=str(respuesta.data["id"]),
+        )
+        audit_url = "/api/auditoria/"
+        detalle_url = f"{audit_url}{evento.pk}/"
+        # Cubrir también el bypass legado que permite eventos sin sucursal.
+        for sucursal_evento in (self.posadas, None):
+            EventoAuditoria.objects.filter(pk=evento.pk).update(sucursal=sucursal_evento)
+            for sucursal in (self.posadas, self.eldorado):
+                self.cambiar_perfil(
+                    sucursal_id=sucursal.pk, puede_ver_todas_las_sucursales=False,
+                )
+                lista = self.client.get(audit_url)
+                detalle = self.client.get(detalle_url)
+                with self.subTest(sucursal=sucursal.pk, sucursal_evento=sucursal_evento, lectura="lista"):
+                    self.assertEqual(lista.status_code, 200)
+                    self.assertNotIn(evento.pk, [e["id"] for e in lista.data["results"]])
+                with self.subTest(sucursal=sucursal.pk, sucursal_evento=sucursal_evento, lectura="detalle"):
+                    self.assertEqual(detalle.status_code, 404)
+        self.cambiar_perfil(puede_ver_todas_las_sucursales=True)
+        lista = self.client.get(audit_url)
+        self.assertEqual(lista.status_code, 200)
+        self.assertIn(evento.pk, [e["id"] for e in lista.data["results"]])
+        detalle = self.client.get(detalle_url)
+        self.assertEqual(detalle.status_code, 200)
+        self.assertEqual(detalle.data["valores_nuevos"]["destino_id"], self.destino.pk)
+        self.assertEqual(EventoAuditoria.objects.count(), 1)
+
+    def test_auditoria_transferencia_local_y_eventos_genericos_conservan_su_alcance(self):
+        from .models import EventoAuditoria
+
+        respuesta = self.client.post(
+            self.url, dict(self.payload, destino_id=self.local.pk), format="json",
+        )
+        self.assertEqual(respuesta.status_code, 201)
+        evento = EventoAuditoria.objects.get(
+            entidad="core.TransferenciaCaja", entidad_id=str(respuesta.data["id"]),
+        )
+        generico = EventoAuditoria.objects.create(
+            usuario=self.actor, sucursal=None, modulo="identidad", accion="sesion",
+            entidad="core.User", entidad_id=str(self.actor.pk),
+        )
+        self.cambiar_perfil(puede_ver_todas_las_sucursales=False)
+        lista = self.client.get("/api/auditoria/")
+        self.assertEqual(lista.status_code, 200)
+        self.assertEqual({e["id"] for e in lista.data["results"]}, {evento.pk, generico.pk})
+        self.assertEqual(self.client.get(f"/api/auditoria/{evento.pk}/").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/auditoria/{generico.pk}/").status_code, 200)
+
+        self.cambiar_perfil(sucursal_id=self.eldorado.pk)
+        lista = self.client.get("/api/auditoria/")
+        self.assertEqual(lista.status_code, 200)
+        self.assertEqual([e["id"] for e in lista.data["results"]], [generico.pk])
+        self.assertEqual(self.client.get(f"/api/auditoria/{evento.pk}/").status_code, 404)
+        self.assertEqual(self.client.get(f"/api/auditoria/{generico.pk}/").status_code, 200)

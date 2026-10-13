@@ -1503,6 +1503,15 @@ class EventoAuditoriaViewSet(viewsets.ReadOnlyModelViewSet):
             return queryset.none()
         if not perfil.puede_ver_todas_las_sucursales:
             queryset = queryset.filter(Q(sucursal=perfil.sucursal) | Q(sucursal__isnull=True))
+            # Una transferencia publica evidencia de ambas sucursales; el
+            # alcance de un evento único (o nulo) no habilita ver la otra.
+            queryset = queryset.filter(
+                ~Q(entidad="core.TransferenciaCaja")
+                | Q(
+                    valores_nuevos__origen_sucursal_id=perfil.sucursal_id,
+                    valores_nuevos__destino_sucursal_id=perfil.sucursal_id,
+                )
+            )
         filters = {
             "usuario_id": self.request.query_params.get("usuario"),
             "sucursal_id": self.request.query_params.get("sucursal"),
