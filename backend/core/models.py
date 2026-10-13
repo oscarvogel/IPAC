@@ -457,6 +457,51 @@ class SaldoArrastrableCaja(TimeStampedModel):
         return f"{self.sucursal} - {self.importe} - caja {self.caja_origen_id}"
 
 
+class TransferenciaCaja(models.Model):
+    """Evidencia de una transferencia confirmada; los movimientos son sus partidas."""
+
+    origen = models.ForeignKey(
+        CajaDiaria, on_delete=models.PROTECT, related_name="transferencias_salientes",
+    )
+    destino = models.ForeignKey(
+        CajaDiaria, on_delete=models.PROTECT, related_name="transferencias_entrantes",
+    )
+    actor = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="transferencias_caja_ejecutadas",
+    )
+    importe = models.DecimalField(max_digits=12, decimal_places=2)
+    motivo = models.CharField(max_length=180)
+    creado = models.DateTimeField(auto_now_add=True)
+    numero_comprobante = models.CharField(
+        max_length=30, unique=True, blank=True, null=True, editable=False,
+    )
+
+    class Meta:
+        ordering = ["-creado", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(importe__gt=0), name="transferencia_caja_importe_positivo",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(origen=models.F("destino")),
+                name="transferencia_caja_cajas_distintas",
+            ),
+        ]
+        verbose_name = "transferencia entre cajas"
+        verbose_name_plural = "transferencias entre cajas"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.numero_comprobante:
+            self.numero_comprobante = f"TRF-{self.pk:08d}"
+            type(self).objects.filter(pk=self.pk).update(
+                numero_comprobante=self.numero_comprobante,
+            )
+
+    def __str__(self):
+        return self.numero_comprobante or f"Transferencia {self.pk}"
+
+
 class MovimientoCaja(TimeStampedModel):
     class Tipo(models.TextChoices):
         PAGO = "pago", "Pago"
@@ -477,6 +522,10 @@ class MovimientoCaja(TimeStampedModel):
         related_name="movimiento_caja",
         blank=True,
         null=True,
+    )
+    transferencia = models.ForeignKey(
+        TransferenciaCaja, on_delete=models.PROTECT, related_name="movimientos",
+        blank=True, null=True,
     )
     movimiento_origen = models.OneToOneField(
         "self",
