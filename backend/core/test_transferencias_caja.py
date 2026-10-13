@@ -261,3 +261,205 @@ class TransferenciaCajaConcurrenciaTests(TransferenciaCajaFixture, TransactionTe
         self.assertEqual(MovimientoCaja.objects.count(), 2)
         self.assertEqual(self.origen.total_esperado, Decimal("0.00"))
         self.assertEqual(self.destino.total_esperado, Decimal("120.00"))
+
+
+class TransferenciaCajaApiTests(TestCase):
+    def setUp(self):
+        from rest_framework.test import APIClient
+        from .models import PerfilUsuario
+
+        self.client = APIClient()
+        self.posadas = Sucursal.objects.create(codigo="TP", nombre="Posadas transferencias API")
+        self.eldorado = Sucursal.objects.create(codigo="TE", nombre="Eldorado transferencias API")
+        self.actor = User.objects.create_user(username="administrador-api")
+        PerfilUsuario.objects.create(
+            user=self.actor, sucursal=self.posadas, rol="administracion",
+            puede_ver_todas_las_sucursales=True,
+        )
+        self.cajero_origen = User.objects.create_user(username="cajero-origen-api")
+        self.cajero_destino = User.objects.create_user(username="cajero-destino-api")
+        self.origen = CajaDiaria.objects.create(
+            fecha=timezone.localdate(), sucursal=self.posadas, usuario=self.cajero_origen,
+            saldo_inicial=Decimal("100.00"),
+        )
+        self.destino = CajaDiaria.objects.create(
+            fecha=timezone.localdate(), sucursal=self.eldorado, usuario=self.cajero_destino,
+            saldo_inicial=Decimal("20.00"),
+        )
+        self.local = CajaDiaria.objects.create(
+            fecha=timezone.localdate(), sucursal=self.posadas, usuario=self.actor,
+            saldo_inicial=Decimal("10.00"),
+        )
+        # Administración puede operar sin tener una caja propia.
+        self.local.usuario = User.objects.create_user(username="otro-cajero-api")
+        self.local.save()
+        self.client.force_authenticate(self.actor)
+        self.url = "/api/transferencias-caja/"
+        self.payload = {
+            "origen_id": self.origen.pk, "destino_id": self.destino.pk,
+            "importe": "30.00", "motivo": "Refuerzo de efectivo",
+        }
+
+    def cambiar_perfil(self, **cambios):
+        from .models import PerfilUsuario
+        PerfilUsuario.objects.filter(user=self.actor).update(**cambios)
+        self.actor = User.objects.get(pk=self.actor.pk)
+        self.client.force_authenticate(self.actor)
+
+    def test_admin_global_puede_transferir_entre_sucursales(self):
+        for rol in ("administracion", "superadmin"):
+            with self.subTest(rol=rol):
+                self.cambiar_perfil(rol=rol)
+                cajas = self.client.get(self.url + "cajas-abiertas/")
+                self.assertEqual(cajas.status_code, 200)
+                self.assertEqual({c["id"] for c in cajas.data}, {self.origen.pk, self.destino.pk, self.local.pk})
+                respuesta = self.client.post(self.url, self.payload, format="json")
+                self.assertEqual(respuesta.status_code, 201)
+                self.assertEqual(respuesta.data["origen"]["sucursal"], self.posadas.pk)
+                self.assertEqual(respuesta.data["destino"]["sucursal"], self.eldorado.pk)
+        self.assertEqual(TransferenciaCaja.objects.count(), 2)
+        self.assertEqual(MovimientoCaja.objects.count(), 4)
+        self.assertEqual(self.origen.total_esperado, Decimal("40.00"))
+        self.assertEqual(self.destino.total_esperado, Decimal("80.00"))
+
+    def test_admin_limitado_no_consulta_ni_transfiere_fuera_de_su_sucursal(self):
+        transferencia_externa = DjangoTransferenciaCajaRepository().transferir(
+            actor=self.actor, solicitud=SolicitudTransferenciaCaja(
+                self.origen.pk, self.destino.pk, Decimal("10.00"), "Entre sucursales",
+            ),
+        )
+        transferencia_local = DjangoTransferenciaCajaRepository().transferir(
+            actor=self.actor, solicitud=SolicitudTransferenciaCaja(
+                self.origen.pk, self.local.pk, Decimal("10.00"), "Dentro de sucursal",
+            ),
+        )
+        for rol in ("administracion", "superadmin"):
+            with self.subTest(rol=rol):
+                self.cambiar_perfil(rol=rol, puede_ver_todas_las_sucursales=False)
+                cajas = self.client.get(self.url + "cajas-abiertas/", {"sucursal": self.eldorado.pk})
+                self.assertEqual(cajas.status_code, 200)
+                self.assertEqual({c["id"] for c in cajas.data}, {self.origen.pk, self.local.pk})
+                historial = self.client.get(self.url)
+                self.assertEqual(historial.status_code, 200)
+                self.assertEqual([t["id"] for t in historial.data], [transferencia_local.pk])
+                self.assertNotIn(transferencia_externa.pk, [t["id"] for t in historial.data])
+                for caja_id in (self.destino.pk, 999999):
+                    for campo in ("origen_id", "destino_id"):
+                        payload = dict(self.payload, origen_id=self.origen.pk, destino_id=self.local.pk)
+                        payload[campo] = caja_id
+                        respuesta = self.client.post(self.url, payload, format="json")
+                        self.assertEqual(respuesta.status_code, 404)
+                        self.assertEqual(respuesta.data["detail"], "Caja no disponible.")
+        self.assertEqual(TransferenciaCaja.objects.count(), 2)
+        self.assertEqual(MovimientoCaja.objects.count(), 4)
+
+    def test_solo_administracion_y_superadmin_pueden_transferir(self):
+        for rol in ("tesoreria", "caja", "consulta"):
+            with self.subTest(rol=rol):
+                self.cambiar_perfil(rol=rol)
+                respuesta = self.client.post(self.url, self.payload, format="json")
+                self.assertEqual(respuesta.status_code, 403)
+                self.assertEqual(self.client.get(self.url).status_code, 403)
+                self.assertEqual(self.client.get(self.url + "cajas-abiertas/").status_code, 403)
+        self.assertEqual(TransferenciaCaja.objects.count(), 0)
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
+
+    def test_respuesta_identifica_actor_y_los_dos_movimientos(self):
+        from .models import EventoAuditoria
+        payload = dict(self.payload, actor=self.cajero_destino.pk, actor_id=self.cajero_destino.pk)
+        respuesta = self.client.post(self.url, payload, format="json")
+        self.assertEqual(respuesta.status_code, 201)
+        evidencia = respuesta.data
+        transferencia = TransferenciaCaja.objects.get(pk=evidencia["id"])
+        self.assertEqual(evidencia["actor"]["id"], self.actor.pk)
+        self.assertEqual(evidencia["actor"]["username"], self.actor.username)
+        self.assertEqual(evidencia["numero_comprobante"], transferencia.numero_comprobante)
+        self.assertTrue(evidencia["creado"])
+        self.assertEqual(evidencia["importe"], "30.00")
+        self.assertEqual(evidencia["motivo"], "Refuerzo de efectivo")
+        self.assertEqual(evidencia["origen"]["id"], self.origen.pk)
+        self.assertEqual(evidencia["destino"]["id"], self.destino.pk)
+        self.assertEqual(evidencia["origen"]["usuario"], self.cajero_origen.pk)
+        self.assertEqual(evidencia["destino"]["usuario"], self.cajero_destino.pk)
+        self.assertEqual(evidencia["movimiento_origen_id"], transferencia.movimientos.get(caja=self.origen).pk)
+        self.assertEqual(evidencia["movimiento_destino_id"], transferencia.movimientos.get(caja=self.destino).pk)
+        self.assertNotEqual(evidencia["movimiento_origen_id"], evidencia["movimiento_destino_id"])
+        evento = EventoAuditoria.objects.get(entidad="core.TransferenciaCaja", entidad_id=str(transferencia.pk))
+        self.assertEqual(EventoAuditoria.objects.count(), 1)
+        self.assertEqual(evento.usuario_id, self.actor.pk)
+        self.assertEqual(evento.modulo, "caja")
+        self.assertEqual(evento.accion, "transferencia")
+        for campo in ("origen_id", "destino_id", "actor_id", "importe", "motivo", "numero_comprobante",
+                      "movimiento_origen_id", "movimiento_destino_id", "creado"):
+            self.assertIn(campo, evento.valores_nuevos)
+        self.assertEqual(evento.valores_nuevos["actor_id"], self.actor.pk)
+        self.assertEqual(evento.valores_nuevos["origen_id"], self.origen.pk)
+        self.assertEqual(evento.valores_nuevos["destino_id"], self.destino.pk)
+        self.assertEqual(evento.valores_nuevos["importe"], "30.00")
+        historial = self.client.get(self.url)
+        self.assertEqual(historial.status_code, 200)
+        self.assertEqual(historial.data[0], evidencia)
+
+    def test_cajas_operables_solo_abiertas_del_dia_e_historial_conserva_evidencia(self):
+        transferencia = DjangoTransferenciaCajaRepository().transferir(
+            actor=self.actor, solicitud=SolicitudTransferenciaCaja(
+                self.origen.pk, self.destino.pk, Decimal("10.00"), "Evidencia anterior",
+            ),
+        )
+        CajaDiaria.objects.filter(pk=self.origen.pk).update(
+            fecha=timezone.localdate() - timedelta(days=1), estado=CajaDiaria.Estado.CERRADA,
+        )
+        CajaDiaria.objects.filter(pk=self.destino.pk).update(
+            fecha=timezone.localdate() + timedelta(days=1),
+        )
+        cajas = self.client.get(self.url + "cajas-abiertas/")
+        self.assertEqual(cajas.status_code, 200)
+        self.assertEqual([c["id"] for c in cajas.data], [self.local.pk])
+        historial = self.client.get(self.url)
+        self.assertEqual(historial.status_code, 200)
+        self.assertEqual([t["id"] for t in historial.data], [transferencia.pk])
+        for caja_id in (self.origen.pk, self.destino.pk):
+            respuesta = self.client.post(
+                self.url, dict(self.payload, origen_id=self.local.pk, destino_id=caja_id), format="json",
+            )
+            self.assertEqual(respuesta.status_code, 404)
+            self.assertEqual(respuesta.data["detail"], "Caja no disponible.")
+        self.assertEqual(TransferenciaCaja.objects.count(), 1)
+        self.assertEqual(MovimientoCaja.objects.count(), 2)
+
+    def test_fallo_de_auditoria_revierte_transferencia_y_ambos_movimientos(self):
+        from .models import EventoAuditoria
+        from .contexts.auditoria.infrastructure.django_auditoria_repository import DjangoAuditoriaRepository
+
+        with patch.object(DjangoAuditoriaRepository, "guardar", side_effect=RuntimeError("Auditoría indisponible")):
+            with self.assertRaisesMessage(RuntimeError, "Auditoría indisponible"):
+                self.client.post(self.url, self.payload, format="json")
+        self.assertEqual(TransferenciaCaja.objects.count(), 0)
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
+        self.assertEqual(EventoAuditoria.objects.count(), 0)
+        self.assertEqual(self.origen.total_esperado, Decimal("100.00"))
+        self.assertEqual(self.destino.total_esperado, Decimal("20.00"))
+
+    def test_rechaza_importes_invalidos_saldo_insuficiente_y_cajas_iguales_sin_escrituras(self):
+        for cambios in (
+            {"importe": "0"}, {"importe": "-1"}, {"importe": "NaN"},
+            {"importe": "100.01"}, {"importe": "1.001"},
+            {"motivo": ""}, {"motivo": "x" * 181},
+            {"destino_id": self.origen.pk},
+        ):
+            with self.subTest(cambios=cambios):
+                respuesta = self.client.post(self.url, dict(self.payload, **cambios), format="json")
+                self.assertEqual(respuesta.status_code, 400)
+        self.assertEqual(TransferenciaCaja.objects.count(), 0)
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
+
+    def test_anonimo_sin_perfil_o_clave_pendiente_no_opera(self):
+        from rest_framework.test import APIClient
+
+        self.assertEqual(APIClient().post(self.url, self.payload, format="json").status_code, 401)
+        self.client.force_authenticate(self.cajero_origen)
+        self.assertEqual(self.client.post(self.url, self.payload, format="json").status_code, 403)
+        self.cambiar_perfil(debe_cambiar_clave=True)
+        self.assertEqual(self.client.post(self.url, self.payload, format="json").status_code, 403)
+        self.assertEqual(TransferenciaCaja.objects.count(), 0)
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
