@@ -23,6 +23,13 @@ class TransferenciaCajaDominioTests(SimpleTestCase):
                 with self.assertRaises(TransferenciaCajaError):
                     validar_solicitud_transferencia(solicitud)
 
+    def test_rechaza_importe_no_finito(self):
+        for importe in (Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")):
+            with self.subTest(importe=importe):
+                solicitud = SolicitudTransferenciaCaja(1, 2, importe, "Reubicación")
+                with self.assertRaises(TransferenciaCajaError):
+                    validar_solicitud_transferencia(solicitud)
+
     def test_rechaza_motivo_vacio(self):
         for motivo in ("", "   "):
             with self.subTest(motivo=motivo):

@@ -20,7 +20,7 @@ def validar_solicitud_transferencia(solicitud: SolicitudTransferenciaCaja) -> No
     """Valida que la transferencia tenga cajas distintas, importe positivo y motivo."""
     if solicitud.origen_id == solicitud.destino_id:
         raise TransferenciaCajaError("La caja de origen y destino deben ser distintas.")
-    if solicitud.importe <= Decimal("0"):
+    if not solicitud.importe.is_finite() or solicitud.importe <= Decimal("0"):
         raise TransferenciaCajaError("El importe de la transferencia debe ser mayor a cero.")
     if not solicitud.motivo or not solicitud.motivo.strip():
         raise TransferenciaCajaError("El motivo de la transferencia es obligatorio.")
