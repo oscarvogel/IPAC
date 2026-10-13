@@ -218,6 +218,9 @@ const modules = computed(() => {
       icon: WalletIcon,
       children: [
         { id: 'caja-dia', label: 'Caja del día', to: '/caja' },
+        ...(['superadmin', 'administracion'].includes(user.value?.perfil?.rol)
+          ? [{ id: 'caja-transferencias', label: 'Transferencias entre cajas', to: '/caja/transferencias' }]
+          : []),
         ...(auth.can('operate-cash')
           ? [
               { id: 'caja-ingreso', label: 'Ingreso manual', to: { path: '/caja', query: { accion: 'ingreso' } } },
