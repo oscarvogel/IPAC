@@ -114,6 +114,42 @@ class TransferenciaCajaAdaptadorTests(TransferenciaCajaFixture, TestCase):
         self.assertEqual(self.origen.total_esperado, Decimal("70.00"))
         self.assertEqual(self.destino.total_esperado, Decimal("50.00"))
 
+    def test_transferencia_persistida_no_permite_mutacion(self):
+        transferencia = self.repository.transferir(actor=self.actor, solicitud=self.solicitud())
+        evidencia = TransferenciaCaja.objects.values().get(pk=transferencia.pk)
+        partidas = list(transferencia.movimientos.order_by("pk").values())
+
+        transferencia.importe = Decimal("80.00")
+        transferencia.motivo = "Motivo alterado"
+        transferencia.numero_comprobante = "TRF-ALTERADO"
+        with self.assertRaises(TransferenciaCajaError):
+            transferencia.save()
+
+        self.assertEqual(TransferenciaCaja.objects.values().get(pk=transferencia.pk), evidencia)
+        self.assertEqual(list(transferencia.movimientos.order_by("pk").values()), partidas)
+        self.assertEqual(self.origen.total_esperado, Decimal("70.00"))
+        self.assertEqual(self.destino.total_esperado, Decimal("50.00"))
+
+    def test_transferencia_persistida_no_permite_save_con_instancia_reconstruida(self):
+        transferencia = self.repository.transferir(actor=self.actor, solicitud=self.solicitud())
+        evidencia = TransferenciaCaja.objects.values().get(pk=transferencia.pk)
+        reconstruida = TransferenciaCaja(
+            pk=transferencia.pk, origen=self.origen, destino=self.destino, actor=self.actor,
+            importe=Decimal("80.00"), motivo="Motivo alterado", creado=transferencia.creado,
+        )
+        with self.assertRaises(TransferenciaCajaError):
+            reconstruida.save()
+        self.assertEqual(TransferenciaCaja.objects.values().get(pk=transferencia.pk), evidencia)
+
+    def test_transferencia_persistida_no_permite_delete(self):
+        transferencia = self.repository.transferir(actor=self.actor, solicitud=self.solicitud())
+        evidencia = TransferenciaCaja.objects.values().get(pk=transferencia.pk)
+        partidas = list(transferencia.movimientos.order_by("pk").values())
+        with self.assertRaises(TransferenciaCajaError):
+            transferencia.delete()
+        self.assertEqual(TransferenciaCaja.objects.values().get(pk=transferencia.pk), evidencia)
+        self.assertEqual(list(transferencia.movimientos.order_by("pk").values()), partidas)
+
     def test_bloquea_ambas_cajas_en_orden_de_id(self):
         # Invertir las cajas fuerza un orden distinto al indicado por el comando.
         with CaptureQueriesContext(connection) as queries:

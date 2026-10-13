@@ -491,12 +491,28 @@ class TransferenciaCaja(models.Model):
         verbose_name_plural = "transferencias entre cajas"
 
     def save(self, *args, **kwargs):
+        from .contexts.caja.domain.transferencia_caja import TransferenciaCajaError
+
+        # El PK explícito también puede reconstruir una fila ya persistida.
+        if not self._state.adding or (
+            self.pk is not None and type(self).objects.filter(pk=self.pk).exists()
+        ):
+            raise TransferenciaCajaError(
+                "Una transferencia confirmada no puede modificarse."
+            )
         super().save(*args, **kwargs)
         if not self.numero_comprobante:
             self.numero_comprobante = f"TRF-{self.pk:08d}"
             type(self).objects.filter(pk=self.pk).update(
                 numero_comprobante=self.numero_comprobante,
             )
+
+    def delete(self, *args, **kwargs):
+        from .contexts.caja.domain.transferencia_caja import TransferenciaCajaError
+
+        raise TransferenciaCajaError(
+            "Una transferencia confirmada no puede eliminarse."
+        )
 
     def __str__(self):
         return self.numero_comprobante or f"Transferencia {self.pk}"
