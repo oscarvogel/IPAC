@@ -524,3 +524,151 @@ class TransferenciaCajaApiTests(TestCase):
         self.assertEqual([e["id"] for e in lista.data["results"]], [generico.pk])
         self.assertEqual(self.client.get(f"/api/auditoria/{evento.pk}/").status_code, 404)
         self.assertEqual(self.client.get(f"/api/auditoria/{generico.pk}/").status_code, 200)
+
+
+class TransferenciaCajaSerializerTests(TransferenciaCajaFixture, TestCase):
+    def setUp(self):
+        super().setUp()
+        from rest_framework.test import APIClient
+        from .models import PerfilUsuario
+        self.actor.first_name = "Ana"
+        self.actor.last_name = "Administración"
+        self.actor.save()
+        PerfilUsuario.objects.create(
+            user=self.actor, sucursal=self.origen.sucursal, rol="administracion",
+            puede_ver_todas_las_sucursales=True,
+        )
+        self.origen.usuario = User.objects.create_user(username="cajero-origen")
+        self.origen.save()
+        self.destino.sucursal = Sucursal.objects.create(codigo="OTR", nombre="Otra sucursal")
+        self.destino.save()
+        self.transferencia = self.repository.transferir(actor=self.actor, solicitud=self.solicitud())
+        self.client = APIClient()
+        self.client.force_authenticate(self.actor)
+
+    def test_movimiento_transferencia_expone_resumen_del_otro_caja_y_ejecutor(self):
+        for caja, contraparte, sentido, tipo, signed in (
+            (self.origen, self.destino, "salida", "pase", Decimal("-30.00")),
+            (self.destino, self.origen, "entrada", "ingreso", Decimal("30.00")),
+        ):
+            with self.subTest(sentido=sentido):
+                movimiento = self.transferencia.movimientos.get(caja=caja)
+                respuesta = self.client.get(f"/api/movimientos-caja/{movimiento.pk}/")
+                self.assertEqual(respuesta.status_code, 200)
+                resumen = respuesta.data.get("transferencia")
+                self.assertIsNotNone(resumen)
+                self.assertEqual(resumen["id"], self.transferencia.pk)
+                self.assertEqual(resumen["numero_comprobante"], self.transferencia.numero_comprobante)
+                self.assertEqual(resumen["sentido"], sentido)
+                self.assertEqual(resumen["importe"], "30.00")
+                self.assertEqual(resumen["motivo"], "Refuerzo de efectivo")
+                self.assertEqual(resumen["creado"], self.transferencia.creado.isoformat())
+                self.assertEqual(resumen["actor"], {
+                    "id": self.actor.pk, "username": self.actor.username, "nombre": "Ana Administración",
+                })
+                self.assertEqual(resumen["contraparte"], {
+                    "id": contraparte.pk, "sucursal": contraparte.sucursal_id,
+                    "sucursal_nombre": contraparte.sucursal.nombre,
+                    "usuario": contraparte.usuario_id, "usuario_nombre": contraparte.usuario.username,
+                })
+                self.assertEqual(respuesta.data["tipo"], tipo)
+                self.assertEqual(movimiento.signed_amount, signed)
+                detalle = self.client.get(f"/api/cajas/{caja.pk}/")
+                self.assertEqual(detalle.status_code, 200)
+                self.assertEqual(detalle.data["movimientos"][0]["transferencia"], resumen)
+
+    def test_usuario_limitado_ve_su_evidencia_sin_datos_de_la_contraparte(self):
+        from .models import PerfilUsuario
+        for caja, otra, sentido in (
+            (self.origen, self.destino, "salida"),
+            (self.destino, self.origen, "entrada"),
+        ):
+            with self.subTest(sentido=sentido):
+                PerfilUsuario.objects.create(
+                    user=caja.usuario, sucursal=caja.sucursal, rol="caja",
+                    puede_ver_todas_las_sucursales=False,
+                )
+                self.client.force_authenticate(caja.usuario)
+                movimiento = self.transferencia.movimientos.get(caja=caja)
+                respuesta = self.client.get(f"/api/movimientos-caja/{movimiento.pk}/")
+                self.assertEqual(respuesta.status_code, 200)
+                resumen = respuesta.data.get("transferencia")
+                self.assertIsNotNone(resumen)
+                self.assertIsNone(resumen["contraparte"])
+                self.assertIsNone(respuesta.data["recibido_por"])
+                self.assertIsNone(respuesta.data["recibido_por_nombre"])
+                self.assertEqual(resumen["numero_comprobante"], self.transferencia.numero_comprobante)
+                self.assertEqual(resumen["importe"], "30.00")
+                self.assertEqual(resumen["motivo"], "Refuerzo de efectivo")
+                self.assertEqual(resumen["actor"]["id"], self.actor.pk)
+                self.assertEqual(resumen["sentido"], sentido)
+                otro_movimiento = self.transferencia.movimientos.get(caja=otra)
+                self.assertEqual(self.client.get(f"/api/movimientos-caja/{otro_movimiento.pk}/").status_code, 404)
+                detalle = self.client.get(f"/api/cajas/{caja.pk}/")
+                self.assertEqual(detalle.status_code, 200)
+                self.assertIsNone(detalle.data["movimientos"][0]["transferencia"]["contraparte"])
+
+    def test_admin_limitado_oculta_contraparte_pero_puede_leer_caja_local(self):
+        from .models import PerfilUsuario
+        PerfilUsuario.objects.filter(user=self.actor).update(puede_ver_todas_las_sucursales=False)
+        self.actor.refresh_from_db()
+        self.client.force_authenticate(self.actor)
+        movimiento = self.transferencia.movimientos.get(caja=self.origen)
+        respuesta = self.client.get(f"/api/movimientos-caja/{movimiento.pk}/")
+        self.assertEqual(respuesta.status_code, 200)
+        resumen = respuesta.data.get("transferencia")
+        self.assertIsNotNone(resumen)
+        self.assertIsNone(resumen["contraparte"])
+
+    def test_movimiento_normal_no_expone_transferencia_y_campo_es_solo_lectura(self):
+        from .serializers import MovimientoCajaSerializer
+        movimiento = MovimientoCaja.objects.create(
+            caja=self.origen, tipo="ingreso", medio="efectivo", importe=Decimal("5.00"),
+            descripcion="Ingreso manual", recibido_por=self.cajero,
+        )
+        respuesta = self.client.get(f"/api/movimientos-caja/{movimiento.pk}/")
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("transferencia", respuesta.data)
+        self.assertIsNone(respuesta.data["transferencia"])
+        self.assertEqual(respuesta.data["recibido_por"], self.cajero.pk)
+        self.assertEqual(respuesta.data["recibido_por_nombre"], self.cajero.username)
+        serializer = MovimientoCajaSerializer(data={
+            "caja": self.origen.pk, "tipo": "ingreso", "medio": "efectivo",
+            "importe": "5.00", "transferencia": {"id": self.transferencia.pk},
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("transferencia", serializer.validated_data)
+
+    def test_transferencia_fuera_de_alcance_no_filtra_receptor_por_campos_heredados(self):
+        from rest_framework.test import APIRequestFactory
+        from .models import PerfilUsuario
+        from .serializers import MovimientoCajaSerializer
+        PerfilUsuario.objects.filter(user=self.actor).update(puede_ver_todas_las_sucursales=False)
+        self.actor.refresh_from_db()
+        request = APIRequestFactory().get("/")
+        request.user = self.actor
+        movimiento = self.transferencia.movimientos.get(caja=self.origen)
+        datos = MovimientoCajaSerializer(movimiento, context={"request": request}).data
+        self.assertIsNone(datos["recibido_por"])
+        self.assertIsNone(datos["recibido_por_nombre"])
+
+    def test_cajero_ve_contraparte_de_su_sucursal_sin_acceso_a_sus_movimientos(self):
+        from .models import PerfilUsuario
+        PerfilUsuario.objects.create(user=self.origen.usuario, sucursal=self.origen.sucursal, rol="caja")
+        local = CajaDiaria.objects.create(
+            fecha=timezone.localdate(), sucursal=self.origen.sucursal,
+            usuario=User.objects.create_user(username="otro-cajero-local"),
+        )
+        transferencia = self.repository.transferir(
+            actor=self.actor, solicitud=self.solicitud("5.00", destino=local),
+        )
+        self.client.force_authenticate(self.origen.usuario)
+        movimiento = transferencia.movimientos.get(caja=self.origen)
+        respuesta = self.client.get(f"/api/movimientos-caja/{movimiento.pk}/")
+        self.assertEqual(respuesta.status_code, 200)
+        resumen = respuesta.data.get("transferencia")
+        self.assertIsNotNone(resumen)
+        self.assertEqual(resumen["contraparte"]["id"], local.pk)
+        self.assertEqual(resumen["contraparte"]["usuario_nombre"], "otro-cajero-local")
+        contraparte = transferencia.movimientos.get(caja=local)
+        self.assertEqual(self.client.get(f"/api/movimientos-caja/{contraparte.pk}/").status_code, 404)
