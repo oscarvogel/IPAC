@@ -51,6 +51,13 @@ watch(validationError, async (message) => {
   validationSummary.value?.focus()
 })
 const origen = computed(() => props.cajas.find((caja) => String(caja.id) === String(form.origen_id)))
+const cajasDisponibles = computed(() => new Set(props.cajas.map((caja) => String(caja.id))))
+
+watch(cajasDisponibles, (ids) => {
+  for (const campo of ['origen_id', 'destino_id']) {
+    if (form[campo] && !ids.has(String(form[campo]))) form[campo] = ''
+  }
+})
 
 function cajaLabel(caja) {
   return caja.sucursal_nombre + ' · ' + caja.usuario_nombre + ' · Caja #' + caja.id
@@ -65,6 +72,10 @@ function review() {
   validationError.value = ''
   if (!form.origen_id || !form.destino_id || !form.importe || !form.motivo.trim()) {
     validationError.value = 'Completá origen, destino, importe y motivo.'
+    return
+  }
+  if (!cajasDisponibles.value.has(String(form.origen_id)) || !cajasDisponibles.value.has(String(form.destino_id))) {
+    validationError.value = 'Volvé a seleccionar origen y destino entre las cajas disponibles.'
     return
   }
   if (form.motivo.trim().length > 180) {

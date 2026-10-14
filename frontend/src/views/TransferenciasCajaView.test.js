@@ -187,3 +187,40 @@ describe('Estados y recuperación de transferencias', () => {
     expect(document.querySelector('[role="alertdialog"]')).toBeNull()
   })
 })
+
+describe('Opciones vigentes e importes de entrada', () => {
+  it.each(['origen', 'destino'])('limpia la caja de %s desaparecida al actualizar antes de revisar', async (campo) => {
+    const terceraCaja = { ...cajas[1], id: 13, usuario: 23, usuario_nombre: 'cajera.respaldo' }
+    let disponibles = [...cajas, terceraCaja]
+    apiRequest.mockImplementation(async (path) => path.includes('cajas-abiertas') ? disponibles : [])
+    await openView()
+    await completeForm()
+    disponibles = disponibles.filter((caja) => caja.id !== (campo === 'origen' ? 11 : 12))
+    const refresh = wrapper.findAll('button').find((button) => button.text() === 'Actualizar')
+    await refresh.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('#transferencia-' + campo).element.value).toBe('')
+    expect(wrapper.get('#transferencia-' + (campo === 'origen' ? 'destino' : 'origen')).element.value).toBe(campo === 'origen' ? '12' : '11')
+    await wrapper.get('form').trigger('submit')
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(wrapper.get('[role="alert"]').text()).toMatch(/origen.*destino/i)
+    expect(comandos).toEqual([])
+    await wrapper.get('#transferencia-' + campo).setValue('13')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    const dialog = document.querySelector('[role="alertdialog"]')
+    expect(dialog.textContent).toContain('Caja #13')
+    expect(dialog.textContent).not.toContain('undefined')
+    expect(comandos).toEqual([])
+  })
+
+  it.each(['0', '-1', '1.001'])('rechaza el importe %s antes de confirmar', async (importe) => {
+    await openView()
+    await completeForm()
+    await wrapper.get('#transferencia-importe').setValue(importe)
+    await wrapper.get('form').trigger('submit')
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(wrapper.get('[role="alert"]').text()).toMatch(/importe.*positivo.*decimales/i)
+    expect(comandos).toEqual([])
+  })
+})
