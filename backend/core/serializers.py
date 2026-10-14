@@ -6,7 +6,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, EventoAuditoria, Matricula, MovimientoCaja, Pago, PerfilUsuario, ReglaRecargo, Sucursal, TipoDescuento
+from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, EventoAuditoria, Matricula, MovimientoCaja, Pago, PerfilUsuario, ReglaRecargo, Sucursal, TasaInteres, TipoDescuento
 from .permissions import can_manage_user
 from .contexts.caja.application.validar_caja import CajaCerradaError, asegurar_caja_abierta
 from .contexts.alumnos.application.gestionar_matricula import GestionarMatricula, MatriculaError
@@ -257,6 +257,54 @@ class ReglaRecargoSerializer(serializers.ModelSerializer):
         if attrs.get("valor", getattr(self.instance, "valor", 0)) < 0:
             raise serializers.ValidationError("El valor del recargo no puede ser negativo.")
         return attrs
+
+
+class TasaInteresSerializer(serializers.ModelSerializer):
+    sucursal_nombre = serializers.CharField(source="sucursal.nombre", read_only=True)
+
+    class Meta:
+        model = TasaInteres
+        fields = [
+            "id",
+            "sucursal",
+            "sucursal_nombre",
+            "porcentaje_mensual",
+            "vigencia_desde",
+            "vigencia_hasta",
+            "base_calculo",
+            "unidad_calculo",
+            "descripcion",
+            "activa",
+        ]
+
+    def validate(self, attrs):
+        desde = attrs.get("vigencia_desde") or getattr(self.instance, "vigencia_desde", None)
+        hasta = attrs.get("vigencia_hasta") or getattr(self.instance, "vigencia_hasta", None)
+        if desde and hasta and hasta < desde:
+            raise serializers.ValidationError(
+                {"vigencia_hasta": "La vigencia no puede terminar antes de empezar."}
+            )
+        return attrs
+
+
+class ResumenInteresCuotaSerializer(serializers.Serializer):
+    cuota_id = serializers.IntegerField()
+    sucursal_id = serializers.IntegerField()
+    saldo_pendiente = serializers.DecimalField(max_digits=12, decimal_places=2)
+    dias_interesables = serializers.IntegerField()
+    periodos = serializers.DecimalField(max_digits=8, decimal_places=2)
+    importe = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class ResumenInteresesSerializer(serializers.Serializer):
+    """Salida de la proyección de intereses. Es de lectura: no escribe."""
+
+    fecha_evaluacion = serializers.DateField()
+    cuotas_evaluadas = serializers.IntegerField()
+    cuotas_con_interes = serializers.IntegerField()
+    total_interes = serializers.DecimalField(max_digits=14, decimal_places=2)
+    sin_tasa = serializers.ListField(child=serializers.IntegerField())
+    detalle = ResumenInteresCuotaSerializer(many=True)
 
 
 class MatriculaSerializer(serializers.ModelSerializer):

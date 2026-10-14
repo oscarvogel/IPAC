@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 from django.contrib.auth.models import User
 
 from .access_scope import scoped_cajas_for_user, scoped_queryset_for_user
-from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, EventoAuditoria, Matricula, MovimientoCaja, Pago, PerfilUsuario, ReglaRecargo, Sucursal, TipoDescuento
+from .models import AplicacionPago, Alumno, CajaDiaria, CarreraCurso, ConceptoCobrable, Cuota, EventoAuditoria, Matricula, MovimientoCaja, Pago, PerfilUsuario, ReglaRecargo, Sucursal, TasaInteres, TipoDescuento
 from .contexts.importacion.application.import_ipac_workbook import IPACWorkbookImporter
 from .contexts.cobranzas.application.registrar_pago import RegistrarPago
 from .contexts.cobranzas.application.generar_cuotas import GeneracionCuotasError, GenerarCuotas
@@ -61,6 +61,12 @@ from .contexts.reportes.infrastructure.xlsx_exporter import XlsxReportExporter
 from .contexts.reportes.application.exportar_cajas import ExportarCajas, FiltrosExportacionCajas
 from .contexts.reportes.infrastructure.django_caja_export_reader import DjangoCajaExportReader
 from .contexts.cobranzas.application.recalcular_recargos import RecalcularRecargos
+from .contexts.cobranzas.application.consultar_intereses import ConsultarIntereses
+from .contexts.cobranzas.domain.intereses import ErrorInteres
+from .contexts.cobranzas.infrastructure.django_interes_repository import (
+    DjangoCuotaInteresReader,
+    DjangoTasaInteresRepository,
+)
 from .contexts.cobranzas.infrastructure.django_recargo_repository import DjangoRecargoRepository
 from .contexts.cobranzas.infrastructure.django_alumno_elegible_cuota_reader import (
     DatosGeneracionCuotasInvalidos,
@@ -106,6 +112,8 @@ from .serializers import (
     EventoAuditoriaSerializer,
     TipoDescuentoSerializer,
     ReglaRecargoSerializer,
+    ResumenInteresesSerializer,
+    TasaInteresSerializer,
     UsuarioCajaSerializer,
 )
 
@@ -703,6 +711,66 @@ class ReglaRecargoViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
             metadata=result,
         )
         return Response(result)
+
+
+class TasaInteresViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
+    """Parametrización de la tasa de interés de mora y su proyección.
+
+    La tasa se administra acá; el interés **no** se escribe en las cuotas desde
+    este endpoint. IPAC todavía no definió si el interés se suma a la cuota o se
+    emite como concepto separado, así que `proyectar` sólo informa.
+    """
+
+    audit_module = "cobranzas"
+    serializer_class = TasaInteresSerializer
+    permission_classes = [AcademicManagementPermission]
+
+    def get_queryset(self):
+        return scoped_queryset_for_user(
+            TasaInteres.objects.select_related("sucursal"), self.request.user
+        )
+
+    @action(detail=False, methods=["get"], url_path="proyectar")
+    def proyectar(self, request):
+        """Interés de mora proyectado a una fecha. Es una consulta.
+
+        Va por GET y no por POST a propósito: no escribe nada, y como POST caía
+        en `write_roles` (sólo administración), el rol `caja` recibía un 403 sin
+        poder ver el interés de la cuota que le toca cobrar. Separa consultas de
+        lectura de comandos que cambian estado.
+        """
+        fecha_evaluacion = self._fecha_evaluacion(request.query_params.get("fecha_evaluacion"))
+        sucursales = scoped_queryset_for_user(Sucursal.objects.all(), request.user)
+        if sucursal_id := request.query_params.get("sucursal"):
+            sucursales = sucursales.filter(pk=sucursal_id)
+
+        use_case = ConsultarIntereses(
+            DjangoTasaInteresRepository(), DjangoCuotaInteresReader()
+        )
+        try:
+            resumen = use_case.execute(
+                sucursal_ids=list(sucursales.values_list("id", flat=True)),
+                fecha_evaluacion=fecha_evaluacion,
+            )
+        except ErrorInteres as exc:
+            raise ValidationError({"detail": exc.detail}) from exc
+
+        return Response(ResumenInteresesSerializer(resumen).data)
+
+    def _fecha_evaluacion(self, crudo):
+        """Hoy por omisión; si viene, tiene que ser una fecha real.
+
+        Se parsea acá y no en el dominio para que un `2026-13-45` conteste 400 y
+        no reviente con un ValueError del `fromisoformat` sin manejar.
+        """
+        if not crudo:
+            return timezone.localdate()
+        try:
+            return date.fromisoformat(str(crudo))
+        except ValueError:
+            raise ValidationError(
+                {"fecha_evaluacion": "Indique la fecha de evaluación como AAAA-MM-DD."}
+            ) from None
 
 
 class MatriculaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
