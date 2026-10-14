@@ -471,6 +471,9 @@ class TransferenciaCaja(models.Model):
     )
     importe = models.DecimalField(max_digits=12, decimal_places=2)
     motivo = models.CharField(max_length=180)
+    # Metadatos del comando HTTP; las filas anteriores conservan NULL.
+    idempotency_key = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+    idempotency_evidence = models.JSONField(null=True, blank=True, editable=False)
     creado = models.DateTimeField(auto_now_add=True)
     numero_comprobante = models.CharField(
         max_length=30, unique=True, blank=True, null=True, editable=False,

@@ -13,7 +13,9 @@ from ...application.consultar_transferencias_caja import (
     ConsultarCajasAbiertasParaTransferir,
     ConsultarTransferenciasCaja,
 )
-from ...application.transferir_entre_cajas import TransferirEntreCajas
+from ...application.transferir_entre_cajas import (
+    TransferenciaIdempotenciaConflicto, TransferirEntreCajas,
+)
 from ...domain.transferencia_caja import SolicitudTransferenciaCaja, TransferenciaCajaError
 from ...infrastructure.django_transferencia_caja_repository import (
     DjangoTransferenciaCajaOperableRepository,
@@ -63,10 +65,18 @@ class TransferenciaCajaViewSet(viewsets.ViewSet):
     def create(self, request):
         serializer = SolicitudTransferenciaSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        key = request.headers.get("Idempotency-Key")
+        if key is not None:
+            key = serializers.UUIDField().run_validation(key)
         solicitud = SolicitudTransferenciaCaja(**serializer.validated_data)
         caso = TransferirEntreCajas(DjangoTransferenciaCajaOperableRepository())
         try:
-            evidencia = caso.execute(actor=request.user, solicitud=solicitud)
+            evidencia = caso.execute(actor=request.user, solicitud=solicitud, idempotency_key=key)
+        except TransferenciaIdempotenciaConflicto:
+            return Response(
+                {"detail": "La clave de idempotencia ya identifica otra transferencia."},
+                status=status.HTTP_409_CONFLICT,
+            )
         except CajaTransferenciaNoDisponible:
             raise NotFound("Caja no disponible.")
         except TransferenciaCajaError as error:

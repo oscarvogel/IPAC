@@ -1,4 +1,5 @@
 from decimal import Decimal
+from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier
@@ -223,6 +224,85 @@ class TransferenciaCajaAdaptadorTests(TransferenciaCajaFixture, TestCase):
     "La concurrencia requiere PostgreSQL y bloqueos SELECT FOR UPDATE; SQLite no los implementa.",
 )
 class TransferenciaCajaConcurrenciaTests(TransferenciaCajaFixture, TransactionTestCase):
+    def ejecutar_con_clave_concurrente(self, solicitudes):
+        from .contexts.caja.infrastructure.django_transferencia_caja_repository import (
+            DjangoTransferenciaCajaOperableRepository,
+        )
+        from .contexts.caja.application.transferir_entre_cajas import TransferenciaIdempotenciaConflicto
+        from .models import PerfilUsuario
+        PerfilUsuario.objects.create(
+            user=self.actor, sucursal=self.origen.sucursal, rol="administracion",
+            puede_ver_todas_las_sucursales=True,
+        )
+        key = uuid4()
+        barrera = Barrier(2)
+        actor_id = self.actor.pk
+
+        def transferir(solicitud):
+            close_old_connections()
+            conexion = connections["default"]
+            try:
+                with conexion.cursor() as cursor:
+                    cursor.execute("SET lock_timeout = 5000")
+                    cursor.execute("SET statement_timeout = 10000")
+                actor = User.objects.get(pk=actor_id)
+                primera_lectura = True
+
+                def sincronizar(execute, sql, params, many, context):
+                    nonlocal primera_lectura
+                    if primera_lectura and "core_transferenciacaja" in sql and sql.startswith("SELECT"):
+                        primera_lectura = False
+                        # Ambos leen ausencia antes de iniciar la escritura.
+                        resultado = execute(sql, params, many, context)
+                        barrera.wait(timeout=5)
+                        return resultado
+                    return execute(sql, params, many, context)
+
+                with conexion.execute_wrapper(sincronizar):
+                    try:
+                        evidencia = DjangoTransferenciaCajaOperableRepository().transferir(
+                            actor=actor, solicitud=solicitud, idempotency_key=key,
+                        )
+                        return evidencia
+                    except TransferenciaIdempotenciaConflicto:
+                        return "conflicto"
+            finally:
+                conexion.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            return list(executor.map(transferir, solicitudes))
+
+    def test_misma_clave_concurrente_repite_evidencia_una_sola_vez(self):
+        from .models import EventoAuditoria
+        solicitud = self.solicitud("100.00")
+        resultados = self.ejecutar_con_clave_concurrente([solicitud, solicitud])
+        self.assertNotIn("conflicto", resultados)
+        self.assertEqual(resultados[0], resultados[1])
+        self.assertEqual(TransferenciaCaja.objects.count(), 1)
+        self.assertEqual(MovimientoCaja.objects.count(), 2)
+        self.assertEqual(EventoAuditoria.objects.count(), 1)
+        self.assertEqual(self.origen.total_esperado, Decimal("0.00"))
+
+    def test_misma_clave_concurrente_en_cajas_disjuntas_resuelve_constraint(self):
+        from .models import EventoAuditoria
+        extra = []
+        for indice in range(2):
+            usuario = User.objects.create_user(username=f"caja-disjunta-{indice}")
+            extra.append(CajaDiaria.objects.create(
+                fecha=timezone.localdate(), sucursal=self.origen.sucursal, usuario=usuario,
+                saldo_inicial=Decimal("100.00"),
+            ))
+        solicitudes = [
+            self.solicitud(),
+            SolicitudTransferenciaCaja(extra[0].pk, extra[1].pk, Decimal("30.00"), "Otro comando"),
+        ]
+        resultados = self.ejecutar_con_clave_concurrente(solicitudes)
+        self.assertEqual(resultados.count("conflicto"), 1)
+        self.assertEqual(TransferenciaCaja.objects.count(), 1)
+        self.assertEqual(MovimientoCaja.objects.count(), 2)
+        self.assertEqual(EventoAuditoria.objects.count(), 1)
+        self.assertEqual(self.origen.total_esperado + extra[0].total_esperado, Decimal("170.00"))
+
     def test_dos_transferencias_concurrentes_no_sobrepasan_efectivo_origen(self):
         barrera = Barrier(2)
         solicitud = self.solicitud("100.00")
@@ -305,6 +385,135 @@ class TransferenciaCajaApiTests(TestCase):
         PerfilUsuario.objects.filter(user=self.actor).update(**cambios)
         self.actor = User.objects.get(pk=self.actor.pk)
         self.client.force_authenticate(self.actor)
+
+    def test_reintento_tras_respuesta_perdida_repite_evidencia_sin_escrituras(self):
+        from .models import EventoAuditoria
+        key = str(uuid4())
+        # El primer POST confirma en DB; el cliente pierde la respuesta.
+        primera = self.client.post(self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        self.assertEqual(primera.status_code, 201)
+        segunda = self.client.post(self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        self.assertEqual(segunda.status_code, 201)
+        self.assertEqual(segunda.data, primera.data)
+        self.assertEqual(TransferenciaCaja.objects.count(), 1)
+        self.assertEqual(MovimientoCaja.objects.count(), 2)
+        self.assertEqual(EventoAuditoria.objects.count(), 1)
+        # La evidencia de respuesta es estable aunque después varíe el saldo,
+        # el actor cambie su nombre o las cajas dejen de ser operables.
+        CajaDiaria.objects.filter(pk=self.origen.pk).update(
+            estado=CajaDiaria.Estado.CERRADA, saldo_inicial=Decimal("999.00"),
+        )
+        User.objects.filter(pk=self.actor.pk).update(first_name="Otro nombre")
+        tercera = self.client.post(self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        self.assertEqual(tercera.status_code, 201)
+        self.assertEqual(tercera.data, primera.data)
+        self.assertEqual(EventoAuditoria.objects.count(), 1)
+
+    def test_clave_reutilizada_con_otro_payload_o_actor_devuelve_conflicto(self):
+        from .models import EventoAuditoria, PerfilUsuario
+        key = str(uuid4())
+        primera = self.client.post(self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        self.assertEqual(primera.status_code, 201)
+        for cambios in (
+            {"importe": "31.00"}, {"motivo": "Otro motivo"},
+            {"destino_id": self.local.pk},
+            {"origen_id": self.destino.pk, "destino_id": self.origen.pk},
+        ):
+            with self.subTest(cambios=cambios):
+                respuesta = self.client.post(
+                    self.url, dict(self.payload, **cambios), format="json", HTTP_IDEMPOTENCY_KEY=key,
+                )
+                self.assertEqual(respuesta.status_code, 409)
+                self.assertNotIn("actor", respuesta.data)
+        otro = User.objects.create_user(username="otro-administrador-idempotencia")
+        PerfilUsuario.objects.create(
+            user=otro, sucursal=self.posadas, rol="administracion",
+            puede_ver_todas_las_sucursales=True,
+        )
+        self.client.force_authenticate(otro)
+        respuesta = self.client.post(self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        self.assertEqual(respuesta.status_code, 409)
+        self.assertEqual(TransferenciaCaja.objects.count(), 1)
+        self.assertEqual(MovimientoCaja.objects.count(), 2)
+        self.assertEqual(EventoAuditoria.objects.count(), 1)
+
+    def test_replay_no_concede_alcance_revocado_y_clave_debe_ser_uuid(self):
+        key = str(uuid4())
+        primera = self.client.post(self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        self.assertEqual(primera.status_code, 201)
+        self.cambiar_perfil(puede_ver_todas_las_sucursales=False)
+        respuesta = self.client.post(self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        self.assertEqual(respuesta.status_code, 404)
+        self.assertEqual(respuesta.data["detail"], "Caja no disponible.")
+        self.cambiar_perfil(puede_ver_todas_las_sucursales=True)
+        for key_invalida in ("no-es-uuid", ""):
+            respuesta = self.client.post(
+                self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key_invalida,
+            )
+            self.assertEqual(respuesta.status_code, 400)
+        self.assertEqual(TransferenciaCaja.objects.count(), 1)
+
+    def test_header_idempotencia_admitido_por_cors(self):
+        respuesta = self.client.options(
+            self.url, HTTP_ORIGIN="http://localhost:5173",
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+            HTTP_ACCESS_CONTROL_REQUEST_HEADERS="content-type,idempotency-key",
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("idempotency-key", respuesta["Access-Control-Allow-Headers"].lower())
+
+    def test_constraint_unica_resuelve_colision_tras_lectura_desactualizada(self):
+        from django.db.models.query import QuerySet
+        from .models import EventoAuditoria
+        key = str(uuid4())
+        primera = self.client.post(self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        original_first = QuerySet.first
+        ocultadas = []
+
+        def lectura_desactualizada(queryset):
+            if queryset.model is TransferenciaCaja and len(ocultadas) < 2:
+                ocultadas.append(True)
+                return None
+            return original_first(queryset)
+
+        # Dos lecturas de clave pueden no ver aún al ganador. El insert real
+        # debe chocar contra UNIQUE y resolverse fuera del savepoint roto.
+        with patch.object(QuerySet, "first", new=lectura_desactualizada):
+            respuesta = self.client.post(self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        self.assertEqual(len(ocultadas), 2)
+        self.assertEqual(respuesta.status_code, 201)
+        self.assertEqual(respuesta.data, primera.data)
+        self.assertEqual(TransferenciaCaja.objects.count(), 1)
+        self.assertEqual(MovimientoCaja.objects.count(), 2)
+        self.assertEqual(EventoAuditoria.objects.count(), 1)
+
+        ocultadas.clear()
+        with patch.object(QuerySet, "first", new=lectura_desactualizada):
+            respuesta = self.client.post(
+                self.url, dict(self.payload, destino_id=self.local.pk),
+                format="json", HTTP_IDEMPOTENCY_KEY=key,
+            )
+        self.assertEqual(respuesta.status_code, 409)
+        self.assertEqual(TransferenciaCaja.objects.count(), 1)
+        self.assertEqual(MovimientoCaja.objects.count(), 2)
+        self.assertEqual(EventoAuditoria.objects.count(), 1)
+
+    def test_fallo_de_snapshot_revierte_clave_partidas_y_auditoria(self):
+        from .contexts.caja.infrastructure.django_transferencia_caja_repository import (
+            DjangoTransferenciaCajaOperableRepository,
+        )
+        from .models import EventoAuditoria
+        key = str(uuid4())
+        with patch.object(DjangoTransferenciaCajaOperableRepository, "_snapshot",
+                          side_effect=RuntimeError("Snapshot falló")):
+            with self.assertRaisesMessage(RuntimeError, "Snapshot falló"):
+                self.client.post(self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        self.assertEqual(TransferenciaCaja.objects.count(), 0)
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
+        self.assertEqual(EventoAuditoria.objects.count(), 0)
+        respuesta = self.client.post(self.url, self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        self.assertEqual(respuesta.status_code, 201)
+        self.assertEqual(TransferenciaCaja.objects.count(), 1)
 
     def test_admin_global_puede_transferir_entre_sucursales(self):
         for rol in ("administracion", "superadmin"):
@@ -545,6 +754,54 @@ class TransferenciaCajaSerializerTests(TransferenciaCajaFixture, TestCase):
         self.transferencia = self.repository.transferir(actor=self.actor, solicitud=self.solicitud())
         self.client = APIClient()
         self.client.force_authenticate(self.actor)
+
+    def test_consultas_de_lista_y_detalle_no_crecen_por_transferencia(self):
+        # Calentar perfil evita atribuir su caché al número de movimientos.
+        self.actor.perfil
+        urls = ("/api/movimientos-caja/", f"/api/cajas/{self.origen.pk}/",
+                f"/api/cajas/{self.destino.pk}/")
+        iniciales = {}
+        for url in urls:
+            with CaptureQueriesContext(connection) as consultas:
+                respuesta = self.client.get(url)
+                self.assertEqual(respuesta.status_code, 200)
+            iniciales[url] = len(consultas)
+        for _ in range(4):
+            self.repository.transferir(actor=self.actor, solicitud=self.solicitud("5.00"))
+        for url in urls:
+            with self.subTest(url=url):
+                with CaptureQueriesContext(connection) as consultas:
+                    respuesta = self.client.get(url)
+                    self.assertEqual(respuesta.status_code, 200)
+                self.assertLessEqual(len(consultas), iniciales[url])
+                self.assertLessEqual(len(consultas), 8)
+                datos = respuesta.data
+                movimientos = datos["results"] if "results" in datos else datos["movimientos"]
+                self.assertEqual(len(movimientos), 10 if "results" in datos else 5)
+                self.assertTrue(all(m["transferencia"] for m in movimientos))
+
+    def test_detalle_hoy_no_crece_por_movimiento_transferencia(self):
+        from .models import PerfilUsuario
+        PerfilUsuario.objects.create(
+            user=self.origen.usuario, sucursal=self.origen.sucursal, rol="caja",
+        )
+        self.client.force_authenticate(self.origen.usuario)
+        url = "/api/cajas/hoy/"
+        self.client.get(url)
+        with CaptureQueriesContext(connection) as consultas:
+            inicial = self.client.get(url)
+        cantidad = len(consultas)
+        for _ in range(4):
+            self.repository.transferir(actor=self.actor, solicitud=self.solicitud("5.00"))
+        with CaptureQueriesContext(connection) as consultas:
+            respuesta = self.client.get(url)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(len(inicial.data["movimientos"]), 1)
+        self.assertEqual(len(respuesta.data["movimientos"]), 5)
+        self.assertLessEqual(len(consultas), cantidad)
+        self.assertLessEqual(len(consultas), 10)
+        self.assertTrue(all(m["transferencia"]["contraparte"] is None
+                            for m in respuesta.data["movimientos"]))
 
     def test_movimiento_transferencia_expone_resumen_del_otro_caja_y_ejecutor(self):
         for caja, contraparte, sentido, tipo, signed in (

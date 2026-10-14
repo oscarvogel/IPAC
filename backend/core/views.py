@@ -1,5 +1,5 @@
 from django.db import connection, transaction
-from django.db.models import Q, Sum, Count, Min, Value, F, OuterRef, Subquery, DecimalField, IntegerField, ExpressionWrapper
+from django.db.models import Q, Sum, Count, Min, Value, F, OuterRef, Subquery, Prefetch, DecimalField, IntegerField, ExpressionWrapper
 from django.db.models.functions import Coalesce, Greatest
 from django.http import HttpResponse
 from django.core import signing
@@ -42,6 +42,9 @@ from .contexts.caja.application.gestionar_caja import CerrarCaja, GestionarSaldo
 from .contexts.caja.application.consultar_historial_cajas import ConsultarHistorialCajas
 from .contexts.caja.domain.resumen_caja import CajaOperacionError
 from .contexts.caja.infrastructure.django_caja_repository import DjangoCajaRepository
+from .contexts.caja.infrastructure.django_movimientos_caja_reader import (
+    movimientos_caja_con_evidencia, precargar_movimientos_de_caja,
+)
 from .contexts.caja.application.registrar_movimiento_caja import (
     RegistrarMovimientoCaja,
     SolicitudMovimientoCaja,
@@ -1197,7 +1200,9 @@ class CajaDiariaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
         # y la comparten el listado y el reporte exportable. Estaba escrita
         # acá a mano y sólo en el reporte faltaba.
         queryset = scoped_cajas_for_user(
-            CajaDiaria.objects.select_related("sucursal", "usuario").prefetch_related("movimientos"),
+            CajaDiaria.objects.select_related("sucursal", "usuario").prefetch_related(
+                Prefetch("movimientos", queryset=movimientos_caja_con_evidencia()),
+            ),
             self.request.user,
         )
         profile = getattr(self.request.user, "perfil", None)
@@ -1210,6 +1215,11 @@ class CajaDiariaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
         ):
             queryset = queryset.filter(usuario=self.request.user)
         return queryset
+
+    def get_serializer(self, *args, **kwargs):
+        if args and isinstance(args[0], CajaDiaria):
+            precargar_movimientos_de_caja(args[0])
+        return super().get_serializer(*args, **kwargs)
 
     def get_serializer_class(self):
         profile = getattr(self.request.user, "perfil", None)
@@ -1427,7 +1437,7 @@ class MovimientoCajaViewSet(AuditableViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [MovimientoCajaPermission]
 
     def get_queryset(self):
-        queryset = MovimientoCaja.objects.select_related("caja", "caja__usuario", "pago")
+        queryset = movimientos_caja_con_evidencia()
         queryset = queryset.filter(caja__in=scoped_queryset_for_user(CajaDiaria.objects.all(), self.request.user))
         profile = getattr(self.request.user, "perfil", None)
         if not profile or profile.rol == PerfilUsuario.Rol.CONSULTA:

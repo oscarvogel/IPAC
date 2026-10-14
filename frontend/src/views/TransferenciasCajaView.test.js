@@ -39,6 +39,7 @@ beforeEach(() => {
 afterEach(() => {
   wrapper?.unmount()
   document.body.innerHTML = ''
+  vi.unstubAllGlobals()
 })
 
 async function openView() {
@@ -171,6 +172,54 @@ describe('Estados y recuperación de transferencias', () => {
     expect(wrapper.get('[role="status"]').text()).toContain('TC-000031')
     expect(wrapper.get('[role="alert"]').text()).toContain('se registró')
     expect(wrapper.get('[aria-labelledby="transferencias-historial-title"]').text()).toContain('TC-000031')
+  })
+
+  it.each(['seguro', 'http'])('reintenta una respuesta perdida con la misma clave y crea otra tras éxito (%s)', async (contexto) => {
+    if (contexto === 'http') {
+      vi.stubGlobal('crypto', { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) })
+    }
+    await openView()
+    const confirm = async () => {
+      await wrapper.get('form').trigger('submit')
+      await flushPromises()
+      ;[...document.querySelectorAll('[role="alertdialog"] button')]
+        .find((button) => button.textContent.includes('Confirmar transferencia')).click()
+      await flushPromises()
+    }
+    const registros = []
+    const porClave = new Map()
+    let perderRespuesta = true
+    apiRequest.mockImplementation(async (path, options = {}) => {
+      if (options.method !== 'POST') return path.includes('cajas-abiertas') ? cajas : registros
+      const key = options.headers?.['Idempotency-Key']
+      let saved = key && porClave.get(key)
+      if (!saved) {
+        saved = { ...evidencia, id: 31 + registros.length }
+        registros.push(saved)
+        if (key) porClave.set(key, saved)
+      }
+      if (perderRespuesta) {
+        perderRespuesta = false
+        throw new Error('Respuesta perdida después de confirmar')
+      }
+      return saved
+    })
+    await completeForm()
+    await confirm()
+    expect(wrapper.get('[role="alert"]').text()).toContain('Respuesta perdida')
+    expect(registros).toHaveLength(1)
+    await confirm()
+    expect(registros).toHaveLength(1)
+    expect(wrapper.get('[role="status"]').text()).toContain('TC-000031')
+    const keys = apiRequest.mock.calls.filter(([, options]) => options?.method === 'POST')
+      .map(([, options]) => options.headers?.['Idempotency-Key'])
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/i)
+    expect(keys[1]).toBe(keys[0])
+    await completeForm()
+    await confirm()
+    expect(registros).toHaveLength(2)
+    const ultimoPost = apiRequest.mock.calls.filter(([, options]) => options?.method === 'POST').at(-1)
+    expect(ultimoPost[1].headers['Idempotency-Key']).not.toBe(keys[0])
   })
 
   it('muestra el rechazo de API y conserva datos para corregirlos', async () => {

@@ -4,7 +4,13 @@ CajaDiaria y MovimientoCaja siguen en el legado compartido. El adaptador
 operable aplica el contrato de alcance vigente antes de bloquear ambas cajas.
 """
 
-from django.db import transaction
+from dataclasses import asdict
+from datetime import date, datetime
+from decimal import Decimal
+import json
+from uuid import uuid4
+
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from ....access_scope import scoped_queryset_for_user
@@ -17,6 +23,7 @@ from ..application.consultar_transferencias_caja import (
     CajaTransferenciaResumen,
     TransferenciaCajaEvidencia,
 )
+from ..application.transferir_entre_cajas import TransferenciaIdempotenciaConflicto
 from ..domain.transferencia_caja import (
     SolicitudTransferenciaCaja,
     TransferenciaCajaError,
@@ -33,7 +40,8 @@ class DjangoTransferenciaCajaRepository:
         )
 
     @transaction.atomic
-    def transferir(self, *, actor, solicitud: SolicitudTransferenciaCaja) -> TransferenciaCaja:
+    def transferir(self, *, actor, solicitud: SolicitudTransferenciaCaja,
+                   idempotency_key=None) -> TransferenciaCaja:
         validar_solicitud_transferencia(solicitud)
         motivo = solicitud.motivo.strip()
         if len(motivo) > 180:
@@ -57,7 +65,7 @@ class DjangoTransferenciaCajaRepository:
 
         transferencia = TransferenciaCaja.objects.create(
             origen=origen, destino=destino, actor=actor,
-            importe=solicitud.importe, motivo=motivo,
+            importe=solicitud.importe, motivo=motivo, idempotency_key=idempotency_key,
         )
         salida = MovimientoCaja.objects.create(
             caja=origen, tipo=MovimientoCaja.Tipo.PASE,
@@ -111,18 +119,91 @@ class DjangoTransferenciaCajaOperableRepository:
         )
 
     @transaction.atomic
-    def transferir(self, *, actor, solicitud: SolicitudTransferenciaCaja) -> TransferenciaCajaEvidencia:
-        # La consulta limitada bloquea los dos IDs antes del comando interno.
-        # Los bloqueos se mantienen hasta terminar partidas, auditoría y DTO.
-        caja_ids = sorted((solicitud.origen_id, solicitud.destino_id))
-        cajas = list(
-            self._cajas_abiertas(actor=actor).select_for_update()
-            .filter(pk__in=caja_ids).order_by("pk")
-        )
-        if len(cajas) != 2:
+    def transferir(self, *, actor, solicitud: SolicitudTransferenciaCaja,
+                   idempotency_key=None) -> TransferenciaCajaEvidencia:
+        key = idempotency_key or uuid4()
+        existente = TransferenciaCaja.objects.filter(idempotency_key=key).first()
+        if existente:
+            return self._replay(existente, actor=actor, solicitud=solicitud)
+
+        try:
+            # El savepoint permite resolver una carrera de la clave única sin
+            # continuar sobre una transacción marcada para rollback.
+            with transaction.atomic():
+                caja_ids = sorted((solicitud.origen_id, solicitud.destino_id))
+                cajas = list(
+                    self._cajas_abiertas(actor=actor).select_for_update()
+                    .filter(pk__in=caja_ids).order_by("pk")
+                )
+                # Un contendiente pudo confirmar mientras esperábamos las cajas.
+                existente = TransferenciaCaja.objects.filter(idempotency_key=key).first()
+                if existente:
+                    return self._replay(existente, actor=actor, solicitud=solicitud)
+                if len(cajas) != 2:
+                    raise CajaTransferenciaNoDisponible()
+                transferencia = DjangoTransferenciaCajaRepository().transferir(
+                    actor=actor, solicitud=solicitud, idempotency_key=key,
+                )
+                evidencia = self._evidencia(transferencia)
+                # Snapshot técnico, en la misma transacción que las dos partidas
+                # y auditoría. No altera una transferencia previamente confirmada.
+                TransferenciaCaja.objects.filter(pk=transferencia.pk).update(
+                    idempotency_evidence=self._snapshot(evidencia),
+                )
+                return evidencia
+        except IntegrityError:
+            # Cajas disjuntas no comparten bloqueos; la restricción única decide
+            # el ganador. Solo se resuelve este error si existe la misma clave.
+            existente = TransferenciaCaja.objects.filter(idempotency_key=key).first()
+            if existente is None:
+                raise
+            return self._replay(existente, actor=actor, solicitud=solicitud)
+
+    def _replay(self, transferencia, *, actor, solicitud):
+        if (
+            transferencia.actor_id != actor.pk
+            or transferencia.origen_id != solicitud.origen_id
+            or transferencia.destino_id != solicitud.destino_id
+            or transferencia.importe != solicitud.importe
+            or transferencia.motivo != solicitud.motivo.strip()
+        ):
+            raise TransferenciaIdempotenciaConflicto()
+        # La clave no concede permisos. Releer alcance, sin exigir que una
+        # operación ya confirmada siga siendo operable hoy.
+        cajas_visibles = scoped_queryset_for_user(CajaDiaria.objects.all(), actor)
+        if cajas_visibles.filter(
+            pk__in=(transferencia.origen_id, transferencia.destino_id),
+        ).count() != 2:
             raise CajaTransferenciaNoDisponible()
-        transferencia = DjangoTransferenciaCajaRepository().transferir(actor=actor, solicitud=solicitud)
-        return self._evidencia(transferencia)
+        datos = transferencia.idempotency_evidence
+        return TransferenciaCajaEvidencia(
+            id=datos["id"], numero_comprobante=datos["numero_comprobante"],
+            creado=datetime.fromisoformat(datos["creado"]),
+            actor=ActorTransferenciaResumen(**datos["actor"]),
+            origen=self._caja_desde_snapshot(datos["origen"]),
+            destino=self._caja_desde_snapshot(datos["destino"]),
+            importe=Decimal(datos["importe"]), motivo=datos["motivo"],
+            movimiento_origen_id=datos["movimiento_origen_id"],
+            movimiento_destino_id=datos["movimiento_destino_id"],
+        )
+
+    @staticmethod
+    def _snapshot(evidencia):
+        def valor_json(valor):
+            if isinstance(valor, (date, datetime)):
+                return valor.isoformat()
+            if isinstance(valor, Decimal):
+                return str(valor)
+            raise TypeError(f"Tipo no serializable: {type(valor).__name__}")
+
+        return json.loads(json.dumps(asdict(evidencia), default=valor_json))
+
+    @staticmethod
+    def _caja_desde_snapshot(datos):
+        return CajaTransferenciaResumen(
+            **dict(datos, fecha=date.fromisoformat(datos["fecha"]),
+                   total_esperado=Decimal(datos["total_esperado"])),
+        )
 
     def cajas_abiertas(self, *, actor) -> tuple[CajaTransferenciaResumen, ...]:
         cajas = (
