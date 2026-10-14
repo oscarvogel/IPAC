@@ -1,0 +1,54 @@
+{
+  "notas": [
+    "Matriz de permisos acordada con IPAC el 07/10/2026 (punto 4 del mail del 01/10/2026).",
+    "El texto del acuerdo está en docs/RESPUESTA_IPAC_2026-10-07.md.",
+    "",
+    "Los usernames viven acá y no en el código porque cada instalación tiene sus",
+    "propias cuentas. La primera versión del comando los tenía escritos en el .py",
+    "con los nombres de un entorno de prueba, y en producción falló entero: daba",
+    "NO EXISTE para los cinco y no aplicaba nada.",
+    "",
+    "Para cambiar un rol se edita este archivo. No hace falta deploy.",
+    "",
+    "alcance: 'global' ve todas las sedes, 'sucursal' sólo la de sucursal_por_defecto.",
+    "Un usuario con alcance 'sucursal' que no tenga sucursal asignada es un error",
+    "de configuración y el comando lo rechaza en vez de dejarlo en el limbo.",
+    "",
+    "`mario.osten` es Mario Rubén Ostén, uno de los dos directivos. La cuenta se",
+    "creó con el nombre Mario, por eso acá no aparece un `ruben.osten`."
+  ],
+  "sucursal_por_defecto": "POS",
+  "usuarios": [
+    {
+      "username": "claudio.rodriguez",
+      "rol": "superadmin",
+      "alcance": "global",
+      "definicion": "Directivo: ve todo en ambas sedes."
+    },
+    {
+      "username": "mario.osten",
+      "rol": "superadmin",
+      "alcance": "global",
+      "definicion": "Directivo: ve todo en ambas sedes."
+    },
+    {
+      "username": "zulma.rodriguez",
+      "rol": "administracion",
+      "alcance": "sucursal",
+      "definicion": "Administración: todo, incluida alta y matrícula de alumnos, usuarios y cajas."
+    },
+    {
+      "username": "laura.acosta",
+      "rol": "administracion",
+      "alcance": "sucursal",
+      "definicion": "Administración: todo, incluida alta y matrícula de alumnos, usuarios y cajas."
+    },
+    {
+      "username": "gerardo.casco",
+      "rol": "caja",
+      "alcance": "sucursal",
+      "definicion": "Caja: sólo cobra cuotas y sólo ve los movimientos de su propia caja."
+    }
+  ],
+  "pendientes": []
+}

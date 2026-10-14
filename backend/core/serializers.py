@@ -573,6 +573,7 @@ class DeudorSerializer(serializers.ModelSerializer):
 
 
 class MovimientoCajaSerializer(serializers.ModelSerializer):
+    transferencia = serializers.SerializerMethodField(read_only=True)
     tipo_label = serializers.CharField(source="get_tipo_display", read_only=True)
     usuario_nombre = serializers.CharField(source="caja.usuario.username", read_only=True)
     pago_numero_recibo = serializers.CharField(source="pago.numero_recibo", read_only=True)
@@ -592,12 +593,59 @@ class MovimientoCajaSerializer(serializers.ModelSerializer):
             "pago_numero_recibo",
             "movimiento_origen",
             "numero_comprobante",
+            "transferencia",
             "recibido_por",
             "recibido_por_nombre",
             "usuario_nombre",
             "creado",
         ]
         read_only_fields = ["pago", "movimiento_origen", "numero_comprobante"]
+
+    def get_transferencia(self, obj):
+        if not obj.transferencia_id:
+            return None
+        transferencia = obj.transferencia
+        salida = obj.caja_id == transferencia.origen_id
+        contraparte = transferencia.destino if salida else transferencia.origen
+        request = self.context.get("request")
+        perfil = getattr(getattr(request, "user", None), "perfil", None)
+        # La lectura del movimiento ya autorizó su caja. Este resumen nunca
+        # habilita consultar la otra: solo publica sus datos si ambas sucursales
+        # pertenecen al alcance vigente, igual que el historial de transferencias.
+        ambas_sucursales_visibles = perfil and (
+            perfil.puede_ver_todas_las_sucursales
+            or transferencia.origen.sucursal_id == transferencia.destino.sucursal_id == perfil.sucursal_id
+        )
+        actor = transferencia.actor
+        return {
+            "id": transferencia.pk,
+            "numero_comprobante": transferencia.numero_comprobante,
+            "creado": transferencia.creado.isoformat(),
+            "importe": format(transferencia.importe, ".2f"),
+            "motivo": transferencia.motivo,
+            "sentido": "salida" if salida else "entrada",
+            "actor": {
+                "id": actor.pk, "username": actor.username,
+                "nombre": actor.get_full_name() or actor.username,
+            },
+            "contraparte": {
+                "id": contraparte.pk,
+                "sucursal": contraparte.sucursal_id,
+                "sucursal_nombre": contraparte.sucursal.nombre,
+                "usuario": contraparte.usuario_id,
+                "usuario_nombre": contraparte.usuario.username,
+            } if ambas_sucursales_visibles else None,
+        }
+
+    def to_representation(self, instance):
+        datos = super().to_representation(instance)
+        transferencia = datos.get("transferencia")
+        if transferencia and transferencia["contraparte"] is None:
+            # El pase heredado conserva al cajero receptor; no debe saltarse
+            # la redacción del resumen mediante sus campos anteriores.
+            datos["recibido_por"] = None
+            datos["recibido_por_nombre"] = None
+        return datos
 
     def validate(self, attrs):
         caja = attrs.get("caja") or getattr(self.instance, "caja", None)

@@ -3,6 +3,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AppSidebar from './AppSidebar.vue'
+import { router as appRouter } from '@/router'
+import { canViewRoute } from '@/lib/permissions'
 
 const authState = vi.hoisted(() => ({ role: 'administracion' }))
 
@@ -26,7 +28,7 @@ vi.mock('@/composables/useAuth', async () => {
 
 function buildRouter(path = '/dashboard') {
   const paths = [
-    '/dashboard', '/alumnos', '/deudores', '/caja', '/reportes', '/configuracion',
+    '/dashboard', '/alumnos', '/deudores', '/caja', '/caja/transferencias', '/reportes', '/configuracion',
     '/sucursales', '/conceptos', '/ajustes-cuotas', '/usuarios', '/importaciones', '/auditoria', '/login',
   ]
   const router = createRouter({
@@ -133,6 +135,22 @@ describe('navegación lateral contextual', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await nextTick()
     expect(wrapper.find('#sidebar-session-menu').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+
+describe('acceso a transferencias entre cajas', () => {
+  it.each([
+    ['administracion', true], ['superadmin', true], ['tesoreria', false], ['caja', false], ['consulta', false],
+  ])('limita navegación y ruta para el rol %s', async (role, allowed) => {
+    authState.role = role
+    const router = await buildRouter('/caja')
+    const wrapper = mount(AppSidebar, { global: { plugins: [router] } })
+    expect(wrapper.find('a[href="/caja/transferencias"]').exists()).toBe(allowed)
+    const route = appRouter.getRoutes().find((item) => item.path === '/caja/transferencias')
+    expect(route).toBeDefined()
+    expect(canViewRoute({ perfil: { rol: role } }, route.meta.roles)).toBe(allowed)
     wrapper.unmount()
   })
 })

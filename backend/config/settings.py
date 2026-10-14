@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 from pathlib import Path
 
 import dj_database_url
+from corsheaders.defaults import default_headers
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -131,6 +132,8 @@ CORS_ALLOWED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+
+CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key")
 
 CSRF_TRUSTED_ORIGINS = []
 for origin in CORS_ALLOWED_ORIGINS:

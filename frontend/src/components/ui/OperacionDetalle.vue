@@ -38,8 +38,22 @@ let revision = 0
 const paymentId = computed(() => props.tipo === 'pago' ? props.operacion?.id : props.operacion?.pago)
 const fields = computed(() => { const item = props.operacion || {}; return [
   { label: 'Tipo', value: item.tipo_label || item.tipo || 'Pago' }, { label: 'Medio', value: { efectivo:'Efectivo', transferencia:'Transferencia', mercado_pago:'Mercado Pago', tarjeta:'Tarjeta', otro:'Otro' }[item.medio] || item.medio },
-  { label: 'Fecha', value: item.creado ? formatDateTime(item.creado) : formatDate(item.fecha) }, { label: 'Descripción', value: item.descripcion || item.observacion || item.concepto_nombre }, { label: 'Cajero', value: item.usuario_nombre }, { label: 'Referencia', value: item.numero_recibo || item.pago_numero_recibo || (item.movimiento_origen ? `Movimiento ${item.movimiento_origen}` : '') }, { label: 'Alumno', value: item.alumno_nombre }, { label: 'Estado', value: item.estado },
-] })
+  { label: 'Fecha', value: item.creado ? formatDateTime(item.creado) : formatDate(item.fecha) }, { label: 'Descripción', value: item.descripcion || item.observacion || item.concepto_nombre }, { label: 'Cajero', value: item.usuario_nombre }, { label: 'Referencia', value: item.transferencia?.numero_comprobante || item.numero_recibo || item.pago_numero_recibo || (item.movimiento_origen ? `Movimiento ${item.movimiento_origen}` : '') }, { label: 'Alumno', value: item.alumno_nombre }, { label: 'Estado', value: item.estado },
+].concat(transferFields(item.transferencia)) })
+function transferFields(transferencia) {
+  if (!transferencia) return []
+  const contraparte = transferencia.contraparte
+  const actor = transferencia.actor
+  return [
+    { label: transferencia.sentido === 'salida' ? 'Caja de destino' : 'Caja de origen', value: contraparte ? 'Caja ' + contraparte.id : 'Otra caja' },
+    ...(contraparte ? [
+      { label: 'Sucursal contraparte', value: contraparte.sucursal_nombre },
+      { label: 'Cajero contraparte', value: contraparte.usuario_nombre },
+    ] : []),
+    { label: 'Motivo de transferencia', value: transferencia.motivo },
+    { label: 'Ejecutado por', value: actor?.nombre && actor.nombre !== actor.username ? actor.nombre + ' (' + actor.username + ')' : actor?.username },
+  ]
+}
 watch(() => props.operacion, () => { revision++; receipt.value = null; showingReceipt.value = false; error.value = ''; loading.value = false })
 async function openReceipt() {
   if (loading.value || !paymentId.value) return

@@ -1,6 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from .contexts.identidad.presentation.favoritas_http import ConsultaFavoritaViewSet
+from .contexts.caja.presentation.http.transferencias_caja import TransferenciaCajaViewSet
 
 from .views import (
     AplicacionPagoViewSet,
@@ -47,6 +48,7 @@ router.register("usuarios", UserViewSet, basename="usuario")
 router.register("aplicaciones-pago", AplicacionPagoViewSet, basename="aplicacion-pago")
 router.register("cajas", CajaDiariaViewSet, basename="caja")
 router.register("movimientos-caja", MovimientoCajaViewSet, basename="movimiento-caja")
+router.register("transferencias-caja", TransferenciaCajaViewSet, basename="transferencia-caja")
 router.register("auditoria", EventoAuditoriaViewSet, basename="auditoria")
 router.register("tipos-descuento", TipoDescuentoViewSet, basename="tipo-descuento")
 router.register("reglas-recargo", ReglaRecargoViewSet, basename="regla-recargo")

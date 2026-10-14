@@ -12,6 +12,7 @@ const DashboardView = () => import('@/views/DashboardView.vue')
 const AlumnosView = () => import('@/views/AlumnosView.vue')
 const DeudoresView = () => import('@/views/DeudoresView.vue')
 const CajaView = () => import('@/views/CajaView.vue')
+const TransferenciasCajaView = () => import('@/views/TransferenciasCajaView.vue')
 const ConceptosView = () => import('@/views/ConceptosView.vue')
 const CarrerasView = () => import('@/views/CarrerasView.vue')
 const ReportesView = () => import('@/views/ReportesView.vue')
@@ -66,6 +67,12 @@ const routes = [
         name: 'caja',
         component: CajaView,
         meta: { roles: ['superadmin', 'administracion', 'tesoreria', 'caja', 'consulta'] },
+      },
+      {
+        path: 'caja/transferencias',
+        name: 'transferencias-caja',
+        component: TransferenciasCajaView,
+        meta: { roles: ['superadmin', 'administracion'], hideTopbarHeading: true },
       },
       {
         path: 'conceptos',
